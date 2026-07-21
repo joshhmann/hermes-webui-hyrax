@@ -1,0 +1,39 @@
+/* Hyraxknot Division — Extension Styles for Hermes WebUI */
+
+.hyrax-project-card {
+  background: var(--panel, #161b22);
+  border: 1px solid var(--line, #30363d);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.hyrax-project-name {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: #e6edf3;
+}
+.hyrax-project-progress {
+  height: 6px;
+  background: rgba(48,54,61,.5);
+  border-radius: 3px;
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+.hyrax-project-progress-fill {
+  height: 100%;
+  background: #2ea043;
+  border-radius: 3px;
+  transition: width .3s;
+}
+.hyrax-project-pct {
+  font-size: 10px;
+  color: var(--muted, #8b949e);
+}
+.hyrax-project-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
