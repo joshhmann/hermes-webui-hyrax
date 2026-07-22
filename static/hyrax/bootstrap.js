@@ -30,38 +30,52 @@
 
   // ── 2. Inject panel divs ──
   // Find the panels container (the element holding .panel-view elements)
-  const panelsContainer = document.querySelector('.panels');
+  // Hermes WebUI uses aside.sidebar as the parent; no .panels container exists.
+  const panelsContainer = document.querySelector('aside.sidebar');
   if (panelsContainer) {
+    const resizeHandle = document.getElementById('sidebarResize');
     HYRAX_PANELS.forEach(p => {
+      const panelId = 'panel' + p.id.charAt(0).toUpperCase() + p.id.slice(1);
+      if (document.getElementById(panelId)) return; // already injected
       const div = document.createElement('div');
-      div.id = 'panel' + p.id.charAt(0).toUpperCase() + p.id.slice(1);
+      div.id = panelId;
       div.className = 'panel-view';
       div.innerHTML = '<div class="panel-page"><div class="page-header"><h2>' + p.label + '</h2></div><div class="panel-content" id="hyrax-' + p.id + '-content"></div></div>';
-      panelsContainer.appendChild(div);
+      // Keep panel-views grouped before the resize handle
+      if (resizeHandle) {
+        panelsContainer.insertBefore(div, resizeHandle);
+      } else {
+        panelsContainer.appendChild(div);
+      }
     });
   }
 
-  // ── 3. Add sidebar nav buttons ──
-  const sidebarNav = document.querySelector('.sidebar-nav');
-  if (sidebarNav) {
-    // Find the settings button as anchor (insert before it)
-    const anchor = sidebarNav.querySelector('[data-panel="settings"]');
-    HYRAX_PANELS.forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = 'nav-tab has-tooltip has-tooltip--bottom';
-      btn.dataset.panel = p.id;
-      btn.dataset.label = p.label;
-      btn.title = p.label;
-      btn.setAttribute('data-tooltip', p.label);
-      btn.setAttribute('onclick', "switchPanel('" + p.id + "',{fromRailClick:true})");
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + p.icon + '"/></svg>';
-      sidebarNav.insertBefore(btn, anchor || null);
-    });
+  // ── 3. Add sidebar nav buttons (mobile + desktop rail) ──
+  function addPanelButton(container, p) {
+    // Skip if button already exists in this container
+    if (container.querySelector('[data-panel="' + p.id + '"]')) return;
+    const btn = document.createElement('button');
+    const isRail = container.classList.contains('rail');
+    btn.className = (isRail ? 'rail-btn ' : '') + 'nav-tab has-tooltip' + (isRail ? '' : ' has-tooltip--bottom');
+    btn.dataset.panel = p.id;
+    btn.dataset.label = p.label;
+    btn.title = p.label;
+    btn.setAttribute('data-tooltip', p.label);
+    btn.setAttribute('onclick', "switchPanel('" + p.id + "',{fromRailClick:true})");
+    if (isRail) btn.setAttribute('aria-label', p.label);
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + p.icon + '"/></svg>';
+    const anchor = container.querySelector('[data-panel="settings"], [data-panel="logs"]');
+    container.insertBefore(btn, anchor || null);
   }
+  document.querySelectorAll('.rail, .sidebar-nav').forEach(function(container) {
+    if (container) HYRAX_PANELS.forEach(function(p) { addPanelButton(container, p); });
+  });
 
   // ── 4. Hook lazy-load into switchPanel ──
   // Monkey-patch switchPanel to trigger our load functions
-  if (typeof switchPanel === 'function') {
+  // Guard: only patch if we haven't already (protection against double-load)
+  if (typeof switchPanel === 'function' && !window.__hyraxSwitchPanelPatched) {
+    window.__hyraxSwitchPanelPatched = true;
     const origSwitchPanel = switchPanel;
     window.switchPanel = async function(name, opts) {
       const result = await origSwitchPanel(name, opts);
@@ -74,21 +88,11 @@
     };
   }
 
-  // ── 5. Load hyrax CSS ──
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/static/hyrax/hyrax.css';
-  document.head.appendChild(link);
-
-  // ── 6. Load hq.js dynamically ──
-  const hqScript = document.createElement('script');
-  hqScript.src = '/static/hyrax/hq.js?v=__WEBUI_VERSION__';
-  hqScript.defer = true;
-  document.head.appendChild(hqScript);
-
-  // ── 7. Load vn.js dynamically ──
-  const vnScript = document.createElement('script');
-  vnScript.src = '/static/hyrax/vn.js?v=__WEBUI_VERSION__';
-  vnScript.defer = true;
-  document.head.appendChild(vnScript);
+  // ── 5. Load hyrax CSS (load once) ──
+  if (!document.querySelector('link[href*="/static/hyrax/hyrax.css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/static/hyrax/hyrax.css';
+    document.head.appendChild(link);
+  }
 })();

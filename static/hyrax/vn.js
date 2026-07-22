@@ -99,7 +99,8 @@ function el(tag, attrs, ...children) {
   return elem;
 }
 
-function $(id) { return document.getElementById(id); }
+// DOM helper (note: $ is taken by hermes-ui)
+function byId(id) { return document.getElementById(id); }
 
 /* ── Conversation handling ── */
 

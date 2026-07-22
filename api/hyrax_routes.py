@@ -74,6 +74,7 @@ def handle_post(handler, parsed) -> bool:
 def _patch():
     """Patch core route handlers to try hyrax routes first."""
     from api import routes as core_routes
+    import sys
     
     orig_get = core_routes.handle_get
     def patched_get(handler, parsed):
@@ -82,12 +83,29 @@ def _patch():
         return orig_get(handler, parsed)
     core_routes.handle_get = patched_get
     
+    # Also patch the server module's local reference if already loaded
+    if 'server' in sys.modules:
+        sys.modules['server'].handle_get = patched_get
+    
     orig_post = core_routes.handle_post
     def patched_post(handler, parsed):
         if handle_post(handler, parsed):
             return True
         return orig_post(handler, parsed)
     core_routes.handle_post = patched_post
+    
+    if 'server' in sys.modules:
+        sys.modules['server'].handle_post = patched_post
 
 # Apply patch on import
 _patch()
+
+def repatch():
+    """Re-apply patches after the server module is fully loaded.
+    Call this from server.py after all imports to ensure the server's
+    local references to handle_get/handle_post use our wrapped version."""
+    import sys
+    if 'server' in sys.modules:
+        from api import routes as core_routes
+        sys.modules['server'].handle_get = core_routes.handle_get
+        sys.modules['server'].handle_post = core_routes.handle_post
