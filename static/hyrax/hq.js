@@ -112,6 +112,11 @@ function renderHQLayout(container) {
   container.replaceChildren(page);
 }
 
+// If HQ is already the active panel by the time this script loads, render now.
+if (document.getElementById('panelHq')?.classList.contains('active')) {
+  loadHq();
+}
+
 /* ── Chibi element factory ── */
 
 function createChibi(sister, profiles) {
