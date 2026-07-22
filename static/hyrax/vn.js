@@ -80,9 +80,8 @@ const VN_ASSETS = {
  * Called by bootstrap.js lazy-load hook when the HQ panel is activated.
  * Sets up the event listener for chibi clicks.
  */
-function loadVn() {
-  document.addEventListener('hyrax:open-conversation', onOpenConversation);
-}
+/* ── Module-level init (runs on script load) ── */
+document.addEventListener('hyrax:open-conversation', onOpenConversation);
 
 /* ── Helpers ── */
 
@@ -179,7 +178,7 @@ async function renderVN(profileId, name) {
   // Portrait
   const exprToAsset = (expr) => {
     const clean = expr.replace(/-/g, '_');
-    return safeLookup(assets, clean);
+    return safeLookup(assets, profileId, clean);
   };
 
   const expression = activeConversation.expression || {};
@@ -280,7 +279,7 @@ async function renderVN(profileId, name) {
 
 /* ── NSFW-safe expression lookup ── */
 
-function safeLookup(assets, clean) {
+function safeLookup(assets, profileId, clean) {
   if (!nsfwEnabled) {
     const blocked = (assets._nsfw || []);
     if (blocked.includes(clean)) return profileId + '.portrait.neutral';
