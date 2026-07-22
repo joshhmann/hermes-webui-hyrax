@@ -158,8 +158,8 @@ async function renderVN(profileId, name) {
     return;
   }
 
-  // Get the HQ panel container
-  const content = document.getElementById('hyrax-hq-content');
+  // Get the HQ main content container
+  const content = document.getElementById('mainHq');
   if (!content) return;
 
   hqViewShown = false;

@@ -42,7 +42,7 @@ const EXPRESSION_ALIASES = {
  * Called automatically by bootstrap.js when the HQ nav tab is clicked.
  */
 async function loadHq() {
-  const content = document.getElementById('hyrax-hq-content');
+  const content = document.getElementById('mainHq');
   if (!content) return;
 
   // Already rendered? Just refresh presence.

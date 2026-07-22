@@ -34,13 +34,21 @@
   const panelsContainer = document.querySelector('aside.sidebar');
   if (panelsContainer) {
     const resizeHandle = document.getElementById('sidebarResize');
+    // Panels whose content lives in the main area (not the sidebar)
+    const mainOnlyPanels = ['hq'];
     HYRAX_PANELS.forEach(p => {
       const panelId = 'panel' + p.id.charAt(0).toUpperCase() + p.id.slice(1);
       if (document.getElementById(panelId)) return; // already injected
       const div = document.createElement('div');
       div.id = panelId;
       div.className = 'panel-view';
-      div.innerHTML = '<div class="panel-page"><div class="page-header"><h2>' + p.label + '</h2></div><div class="panel-content" id="hyrax-' + p.id + '-content"></div></div>';
+      // Main-only panels get a minimal sidebar (just the header — content lives in #main<Name>)
+      // List-oriented panels get the full .panel-page with .panel-content container
+      if (mainOnlyPanels.includes(p.id)) {
+        div.innerHTML = '<div class="panel-page"><div class="page-header"><h2>' + p.label + '</h2></div></div>';
+      } else {
+        div.innerHTML = '<div class="panel-page"><div class="page-header"><h2>' + p.label + '</h2></div><div class="panel-content" id="hyrax-' + p.id + '-content"></div></div>';
+      }
       // Keep panel-views grouped before the resize handle
       if (resizeHandle) {
         panelsContainer.insertBefore(div, resizeHandle);
