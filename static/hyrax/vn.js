@@ -238,6 +238,14 @@
       _showHqView(content);
     });
 
+    // Enter 3D Loft button → launches Tai's room
+    var loft = _el('button', { className: 'vn-back', style: 'left:auto;right:20px;' }, '3D Loft \u2192');
+    loft.addEventListener('click', function() {
+      if (typeof window.__hqLaunch3d === 'function') {
+        window.__hqLaunch3d();
+      }
+    });
+
     // Escape key → HQ map
     function onKeyDown(e) {
       if (e.key === 'Escape') {
@@ -340,7 +348,7 @@
     });
 
     dialogue.append(header, backlog, form);
-    stage.append(back, portrait, dialogue);
+    stage.append(back, loft, portrait, dialogue);
 
     // Show empty/loading state
     content.replaceChildren(stage);

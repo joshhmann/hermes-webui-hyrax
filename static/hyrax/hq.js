@@ -43,7 +43,7 @@
   ];
 
   // ── Mount (called by HermesPanels mount hook) ──
-  async function __hqMount(id) {
+  function __hqMount(id) {
     var content = document.getElementById('mainHq');
     if (!content) return;
 
@@ -58,45 +58,9 @@
     var gen = ++_mountGen;
     _mounted = true;
     _prevContent = content.innerHTML;
-    content.innerHTML = '<p class="muted">Loading Division HQ\u2026</p>';
 
-    if (!_imported) {
-      _imported = true;
-      try {
-        var mod = await import(MODULE_URL);
-        // Stale: unmount/re-mount happened while import was pending
-        if (_mountGen !== gen) return;
-
-        if (mod && typeof mod.mountTaiLoft === 'function') {
-          // Unmount callback for "Return to VN" button in 3D view
-          var returnToVn = function() {
-            if (typeof _unmount3d === 'function') _unmount3d();
-            _unmount3d = null;
-            content.innerHTML = _prevContent || '';
-            _mounted = false;
-            // Re-mount in 2D mode
-            render2dFallback(content);
-          };
-          var cleanup = await mod.mountTaiLoft(
-            content,
-            returnToVn,
-            { vrmUrl: '/api/hyrax/assets/tai.embodiment.vrm' }
-          );
-          // Stale: another mount cycle completed while we were mounting
-          if (_mountGen !== gen) {
-            if (typeof cleanup === 'function') cleanup();
-            return;
-          }
-          _unmount3d = cleanup;
-          return;
-        }
-      } catch (_) {
-        // Stale import failure — don't render fallback into newer mount
-        if (_mountGen !== gen) return;
-      }
-    }
-
-    // 2D fallback (import failure, CSP block, WebGL unavailable)
+    // Always render the 2D isometric map first.
+    // The 3D space is launched on demand from the VN conversation.
     render2dFallback(content);
   }
 
@@ -226,8 +190,39 @@
     });
   }
 
+  // ── Launch 3D Loft (called from VN conversation) ──
+  async function launch3d() {
+    var content = document.getElementById('mainHq');
+    if (!content) return;
+    content.innerHTML = '<p class="muted">Loading 3D Loft...</p>';
+
+    if (!_imported) {
+      _imported = true;
+      try {
+        var mod = await import(MODULE_URL);
+        if (mod && typeof mod.mountTaiLoft === 'function') {
+          var returnToVn = function() {
+            if (typeof _unmount3d === 'function') _unmount3d();
+            _unmount3d = null;
+            render2dFallback(content);
+          };
+          var cleanup = await mod.mountTaiLoft(
+            content,
+            returnToVn,
+            { vrmUrl: '/api/hyrax/assets/tai.embodiment.vrm' }
+          );
+          _unmount3d = cleanup;
+          return;
+        }
+      } catch (_) {}
+    }
+    // 3D failed — show 2D map
+    render2dFallback(content);
+  }
+
   // ── Expose for bootstrap ──
   window.__hqMount = __hqMount;
   window.__hqUnmount = __hqUnmount;
+  window.__hqLaunch3d = launch3d;
 
 })();

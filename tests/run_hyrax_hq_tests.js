@@ -226,41 +226,36 @@ function runTests() {
   console.log('\n── __hqMount / __hqUnmount ──');
   assert(typeof globalThis.__hqMount === 'function', '__hqMount is a function');
   assert(typeof globalThis.__hqUnmount === 'function', '__hqUnmount is a function');
+  assert(typeof globalThis.__hqLaunch3d === 'function', '__hqLaunch3d is a function');
 
-  // 5. First mount triggers import
-  console.log('\n── First mount (lazy import) ──');
-  // Install mock import before mounting
+  // 5. First mount renders 2D (sync, no import)
+  console.log('\n── First mount (2D, no import) ──');
   var importBefore = importCalls.length;
-  return globalThis.__hqMount('hq').then(function() {
-    assert(importCalls.length > importBefore, 'first mount triggers dynamic import');
-    const importCall = importCalls[importCalls.length - 1] || '';
-    assert(importCall.includes('embodiment-bundle'), 'imports embodiment-bundle.js');
+  globalThis.__hqMount('hq');
+  assert(importCalls.length === importBefore, 'first mount does NOT trigger import');
+  assert(mainHqEl._children && mainHqEl._children.length > 0, 'mount renders content');
 
-    // 6. Second mount does NOT re-import
-    console.log('\n── Second mount (no re-import) ──');
-    const importCount = importCalls.length;
-    return globalThis.__hqMount('hq').then(() => {
-      assert(importCalls.length === importCount, 'second mount does NOT re-import');
+  // 6. Second mount refreshes presence, no re-import
+  console.log('\n── Second mount (refresh, no import) ──');
+  globalThis.__hqMount('hq');
+  assert(importCalls.length === importBefore, 'second mount does NOT re-import');
 
-      // 7. Unmount
-      console.log('\n── Unmount ──');
-      globalThis.__hqUnmount('hq');
+  // 7. Unmount
+  console.log('\n── Unmount ──');
+  globalThis.__hqUnmount('hq');
 
-      // 8. Idempotent unmount
-      console.log('\n── Idempotent unmount ──');
-      globalThis.__hqUnmount('hq'); // Second call should be no-op
-      assert(true, 'double unmount does not throw');
+  // 8. Idempotent unmount
+  console.log('\n── Idempotent unmount ──');
+  globalThis.__hqUnmount('hq');
+  assert(true, 'double unmount does not throw');
 
-      // 9. Re-mount after unmount
-      console.log('\n── Re-mount after unmount ──');
-      const importAfterUnmount = importCalls.length;
-      return globalThis.__hqMount('hq').then(() => {
-        // Should not re-import (module is cached in memory)
-        assert(importCalls.length === importAfterUnmount, 're-mount does not re-import cached module');
-      });
-    });
-  });
-} // end of inner-most chain exposed for the attacker test below
+  // 9. Re-mount after unmount
+  console.log('\n── Re-mount after unmount ──');
+  globalThis.__hqMount('hq');
+  assert(importCalls.length === importBefore, 're-mount does not trigger import');
+
+  return Promise.resolve();
+}
 
 runTests().then(function() {
   // Test 10: window.__mockImport attacker isolation (first-mount path)
@@ -294,13 +289,13 @@ runTests().then(function() {
     setTimeout, clearTimeout
   );
 
-  return globalThis.__hqMount('hq').then(function() {
+  return globalThis.__hqLaunch3d().then(function() {
     assert(!attackerImportCalled,
       'window.__mockImport must NOT be called (attacker override on fresh eval)');
     // Verify the real import mechanism was used instead
     var lastImport = importCalls[importCalls.length - 1] || '';
     assert(lastImport.indexOf('embodiment-bundle') !== -1,
-      'import must be through _dynamicImport, not __mockImport');
+      'launch3d uses real import, not attacker __mockImport');
     globalThis.__hqUnmount('hq');
     delete globalThis.__mockImport;
   });
@@ -327,16 +322,26 @@ runTests().then(function() {
     fn(mockFn, globalThis, fakeDoc, FakeCustomEvent, console, setTimeout, clearTimeout);
   }
 
-  // 11: Unmount before import resolve → stale doesn't mount
-  var genTestsChain = (function testUnmountBeforeImportResolve() {
-    var deferred = createDeferred();
+  // 11: __hqMount renders 2D immediately (no async import)
+  var genTestsChain = (function testMountRenders2d() {
+    evalWithImport(function() { return Promise.resolve({}); });
+    mainHqEl.innerHTML = '<div id="original">ORIGINAL</div>';
+
+    var result = globalThis.__hqMount('hq');
+    assert(mainHqEl._children && mainHqEl._children.length > 0,
+      'mount renders 2D HQ immediately');
+    assert(result === undefined, 'mount does not return a promise');
+    return Promise.resolve();
+  })();
+
+  // 12: __hqLaunch3d triggers import and mounts 3D
+  genTestsChain = genTestsChain.then(function testLaunch3dImports() {
     var mountTaiLoftCalled = false;
     var importCount = 0;
 
     function genMock(url) {
       importCalls.push(url);
       importCount++;
-      if (importCount === 1) return deferred.promise;
       return Promise.resolve({
         mountTaiLoft: async function() {
           mountTaiLoftCalled = true;
@@ -348,117 +353,29 @@ runTests().then(function() {
     evalWithImport(genMock);
     mainHqEl.innerHTML = '<div id="original">ORIGINAL</div>';
 
-    // Mount starts slow import
-    var mountPromise = globalThis.__hqMount('hq');
-    assert(mainHqEl.innerHTML.indexOf('Loading Division HQ') !== -1,
-      'mount sets loading state');
-
-    // Unmount before import resolves
-    globalThis.__hqUnmount('hq');
-
-    // Resolve the deferred (slow import completes after unmount)
-    deferred.resolve({
-      mountTaiLoft: async function() {
-        mountTaiLoftCalled = true;
-        return function() {};
-      },
-    });
-
-    return mountPromise.then(function() {
-      assert(!mountTaiLoftCalled,
-        'stale import after unmount must NOT call mountTaiLoft');
-      assert(mainHqEl.innerHTML.indexOf('Loading') !== -1,
-        'stale import must not overwrite content with fallback');
-    });
-  })();
-
-  // 12: Unmount+remount → old import resolves after new gen renders 2D
-  genTestsChain = genTestsChain.then(function testUnmountRemountThenOldImport() {
-    var deferred = createDeferred();
-    var mountTaiLoftCalled = 0;
-    var importCount = 0;
-
-    function genMock2(url) {
-      importCalls.push(url);
-      importCount++;
-      if (importCount === 1) return deferred.promise;
-      // Second call instant success (but won't be invoked since _imported is true)
-      return Promise.resolve({
-        mountTaiLoft: async function() {
-          mountTaiLoftCalled++;
-          return function() {};
-        },
-      });
-    }
-
-    evalWithImport(genMock2);
-    mainHqEl.innerHTML = '<div id="original">ORIGINAL</div>';
-
-    // Mount gen=1 — starts slow import, _imported = true
-    var mount1 = globalThis.__hqMount('hq');
-    assert(importCount === 1, 'gen=1 triggers one import');
-
-    // Unmount — gen becomes stale, _imported still true
-    globalThis.__hqUnmount('hq');
-
-    // Remount gen=2 — _imported=true, skips import block, renders 2D fallback
-    var mount2 = globalThis.__hqMount('hq');
-
-    // Now resolve the old deferred — gen=1 import completes
-    deferred.resolve({
-      mountTaiLoft: async function() {
-        mountTaiLoftCalled++;
-        return function() {};
-      },
-    });
-
-    return Promise.all([mount1, mount2]).then(function() {
-      // gen=1 was stale — must NOT call mountTaiLoft
-      assert(mountTaiLoftCalled === 0,
-        'stale gen=1 must NOT call mountTaiLoft (got ' + mountTaiLoftCalled + ')');
-      // gen=2 renders 2D fallback (skip import) — content should show HQ page
-      assert(importCount === 1,
-        'only one import call (gen=2 skips import, uses 2D fallback)');
+    return globalThis.__hqLaunch3d().then(function() {
+      assert(importCount === 1, 'launch3d triggers one import');
+      assert(mountTaiLoftCalled, 'launch3d mounts 3D');
     });
   });
 
-  // 13: Stale import rejects after new mount → 2D fallback preserved
-  genTestsChain = genTestsChain.then(function testStaleRejectAfterNewMount() {
-    var deferred = createDeferred();
-    var mountTaiLoftCalled = false;
+  // 13: launch3d renders 2D fallback when import fails
+  genTestsChain = genTestsChain.then(function testLaunch3dFallback() {
     var importCount = 0;
 
-    function genMock3(url) {
+    function genMock(url) {
       importCalls.push(url);
       importCount++;
-      if (importCount === 1) return deferred.promise;
-      return Promise.resolve({
-        mountTaiLoft: async function() {
-          mountTaiLoftCalled = true;
-          return function() {};
-        },
-      });
+      return Promise.reject(new Error('import failed'));
     }
 
-    evalWithImport(genMock3);
+    evalWithImport(genMock);
     mainHqEl.innerHTML = '<div id="original">ORIGINAL</div>';
 
-    // Mount gen=1 — starts slow import
-    var mount1 = globalThis.__hqMount('hq');
-    assert(mainHqEl.innerHTML.indexOf('Loading') !== -1, 'mount1 shows loading');
-
-    // Remount gen=2 — _imported=true, renders 2D fallback
-    globalThis.__hqUnmount('hq');
-    var mount2 = globalThis.__hqMount('hq');
-
-    // Gen=1 import REJECTS after gen=2 fallback is active
-    deferred.reject(new Error('stale failure'));
-
-    return mount1.then(function() {
-      // Gen=1 rejection caught — must NOT overwrite gen=2's fallback
-      // Gen=2 rendered fallback (no mountTaiLoft since _imported=true)
-      assert(!mountTaiLoftCalled,
-        'gen=1 rejection must NOT trigger mount side effects');
+    return globalThis.__hqLaunch3d().then(function() {
+      assert(importCount === 1, 'launch3d tried import');
+      assert(mainHqEl._children && mainHqEl._children.length > 0,
+        'fallback renders 2D HQ after import failure');
     });
   });
 
