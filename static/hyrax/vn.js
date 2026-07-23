@@ -217,7 +217,7 @@
   // ── Render VN ──
 
   function _renderVN(content, profileId, name, token) {
-    var conversationId = _activeConversation && _activeConversation.id;
+    var conversationId = _activeConversation && (_activeConversation.id || _activeConversation.session_id);
     if (!conversationId) return;
 
     var assets = VN_ASSETS[profileId];
@@ -392,7 +392,7 @@
 
   function _connectEvents(profileId, token) {
     if (!_activeConversation) return;
-    var cid = _activeConversation.id;
+    var cid = _activeConversation.id || _activeConversation.session_id;
 
     // If we already have an EventSource for the same conversation, reuse
     if (_eventSource) {
