@@ -229,7 +229,7 @@
 
     // Build VN stage
     var stage = _el('section', { className: 'vn-stage' });
-    stage.style.background = 'linear-gradient(180deg,rgba(8,12,18,.1),rgba(8,12,18,.92)),url(' + assets.background + ')';
+    stage.style.background = 'linear-gradient(180deg,rgba(8,12,18,.1),rgba(8,12,18,.92)),url(/api/hyrax/assets/' + assets.background + ')';
 
     // Back button → HQ map
     var back = _el('button', { className: 'vn-back' }, '\u2190 HQ');
