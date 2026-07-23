@@ -16,11 +16,16 @@
 //   - no-redeclare (1 hit): redeclared loop var in panels.js
 // If those are cleaned up later, they can be promoted into this guard.
 //
+// Bundled assets NOT ignored: the Hyrax 3D ES-module bundle (embodiment-bundle.js)
+// uses sourceType: "module" via a narrow override below. Runtime-error rules remain
+// active for ALL files — the override only changes the parser mode so valid ESM
+// import/export doesn't cause a false-positive parsing error.
+//
 // Run: npx eslint -c eslint.runtime-guard.config.mjs "static/**/*.js"
 // (tests/test_static_js_runtime_lint.py runs this automatically when eslint is present.)
 
 export default [
-  // Bundled/minified third-party assets are ES modules and not ours to lint.
+  // Third-party vendor assets (unminified). Minified assets are also excluded.
   { ignores: ["**/vendor/**", "**/*.min.js"] },
   {
     files: ["**/*.js"],
@@ -29,6 +34,20 @@ export default [
       // #3162: reassigning a `const` — runtime TypeError, only fires on execution.
       "no-const-assign": "error",
       // Assigning to an import binding — runtime TypeError.
+      "no-import-assign": "error",
+    },
+  },
+  // Narrow override: Hyrax 3D ES-module bundle uses ESM syntax (import/export).
+  // Only the parser mode changes — runtime-error rules remain fully active.
+  // Inline eslint-disable comments from the TypeScript build source reference
+  // rules (e.g. @typescript-eslint/naming-convention, compat/compat) that don't
+  // exist in this config — noInlineConfig keeps ESLint from tripping on those.
+  {
+    files: ["static/hyrax/3d/**/*.js"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+    linterOptions: { noInlineConfig: true },
+    rules: {
+      "no-const-assign": "error",
       "no-import-assign": "error",
     },
   },

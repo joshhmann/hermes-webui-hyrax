@@ -329,6 +329,17 @@
   to   { opacity: 1; transform: translate(-50%) translateY(0); }
 }
 
+/* ── Interactive element mobile optimization ── */
+.chibi,
+.composer button,
+.composer textarea,
+.vn-back,
+.nav-tab,
+.rail-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ── Responsive ── */
 @media (max-width: 720px) {
   .iso-floor {
@@ -352,6 +363,72 @@
   }
 }
 
+@media (max-width: 480px) {
+  .hq-page {
+    padding: 0 8px;
+  }
+  .hq-page .page-head h1 {
+    font-size: 18px;
+  }
+  .hq-page .page-head p {
+    font-size: 12px;
+  }
+  .map-stage {
+    height: min(420px, calc(100vh - 180px));
+    min-height: 300px;
+    border-radius: 10px;
+  }
+  .iso-floor {
+    transform: scale(.6) rotateX(56deg) rotateZ(-40deg);
+    width: 600px;
+    height: 420px;
+    margin: -210px 0 0 -300px;
+  }
+  .chibi {
+    transform: scale(.6);
+  }
+  .dialogue {
+    left: 1%;
+    right: 1%;
+    bottom: 1%;
+    padding: 16px 10px;
+    min-height: 180px;
+  }
+  .dialogue-name {
+    font-size: 14px;
+    padding: 5px 14px;
+  }
+  .vn-back {
+    top: 10px;
+    left: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  .vn-portrait {
+    left: -20%;
+    max-width: 130%;
+  }
+  .composer textarea {
+    min-width: 60px;
+    font-size: 12px;
+  }
+  .composer button {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  .backlog {
+    height: 80px;
+  }
+  .hyrax-toast {
+    left: 5%;
+    right: 5%;
+    transform: none;
+    bottom: 12px;
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chibi,
   .vn-portrait,
@@ -365,3 +442,29 @@
 main.main > #mainHq { display: none; }
 main.main.showing-hq > #mainHq { display: flex; overflow-y: auto; }
 #mainHqBody { flex: 1; min-height: 0; }
+
+/* ── Hide main-chat when any Hyrax main-view panel is active ── */
+/* Upstream uses a high-specificity :not() chain; !important is the standard
+   CSS extension mechanism to override without touching upstream source. */
+main.main.showing-hq > #mainChat,
+main.main.showing-projects > #mainChat,
+main.main.showing-warroom > #mainChat,
+main.main.showing-dispatch > #mainChat,
+main.main.showing-verify > #mainChat,
+main.main.showing-promises > #mainChat { display: none !important; }
+
+/* ── Show Hyrax main-view panels when active ── */
+main.main.showing-projects > #mainProjects,
+main.main.showing-warroom > #mainWarroom,
+main.main.showing-dispatch > #mainDispatch,
+main.main.showing-verify > #mainVerify,
+main.main.showing-promises > #mainPromises { display: flex !important; }
+
+/* Shared hyrax main-view content styling */
+main.main > .main-view[id^="main"][id$="Hq"],
+main.main > .main-view[id^="main"][id$="Projects"],
+main.main > .main-view[id^="main"][id$="Warroom"],
+main.main > .main-view[id^="main"][id$="Dispatch"],
+main.main > .main-view[id^="main"][id$="Verify"],
+main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-direction: column; flex: 1; }
+.hyrax-placeholder { color: var(--muted, #8b949e); padding: 24px; font-size: 14px; }

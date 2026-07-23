@@ -2,7 +2,7 @@
  * Hyraxknot Projects Panel
  * 
  * Displays project cards with progress bars, status breakdowns,
- * and task counts. Data from GET /api/v1/projects.
+ * and task counts. Data from GET /api/hyrax/projects.
  */
 
 async function loadProjects() {
@@ -11,7 +11,7 @@ async function loadProjects() {
   content.innerHTML = '<p class="muted">Loading projects…</p>';
   
   try {
-    const data = await api('/api/v1/projects');
+    const data = await api('/api/hyrax/projects');
     const projects = data?.items || [];
     
     if (!projects.length) {

@@ -1,191 +1,233 @@
 /**
- * Hyraxknot Division — HQ Isometric Map Panel
+ * Hyraxknot Division — HQ Panel
  *
- * Renders the Division HQ as an isometric map with 9 rooms and
- * sister chibis. Integrates with the VN panel by dispatching
- * custom events that vn.js listens for.
+ * Lazy-loads the 3D embodiment module on first mount. Falls back to a
+ * 2D isometric map if the module fails to load (CSP/WebGL unavailable).
  *
- * Called by bootstrap.js via the lazy-load hook (loadHq).
+ * Mount/unmount lifecycle driven by bootstrap.js via window.__hqMount
+ * and window.__hqUnmount, which are registered as HermesPanels hooks.
+ *
+ * No switchPanel wrapper, no direct panel-list mutation, no polling.
  */
+(function() {
+  'use strict';
 
-/* ── Room definitions ── */
-const HQ_ROOMS = [
-  { id: 'security',  label: 'Security Alcove' },
-  { id: 'common',    label: 'Common Area' },
-  { id: 'coffee',    label: 'Coffee Station' },
-  { id: 'corridor',  label: 'Main Corridor' },
-  { id: 'director',  label: "Director's Office" },
-  { id: 'ops',       label: 'Operations Hub' },
-  { id: 'lab',       label: 'Research Lab' },
-  { id: 'logistics', label: 'Logistics Annex' },
-  { id: 'entrance',  label: 'Entrance' },
-];
+  var _mounted = false;
+  var _imported = false;
+  var _unmount3d = null;         // cleanup function returned by 3D module
+  var _prevContent = null;       // snapshot of HQ content for unmount
+  var _mountGen = 0;             // epoch counter: increments on each mount
 
-/* ── Sister chibi definitions ── */
-const HQ_SISTERS = [
-  { id: 'tai', name: 'Tai',  room: 'Operations Hub',   role: 'implementation' },
-  { id: 'rei', name: 'Rei',  room: 'Security Alcove',   role: 'verification'  },
-  { id: 'nei', name: 'Nei',  room: 'Research Lab',      role: 'contracts'     },
-  { id: 'mai', name: 'Mai',  room: 'Logistics Annex',   role: 'blocked triage'},
-];
+  // 3D module path (generated local ES module).
+  var MODULE_URL = '/static/hyrax/3d/embodiment-bundle.js';
 
-/* ── Expression aliases (mirrors server-side mapping) ── */
-const EXPRESSION_ALIASES = {
-  amused: 'smile', happy: 'smile', grinning: 'laughing',
-  calm: 'light-smile', annoyed: 'scream-of-fury', shy: 'shy-smile',
-  mischievous: 'yandere-smile', playful: 'ohhoai', deadpan: 'neutral',
-  thinking: 'focused', surprised: 'ohhoai', concerned: 'focused',
-};
+  // ── Rooms ──
+  var HQ_ROOMS = [
+    { id: 'security',  label: 'Security Alcove' },
+    { id: 'common',    label: 'Common Area' },
+    { id: 'coffee',    label: 'Coffee Station' },
+    { id: 'corridor',  label: 'Main Corridor' },
+    { id: 'director',  label: "Director's Office" },
+    { id: 'ops',       label: 'Operations Hub' },
+    { id: 'lab',       label: 'Research Lab' },
+    { id: 'logistics', label: 'Logistics Annex' },
+    { id: 'entrance',  label: 'Entrance' },
+  ];
 
-/**
- * Load the HQ panel — sets up the isometric map if not already built.
- * Called automatically by bootstrap.js when the HQ nav tab is clicked.
- */
-async function loadHq() {
-  const content = document.getElementById('mainHq');
-  if (!content) return;
+  // ── Sisters ──
+  var HQ_SISTERS = [
+    { id: 'tai', name: 'Tai',  room: 'Operations Hub',   role: 'implementation' },
+    { id: 'rei', name: 'Rei',  room: 'Security Alcove',   role: 'verification'  },
+    { id: 'nei', name: 'Nei',  room: 'Research Lab',      role: 'contracts'     },
+    { id: 'mai', name: 'Mai',  room: 'Logistics Annex',   role: 'blocked triage' },
+  ];
 
-  // Already rendered? Just refresh presence.
-  if (content.dataset.rendered) {
-    refreshPresence();
-    return;
-  }
+  // ── Mount (called by HermesPanels mount hook) ──
+  async function __hqMount(id) {
+    var content = document.getElementById('mainHq');
+    if (!content) return;
 
-  content.innerHTML = '<p class="muted">Loading Division HQ…</p>';
-
-  try {
-    renderHQLayout(content);
-    content.dataset.rendered = 'true';
-  } catch (err) {
-    content.innerHTML = '<div class="empty"><p>Failed to load HQ.</p><p class="muted">' + esc(err.message || 'Unknown error') + '</p></div>';
-  }
-}
-
-/* ── Layout renderer ── */
-
-function renderHQLayout(container) {
-  // Page wrapper
-  const page = document.createElement('div');
-  page.className = 'hq-page';
-
-  // Header
-  const head = document.createElement('div');
-  head.className = 'page-head';
-  head.innerHTML = '<p class="eyebrow">SPATIAL OVERVIEW</p>'
-    + '<h1>Division Headquarters</h1>'
-    + '<p class="muted">Click a sister\'s chibi to open a conversation.</p>';
-  page.appendChild(head);
-
-  // Map stage
-  const stage = document.createElement('div');
-  stage.className = 'map-stage';
-
-  // Iso floor
-  const floor = document.createElement('div');
-  floor.className = 'iso-floor';
-  floor.setAttribute('aria-label', 'Isometric Division HQ map');
-
-  // Render rooms
-  HQ_ROOMS.forEach(r => {
-    const room = document.createElement('div');
-    room.className = 'room room-' + r.id;
-    room.textContent = r.label;
-    floor.appendChild(room);
-  });
-  stage.appendChild(floor);
-
-  // Fetch profiles for presence data, then add chibis
-  fetchProfiles().then(profiles => {
-    HQ_SISTERS.forEach(s => {
-      const chibi = createChibi(s, profiles);
-      stage.appendChild(chibi);
-    });
-  }).catch(() => {
-    // Profiles unavailable — render chibis without presence data
-    HQ_SISTERS.forEach(s => {
-      const chibi = createChibi(s, []);
-      stage.appendChild(chibi);
-    });
-  });
-
-  page.appendChild(stage);
-  container.replaceChildren(page);
-}
-
-// If HQ is already the active panel by the time this script loads, render now.
-if (document.getElementById('panelHq')?.classList.contains('active')) {
-  loadHq();
-}
-
-/* ── Chibi element factory ── */
-
-function createChibi(sister, profiles) {
-  const chibi = document.createElement('button');
-  chibi.className = 'chibi chibi-' + sister.id;
-  chibi.setAttribute('aria-label', 'Talk with ' + sister.name);
-
-  const img = document.createElement('img');
-  img.src = '/api/v1/assets/' + sister.id + '.chibi.stand';
-  img.alt = '';
-  img.loading = 'lazy';
-
-  const name = document.createElement('strong');
-  name.textContent = sister.name;
-
-  const role = document.createElement('span');
-  role.textContent = sister.role;
-
-  chibi.appendChild(img);
-  chibi.appendChild(name);
-  chibi.appendChild(role);
-
-  // Presence gating
-  const profile = profiles.find(p => p.id === sister.id);
-  if (!profile || !profile.enabled || !profile.runtime_safe) {
-    chibi.classList.add('staged');
-  }
-
-  // Click → dispatch custom event that vn.js catches
-  chibi.addEventListener('click', function onClick() {
-    const event = new CustomEvent('hyrax:open-conversation', {
-      detail: { sisterId: sister.id, sisterName: sister.name, role: sister.role },
-      bubbles: true,
-    });
-    document.dispatchEvent(event);
-  });
-
-  return chibi;
-}
-
-/* ── Presence data ── */
-
-/**
- * Fetch sister profiles/presence from the API.
- * Returns an empty array if the endpoint isn't available yet,
- * so chibis render unconditionally in the shell.
- */
-async function fetchProfiles() {
-  try {
-    const data = await api('/api/v1/profiles');
-    return data?.items || [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Refresh chibi staged state — called on revisit without rebuilding the DOM.
- */
-async function refreshPresence() {
-  const profiles = await fetchProfiles();
-  HQ_SISTERS.forEach(s => {
-    const chibiEl = document.querySelector('.chibi-' + s.id);
-    if (!chibiEl) return;
-    const profile = profiles.find(p => p.id === s.id);
-    if (!profile || !profile.enabled || !profile.runtime_safe) {
-      chibiEl.classList.add('staged');
-    } else {
-      chibiEl.classList.remove('staged');
+    // Already mounted — refresh presence data
+    if (_mounted) {
+      refreshPresence();
+      return;
     }
-  });
-}
+
+    // Increment generation — any stale import/mount in-flight belongs
+    // to an older generation and must not execute mount side effects.
+    var gen = ++_mountGen;
+    _mounted = true;
+    _prevContent = content.innerHTML;
+    content.innerHTML = '<p class="muted">Loading Division HQ\u2026</p>';
+
+    if (!_imported) {
+      _imported = true;
+      try {
+        var mod = await import(MODULE_URL);
+        // Stale: unmount/re-mount happened while import was pending
+        if (_mountGen !== gen) return;
+
+        if (mod && typeof mod.mountTaiLoft === 'function') {
+          // Unmount callback for "Return to VN" button in 3D view
+          var returnToVn = function() {
+            if (typeof _unmount3d === 'function') _unmount3d();
+            _unmount3d = null;
+            content.innerHTML = _prevContent || '';
+            _mounted = false;
+            // Re-mount in 2D mode
+            render2dFallback(content);
+          };
+          var cleanup = await mod.mountTaiLoft(
+            content,
+            returnToVn,
+            { vrmUrl: '/api/hyrax/assets/tai.embodiment.vrm' }
+          );
+          // Stale: another mount cycle completed while we were mounting
+          if (_mountGen !== gen) {
+            if (typeof cleanup === 'function') cleanup();
+            return;
+          }
+          _unmount3d = cleanup;
+          return;
+        }
+      } catch (_) {
+        // Stale import failure — don't render fallback into newer mount
+        if (_mountGen !== gen) return;
+      }
+    }
+
+    // 2D fallback (import failure, CSP block, WebGL unavailable)
+    render2dFallback(content);
+  }
+
+  // ── Unmount (called by HermesPanels unmount hook) ──
+  function __hqUnmount(id) {
+    if (!_mounted) return;
+    _mountGen++; // increment generation — invalidate any pending mount work
+    _mounted = false;
+    if (typeof _unmount3d === 'function') {
+      _unmount3d();
+      _unmount3d = null;
+    }
+    _prevContent = null;
+  }
+
+  // ── 2D fallback: isometric map with chibis ──
+  function render2dFallback(container) {
+    var page = document.createElement('div');
+    page.className = 'hq-page';
+
+    // Header
+    var head = document.createElement('div');
+    head.className = 'page-head';
+    head.innerHTML = '<p class="eyebrow">SPATIAL OVERVIEW</p>'
+      + '<h1>Division Headquarters</h1>'
+      + '<p class="muted">Click a sister\'s chibi to open a conversation.</p>';
+    page.appendChild(head);
+
+    // Map stage
+    var stage = document.createElement('div');
+    stage.className = 'map-stage';
+
+    // Iso floor
+    var floor = document.createElement('div');
+    floor.className = 'iso-floor';
+    floor.setAttribute('aria-label', 'Isometric Division HQ map');
+    HQ_ROOMS.forEach(function(r) {
+      var room = document.createElement('div');
+      room.className = 'room room-' + r.id;
+      room.textContent = r.label;
+      floor.appendChild(room);
+    });
+    stage.appendChild(floor);
+
+    // Chibis
+    fetchProfiles().then(function(profiles) {
+      HQ_SISTERS.forEach(function(s) {
+        stage.appendChild(createChibi(s, profiles));
+      });
+    }).catch(function() {
+      HQ_SISTERS.forEach(function(s) {
+        stage.appendChild(createChibi(s, []));
+      });
+    });
+
+    page.appendChild(stage);
+    container.replaceChildren(page);
+  }
+
+  // ── Chibi element factory ──
+  function createChibi(sister, profiles) {
+    var chibi = document.createElement('button');
+    chibi.className = 'chibi chibi-' + sister.id;
+    chibi.setAttribute('aria-label', 'Talk with ' + sister.name);
+
+    var img = document.createElement('img');
+    img.src = '/api/hyrax/assets/' + sister.id + '.chibi.stand';
+    img.alt = '';
+    img.loading = 'lazy';
+
+    var name = document.createElement('strong');
+    name.textContent = sister.name;
+
+    var role = document.createElement('span');
+    role.textContent = sister.role;
+
+    chibi.appendChild(img);
+    chibi.appendChild(name);
+    chibi.appendChild(role);
+
+    // Presence gating
+    var profile = profiles.find(function(p) { return p.id === sister.id; });
+    if (!profile || !profile.available) {
+      chibi.classList.add('staged');
+      chibi.setAttribute('aria-disabled', 'true');
+    }
+
+    // Click → dispatch custom event that vn.js catches
+    chibi.addEventListener('click', function onClick() {
+      var event = new CustomEvent('hyrax:open-conversation', {
+        detail: { sisterId: sister.id, sisterName: sister.name, role: sister.role },
+        bubbles: true,
+      });
+      document.dispatchEvent(event);
+    });
+
+    return chibi;
+  }
+
+  // ── Presence ──
+  function fetchProfiles() {
+    try {
+      var data = api('/api/hyrax/vn/profiles');
+      if (data && typeof data.then === 'function') {
+        return data.then(function(r) { return r?.items || []; }).catch(function() { return []; });
+      }
+      return Promise.resolve(data?.items || []);
+    } catch (_) {
+      return Promise.resolve([]);
+    }
+  }
+
+  function refreshPresence() {
+    fetchProfiles().then(function(profiles) {
+      HQ_SISTERS.forEach(function(s) {
+        var chibiEl = document.querySelector('.chibi-' + s.id);
+        if (!chibiEl) return;
+        var profile = profiles.find(function(p) { return p.id === s.id; });
+        if (!profile || !profile.available) {
+          chibiEl.classList.add('staged');
+          chibiEl.setAttribute('aria-disabled', 'true');
+        } else {
+          chibiEl.classList.remove('staged');
+          chibiEl.removeAttribute('aria-disabled');
+        }
+      });
+    });
+  }
+
+  // ── Expose for bootstrap ──
+  window.__hqMount = __hqMount;
+  window.__hqUnmount = __hqUnmount;
+
+})();

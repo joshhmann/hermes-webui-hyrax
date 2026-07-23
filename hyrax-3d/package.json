@@ -1,0 +1,23 @@
+{
+  "name": "@hermes-webui/hyrax-3d",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "build:test": "vite build --mode test",
+    "check": "npm run typecheck && npm run build && npm test",
+    "test": "node --test tests/contracts.test.mjs",
+    "test:lifecycle": "vite build --mode test && node --test tests/lifecycle.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "3.4.2",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "typescript": "5.8.3",
+    "vite": "6.2.6"
+  }
+}

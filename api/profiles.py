@@ -499,6 +499,54 @@ def clear_request_profile() -> None:
     _tls.profile = None
 
 
+_SENTINEL = object()
+
+
+@contextmanager
+def request_profile_context(name: str):
+    """Context manager that sets a thread-local request profile for its duration.
+
+    Applies the same thread-local profile isolation pattern as
+    set_request_profile() / clear_request_profile() but without needing an
+    explicit finally block at every call site.  Designed for use inside
+    route handlers that need a temporary request-scoped profile.
+
+    Contract:
+      - Preserves the exact prior TLS profile value (None or str).
+      - Restores it in ``finally`` so exceptions do not leak the value.
+      - Supports nesting: inner contexts save/restore the outer value.
+      - Rejects invalid profile names with ValueError (preventing traversal).
+      - Never mutates process-global ``_active_profile``, ``os.environ``,
+        ``HERMES_HOME``, or any module-level state beyond ``_tls.profile``.
+
+    Usage::
+
+        with request_profile_context("tai"):
+            # get_active_profile_name() returns "tai" within this block
+            session = get_session(sid)
+            ...
+        # profile restored to whatever it was before
+
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("profile name must be a non-empty string")
+    if not _PROFILE_ID_RE.fullmatch(name):
+        raise ValueError(f"invalid profile name: {name!r}")
+
+    prior = getattr(_tls, 'profile', _SENTINEL)
+    _tls.profile = name
+    try:
+        yield
+    finally:
+        if prior is _SENTINEL:
+            try:
+                delattr(_tls, 'profile')
+            except AttributeError:
+                pass
+        else:
+            _tls.profile = prior
+
+
 def _resolve_profile_home_for_name(name: str) -> Path:
     """Resolve a logical profile name to its Hermes home path.
 

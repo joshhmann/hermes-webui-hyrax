@@ -11982,6 +11982,12 @@ def handle_get(handler, parsed) -> bool:
     if proxy_result is not False:
         return proxy_result
 
+    # ── Hyraxknot /api/hyrax/* dispatch ─────────────────────────────────
+    if parsed.path.startswith("/api/hyrax/"):
+        from api.hyrax_routes import handle_hyrax_get
+        return handle_hyrax_get(handler, parsed)
+    # ─────────────────────────────────────────────────────────────────────
+
     if parsed.path.startswith("/session/static/"):
         # Strip the leading "/session" so _serve_static() sees a path that
         # starts with "/static/" (its required prefix). _serve_static enforces
@@ -13962,6 +13968,12 @@ def handle_post(handler, parsed) -> bool:
         if diag:
             diag.finish()
         return proxy_result
+
+    # ── Hyraxknot /api/hyrax/* POST dispatch ──────────────────────────────
+    if parsed.path.startswith("/api/hyrax/"):
+        from api.hyrax_routes import handle_hyrax_post
+        return handle_hyrax_post(handler, parsed)
+    # ────────────────────────────────────────────────────────────────────────
 
     if parsed.path == "/api/shutdown":
         return _handle_shutdown(handler)

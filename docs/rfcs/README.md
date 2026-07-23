@@ -70,3 +70,7 @@ First-time contributor RFCs should be discussed in an issue before opening a PR.
 - [`session-sse-contract-v1.md`](session-sse-contract-v1.md) — #4812 Proposed
   contract vocabulary, replay identity, event taxonomy, cursor/resume semantics,
   and implementation gates for `GET /api/sessions/{session_id}/events`.
+- [`hyrax-vn-native-session-adapter.md`](hyrax-vn-native-session-adapter.md) —
+  accepted contract for presenting profile-owned native Hermes sessions and
+  run-journal SSE through the Hyrax visual-novel interface without a second
+  conversation database, runner, or control-plane dependency.

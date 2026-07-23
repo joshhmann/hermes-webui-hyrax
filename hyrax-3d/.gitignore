@@ -1,0 +1,6 @@
+# The isolated production bundle is reproducible even though the WebUI root
+# ignores package locks used by its optional development tooling.
+!package-lock.json
+
+# Test build output — never commit or ship this
+/test-output/

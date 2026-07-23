@@ -1,0 +1,131 @@
+{
+  "captured_at_utc": "2026-07-23T03:09:43.126041+00:00",
+  "combined_sha256": "1ad00f6d20faffc1406b5ea9fbd5347710cebf558898a848e6c83798b315ecd7",
+  "combined_sha256_algorithm": "sha256(sorted(relative_path + space + file_sha256 + newline))",
+  "file_count": 14,
+  "files": [
+    {
+      "bytes": 19335,
+      "git_status": "",
+      "relative_path": "TaiRoomScene.ts",
+      "sha256": "c36dc7d4de8ce2fb2fbef0ad6ca77404a3a85a1b6cb3c3195e2e36e15929700c",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/TaiRoomScene.ts"
+    },
+    {
+      "bytes": 5257,
+      "git_status": "",
+      "relative_path": "atmosphere/TimeOfDaySystem.ts",
+      "sha256": "f81cec52228ffa280b41f177f9b88be0320cce4bdd7518149d3f350bf85ce34d",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/atmosphere/TimeOfDaySystem.ts"
+    },
+    {
+      "bytes": 10348,
+      "git_status": "",
+      "relative_path": "debug/RigDevelopmentPanel.ts",
+      "sha256": "3431c4504c610944d236c18bd3c6d334f4f1658d0fa24a7a8c8317573efcc03f",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/debug/RigDevelopmentPanel.ts"
+    },
+    {
+      "bytes": 2852,
+      "git_status": "",
+      "relative_path": "face/FaceController.ts",
+      "sha256": "ba804774dbe11b68f93d29ec947272b4088722f7cc583fa693b8478890efcfe5",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/face/FaceController.ts"
+    },
+    {
+      "bytes": 5186,
+      "git_status": "",
+      "relative_path": "face/GazeSystem.ts",
+      "sha256": "0ddf3fc92dd8437b3a499df58e6d8302e61d8909a61215a3a916a40dd163d91a",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/face/GazeSystem.ts"
+    },
+    {
+      "bytes": 1207,
+      "git_status": "",
+      "relative_path": "loaders/loadModel.ts",
+      "sha256": "52610b0d9a0a0e1c19975a909128160450e1210eb3941e60fa5fad95adea3cb7",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/loaders/loadModel.ts"
+    },
+    {
+      "bytes": 18375,
+      "git_status": "",
+      "relative_path": "locomotion/ProceduralLocomotion.ts",
+      "sha256": "0fd4eeb53f47f91f103d59f0f4e5e036e64f258f0c290a207bf2f6db9ae05ee9",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/locomotion/ProceduralLocomotion.ts"
+    },
+    {
+      "bytes": 2936,
+      "git_status": "",
+      "relative_path": "mountTaiLoft.ts",
+      "sha256": "247a1d0b80af5ec5d8d16df8d706bab75d9cdc852f58d4536ade90bb84a01712",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/mountTaiLoft.ts"
+    },
+    {
+      "bytes": 16341,
+      "git_status": "",
+      "relative_path": "navigation/RoomNavigation.ts",
+      "sha256": "a4d30cebfd37967cb54ee0ce25f5d9d3a234d5ebd4a6b4666b8045e774f8db95",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/navigation/RoomNavigation.ts"
+    },
+    {
+      "bytes": 21997,
+      "git_status": "",
+      "relative_path": "rig/AvatarRig.ts",
+      "sha256": "9375f9ead3b0abf50e88a60d69f4905b8866abaf9ee5d89a1d4bb95b0c7e9306",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/rig/AvatarRig.ts"
+    },
+    {
+      "bytes": 6393,
+      "git_status": "",
+      "relative_path": "room/roomObjects.json",
+      "sha256": "216129341ab1e413a85c1fdf3a7b697791e5964b7d865186d18aa2ff4c5bad0c",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/room/roomObjects.json"
+    },
+    {
+      "bytes": 4650,
+      "git_status": "",
+      "relative_path": "tai-room.css",
+      "sha256": "957bd22d17d4d64a7e426daa7d8461616288dfc421c2099efdb3e42862d8fe29",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/tai-room.css"
+    },
+    {
+      "bytes": 8247,
+      "git_status": "",
+      "relative_path": "types.ts",
+      "sha256": "5001ac91658a2b2a1b5a2c35060c09033cdfb1851a0d8bc6650edf67f5a93766",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/types.ts"
+    },
+    {
+      "bytes": 2172,
+      "git_status": "",
+      "relative_path": "voice/VisemeController.ts",
+      "sha256": "9ec7013185c1b669fc49811e662fbcdb440fc9214e6de5d354430a77679f3f49",
+      "source_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment/voice/VisemeController.ts"
+    }
+  ],
+  "provenance_statement": "Snapshot of the already-ported local Gestalt control-plane embodiment implementation. CT 112 was not accessed and is not an integration source.",
+  "schema_version": 1,
+  "source": {
+    "absolute_path": "/root/workspace/gestalt-control-plane/frontend/src/embodiment",
+    "branch": "agent/standardize-work-packet",
+    "embodiment_status": [],
+    "git_root": "/root/workspace/gestalt-control-plane",
+    "head": "8e550c240efce7888a1d9104307ead68dd022bf2",
+    "origin": "https://github.com/joshhmann/hyrax-division-control-plane.git",
+    "read_only_invariant": true,
+    "working_tree_status": [
+      "M division_gateway/app.py",
+      " M frontend/src/main.ts",
+      "?? .hermes/plans/2026-07-21_080500-webui-fork-integration.md",
+      "?? .hermes/plans/2026-07-21_174000-webui-prd.md",
+      "?? .hermes/plans/2026-07-21_180000-hq-vn-port-prd.md",
+      "?? frontend/control-plane-frontend-architecture.md"
+    ]
+  },
+  "target": {
+    "branch": "master",
+    "git_root": "/root/hermes-webui-hyrax",
+    "head": "271a35810abde7a00574abe0276fb63c5ee758c5",
+    "origin": "https://github.com/joshhmann/hermes-webui-hyrax.git"
+  }
+}

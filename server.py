@@ -109,9 +109,6 @@ from api.helpers import (
 )
 from api.profiles import set_request_profile, clear_request_profile
 from api.routes import handle_delete, handle_get, handle_patch, handle_post, handle_put, apply_cors_preflight_headers
-from api import hyrax_routes  # Hyraxknot Division route extensions (no core modifications)
-# Re-patch now that server module is fully loaded
-hyrax_routes.repatch()
 from api.startup import auto_install_agent_deps, fix_credential_permissions
 from api.updates import WEBUI_VERSION
 from api.crash_visibility import install_crash_visibility

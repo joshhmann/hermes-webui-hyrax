@@ -47,6 +47,156 @@ const APP_TITLEBAR_KEYS = {
 const MAIN_VIEW_PANELS = ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'];
 const MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS = { plugin: 'settings' };
 
+// ── Extension panel registry / lifecycle ──
+// window.HermesPanels — generic extension-panel API for third-party consumers.
+// Core contains zero vendor-specific identifiers.
+
+const _EXT_IDS = new Set();
+const _EXT_REGISTRY = new Map();
+const _EXT_SIDEBAR_FALLBACKS = {};
+const _EXT_MOUNT_HOOKS = {};
+const _EXT_UNMOUNT_HOOKS = {};
+const _EXT_ID_RE = /^[a-z][a-z0-9-]{0,31}$/;
+const _EXT_LABEL_MAX = 64;
+
+function _isCorePanel(id) {
+  return !!APP_TITLEBAR_KEYS[id] || MAIN_VIEW_PANELS.includes(id);
+}
+
+function _runExtensionHook(id, phase) {
+  const hooks = phase === 'mount' ? _EXT_MOUNT_HOOKS : _EXT_UNMOUNT_HOOKS;
+  const fn = hooks[id];
+  if (!fn) return;
+  const dispatch = (name, detail) => {
+    try { document.dispatchEvent(new CustomEvent(name, { bubbles: true, cancelable: false, detail })); } catch (_) {}
+  };
+  try {
+    const result = fn(id);
+    if (result && typeof result.then === 'function') {
+      result.then(() => dispatch('hermes:panel-' + phase + 'ed', { id, phase }))
+            .catch(() => {
+              console.warn('[HermesPanels] ' + phase + ' hook error for "' + id + '"');
+              dispatch('hermes:panel-hook-error', { id, phase });
+            });
+    } else {
+      dispatch('hermes:panel-' + phase + 'ed', { id, phase });
+    }
+  } catch (_) {
+    console.warn('[HermesPanels] ' + phase + ' hook threw for "' + id + '"');
+    dispatch('hermes:panel-hook-error', { id, phase });
+  }
+}
+
+function _callExtensionUnmountHook(id) { _runExtensionHook(id, 'unmount'); }
+function _callExtensionMountHook(id) { _runExtensionHook(id, 'mount'); }
+
+window.HermesPanels = {
+  register: function(def) {
+    if (!def || typeof def !== 'object')
+      throw Error('HermesPanels.register: definition must be a non-null object');
+
+    // Strict definition types — no coercion
+    if (typeof def.id !== 'string')
+      throw Error('HermesPanels.register: id must be a string');
+    var id = def.id.trim();
+    if (!id || !_EXT_ID_RE.test(id))
+      throw Error('HermesPanels.register: invalid id "' + id + '". Must match /^[a-z][a-z0-9-]{0,31}$/');
+
+    if (typeof def.label !== 'string')
+      throw Error('HermesPanels.register: label must be a string');
+    var label = def.label.trim();
+    if (!label)
+      throw Error('HermesPanels.register: non-empty label is required');
+    if (label.length > _EXT_LABEL_MAX)
+      throw Error('HermesPanels.register: label exceeds ' + _EXT_LABEL_MAX + ' characters');
+
+    if (_EXT_IDS.has(id))
+      throw Error('HermesPanels.register: duplicate id "' + id + '"');
+    if (_isCorePanel(id))
+      throw Error('HermesPanels.register: id "' + id + '" collides with a core panel');
+
+    // mainView must be boolean when supplied
+    if (Object.prototype.hasOwnProperty.call(def, 'mainView') && typeof def.mainView !== 'boolean')
+      throw Error('HermesPanels.register: mainView must be a boolean');
+    var mainView = def.mainView !== false;
+
+    // sidebarFallback must be a string matching the panel-id regex, non-empty,
+    // and not equal to the registering id.
+    var sidebarFallback = null;
+    if (Object.prototype.hasOwnProperty.call(def, 'sidebarFallback')) {
+      if (typeof def.sidebarFallback !== 'string')
+        throw Error('HermesPanels.register: sidebarFallback must be a string');
+      var sf = def.sidebarFallback.trim();
+      if (!sf || !_EXT_ID_RE.test(sf))
+        throw Error('HermesPanels.register: sidebarFallback "' + def.sidebarFallback + '" is not a valid panel id');
+      if (sf === id)
+        throw Error('HermesPanels.register: sidebarFallback cannot be the same as the registering id');
+      sidebarFallback = sf;
+    }
+
+    // Hook validation — own property with non-function/non-null/non-undefined type throws
+    if (Object.prototype.hasOwnProperty.call(def, 'mount') && def.mount !== null && def.mount !== undefined && typeof def.mount !== 'function')
+      throw Error('HermesPanels.register: mount must be a function, null, or undefined');
+    if (Object.prototype.hasOwnProperty.call(def, 'unmount') && def.unmount !== null && def.unmount !== undefined && typeof def.unmount !== 'function')
+      throw Error('HermesPanels.register: unmount must be a function, null, or undefined');
+
+    var mount = typeof def.mount === 'function' ? def.mount : null;
+    var unmount = typeof def.unmount === 'function' ? def.unmount : null;
+
+    // Sanitized, frozen metadata so later caller mutation cannot change behaviour.
+    var meta = Object.freeze({
+      id: id,
+      label: label,
+      mainView: mainView,
+      sidebarFallback: sidebarFallback
+    });
+
+    _EXT_IDS.add(id);
+    _EXT_REGISTRY.set(id, meta);
+    if (sidebarFallback) _EXT_SIDEBAR_FALLBACKS[id] = sidebarFallback;
+    if (mount) _EXT_MOUNT_HOOKS[id] = mount;
+    if (unmount) _EXT_UNMOUNT_HOOKS[id] = unmount;
+
+    // Integrate with core panel structures.
+    APP_TITLEBAR_KEYS[id] = label;
+    if (mainView && MAIN_VIEW_PANELS.indexOf(id) === -1) {
+      MAIN_VIEW_PANELS.push(id);
+    }
+
+    var registeredId = id;
+    var _unregistered = false;
+    return function unregister() {
+      if (_unregistered) return;
+      _unregistered = true;
+
+      // If active, switch to chat safely before removal.
+      if (typeof _currentPanel !== 'undefined' && _currentPanel === registeredId) {
+        switchPanel('chat');
+      }
+
+      // Remove only extension-owned state — never core state.
+      _EXT_IDS['delete'](registeredId);
+      _EXT_REGISTRY['delete'](registeredId);
+      delete _EXT_SIDEBAR_FALLBACKS[registeredId];
+      delete _EXT_MOUNT_HOOKS[registeredId];
+      delete _EXT_UNMOUNT_HOOKS[registeredId];
+      delete APP_TITLEBAR_KEYS[registeredId];
+      var mvIdx = MAIN_VIEW_PANELS.indexOf(registeredId);
+      if (mvIdx !== -1) MAIN_VIEW_PANELS.splice(mvIdx, 1);
+    };
+  }
+};
+
+// Emit the API-ready event exactly once, asynchronously after
+// window.HermesPanels installation.  Consumers can synchronously check
+// window.HermesPanels or listen for this event before load; no polling needed.
+setTimeout(function() {
+  try { document.dispatchEvent(new CustomEvent('hermes:panel-ready', {
+    bubbles: true, cancelable: false,
+    detail: {}
+  })); } catch (_) {}
+}, 0);
+
 /**
  * Update the top app titlebar to reflect the current page or selected conversation.
  * On the chat panel, a selected session's title takes precedence over the page name.
@@ -67,8 +217,14 @@ function syncAppTitlebar() {
     // Recovered sidecars stamp source_label 'WebUI' (api/session_recovery.py); don't badge a native session as its own source (#3338).
     if (/^webui$/i.test(sourceLabel)) sourceLabel = '';
   } else {
-    const key = APP_TITLEBAR_KEYS[panel];
-    mainText = key && typeof t === 'function' ? t(key) : (panel.charAt(0).toUpperCase() + panel.slice(1));
+    // Extension panels use their literal registered label; core panels go
+    // through the i18n translator.
+    if (_EXT_IDS.has(panel)) {
+      mainText = APP_TITLEBAR_KEYS[panel] || (panel.charAt(0).toUpperCase() + panel.slice(1));
+    } else {
+      const key = APP_TITLEBAR_KEYS[panel];
+      mainText = key && typeof t === 'function' ? t(key) : (panel.charAt(0).toUpperCase() + panel.slice(1));
+    }
   }
 
   // Don't touch the element while an inline rename is in progress — replacing
@@ -346,7 +502,7 @@ function _panelFromCurrentMainView(){
   const mainEl=document.querySelector('main.main');
   if(!mainEl)return _currentPanel||'chat';
   for(const panel of MAIN_VIEW_PANELS){
-    if(mainEl.classList.contains('showing-'+panel))return MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS[panel]||panel;
+    if(mainEl.classList.contains('showing-'+panel))return MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS[panel]||_EXT_SIDEBAR_FALLBACKS[panel]||panel;
   }
   if(_currentPanel&&$('panel'+_currentPanel.charAt(0).toUpperCase()+_currentPanel.slice(1)))return _currentPanel;
   return 'chat';
@@ -394,6 +550,8 @@ async function switchPanel(name, opts = {}) {
   if (prevPanel === 'kanban' && nextPanel !== 'kanban') {
     if (typeof _kanbanStopPolling === 'function') _kanbanStopPolling();
   }
+  // Extension panel lifecycle — unmount previous registered hook before activation
+  if (prevPanel !== nextPanel) _callExtensionUnmountHook(prevPanel);
   _currentPanel = nextPanel;
   // Update nav tabs (rail + mobile sidebar-nav share data-panel)
   document.querySelectorAll('[data-panel]').forEach(t => t.classList.toggle('active', t.dataset.panel === nextPanel));
@@ -437,6 +595,8 @@ async function switchPanel(name, opts = {}) {
   _resyncChatSidebarAfterPanelSwitch();
   if (nextPanel === 'chat' && typeof syncTopbar === 'function') syncTopbar();
   else syncAppTitlebar();
+  // Extension panel lifecycle — mount next registered hook after sync
+  if (prevPanel !== nextPanel) _callExtensionMountHook(nextPanel);
   return true;
 }
 

@@ -1,0 +1,5 @@
+# VRM 3D model files — stored via Git LFS
+*.vrm filter=lfs diff=lfs merge=lfs -text
+
+# Reviewed SFW Hyrax VN/HQ image package — keep binary artwork out of Git objects.
+hyrax-assets/vn/**/*.png filter=lfs diff=lfs merge=lfs -text
