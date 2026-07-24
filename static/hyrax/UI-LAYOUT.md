@@ -239,7 +239,7 @@ if (typeof MAIN_VIEW_PANELS !== 'undefined') {
 - ✅ `#mainHq` injected into `<main.main>` alongside `#mainChat` (index.html)
 - ✅ CSS rules added: `main.main.showing-hq > #mainHq { display: flex; }` (hyrax.css)
 - ✅ Sidebar `#panelHq` is minimal — header only, no `.panel-content` (bootstrap.js)
-- ✅ `hq.js` + `vn.js` render into `#mainHqBody` instead of `#hyrax-hq-content`
+- ✅ `hq.js` + `vn.js` render directly into `#mainHq` (`replaceChildren`)
 - Content persists across panel switches (data-rendered guard on `#mainHq`)
 
 **For list-oriented panels (Projects, Verify, Promises):**

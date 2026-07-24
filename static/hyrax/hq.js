@@ -13,9 +13,8 @@
   'use strict';
 
   var _mounted = false;
-  var _imported = false;
+  var _modulePromise = null;     // cached import() promise for the 3D bundle
   var _unmount3d = null;         // cleanup function returned by 3D module
-  var _prevContent = null;       // snapshot of HQ content for unmount
   var _mountGen = 0;             // epoch counter: increments on each mount
 
   // 3D module path (generated local ES module).
@@ -57,7 +56,6 @@
     // to an older generation and must not execute mount side effects.
     var gen = ++_mountGen;
     _mounted = true;
-    _prevContent = content.innerHTML;
 
     // Always render the 2D isometric map first.
     // The 3D space is launched on demand from the VN conversation.
@@ -73,7 +71,6 @@
       _unmount3d();
       _unmount3d = null;
     }
-    _prevContent = null;
   }
 
   // ── 2D fallback: isometric map with chibis ──
@@ -190,37 +187,84 @@
     });
   }
 
+  // ── 3D bundle CSS ──
+  // The Vite build emits the styles as a separate file next to the JS
+  // bundle; nothing else loads it, so without this the 3D shell renders
+  // unstyled and the canvas collapses (the "fills only the top quarter"
+  // symptom).
+  var CSS_URL = '/static/hyrax/3d/embodiment-bundle.css';
+  var _cssInjected = false;
+
+  function inject3dCss() {
+    if (_cssInjected) return;
+    try {
+      if (document.querySelector('link[href*="/static/hyrax/3d/embodiment-bundle.css"]')) {
+        _cssInjected = true;
+        return;
+      }
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = CSS_URL;
+      document.head.appendChild(link);
+      _cssInjected = true;
+    } catch (_) {}
+  }
+
   // ── Launch 3D Loft (called from VN conversation) ──
   async function launch3d() {
     var content = document.getElementById('mainHq');
     if (!content) return;
-    content.innerHTML = '<p class="muted">Loading 3D Loft...</p>';
 
-    if (!_imported) {
-      _imported = true;
-      try {
-        var mod = await import(MODULE_URL);
-        if (mod && typeof mod.mountTaiLoft === 'function') {
-          var returnToVn = function() {
-            if (typeof _unmount3d === 'function') _unmount3d();
-            _unmount3d = null;
-            // Return to current VN conversation, not the 2D map
-            if (typeof window.__vnReopen === 'function') {
-              window.__vnReopen();
-            } else {
-              render2dFallback(content);
-            }
-          };
-          var cleanup = await mod.mountTaiLoft(
-            content,
-            returnToVn,
-            { vrmUrl: '/api/hyrax/assets/tai.embodiment.vrm' }
-          );
-          _unmount3d = cleanup;
+    // Tear down an already-mounted 3D space before re-mounting
+    if (typeof _unmount3d === 'function') {
+      try { _unmount3d(); } catch (_) {}
+      _unmount3d = null;
+    }
+
+    content.innerHTML = '<p class="muted">Loading 3D Loft...</p>';
+    var gen = _mountGen;
+
+    try {
+      // The module import is cached; the mount runs on EVERY click. (The
+      // old one-shot flag made the loft reachable exactly once per page
+      // load — later clicks fell through to the 2D map.)
+      if (!_modulePromise) _modulePromise = import(MODULE_URL);
+      var mod = await _modulePromise;
+      if (gen !== _mountGen) return; // panel switched while loading
+
+      if (mod && typeof mod.mountTaiLoft === 'function') {
+        inject3dCss();
+        var returnToVn = function() {
+          if (typeof _unmount3d === 'function') _unmount3d();
+          _unmount3d = null;
+          // Return to current VN conversation, not the 2D map
+          if (typeof window.__vnReopen === 'function') {
+            window.__vnReopen();
+          } else {
+            render2dFallback(content);
+          }
+        };
+        var cleanup = await mod.mountTaiLoft(
+          content,
+          returnToVn,
+          { vrmUrl: '/api/hyrax/assets/tai.embodiment.vrm' }
+        );
+        if (gen !== _mountGen) {
+          // Unmounted while the scene was initializing — dispose at once
+          if (typeof cleanup === 'function') {
+            try { cleanup(); } catch (_) {}
+          }
           return;
         }
-      } catch (_) {}
+        _unmount3d = cleanup;
+        return;
+      }
+    } catch (_) {
+      // Import or mount failed — clear the cached promise so the next
+      // click retries instead of reusing a rejected promise forever.
+      _modulePromise = null;
     }
+    if (gen !== _mountGen) return;
     // 3D failed — show 2D map
     render2dFallback(content);
   }

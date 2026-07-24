@@ -168,10 +168,11 @@
 
     // Create or resume conversation
     try {
-      // Include current session context if available
+      // Include current session context if available. Session ids are not
+      // all hex (e.g. "api-*" ids exist), so accept the full safe-id charset.
       var body = { profile_id: profileId, fresh: false };
       try {
-        var hashMatch = location.hash.match(/[?&]session=([a-f0-9]+)/i);
+        var hashMatch = location.hash.match(/[?&]session=([A-Za-z0-9_-]+)/);
         if (hashMatch) body.current_session_id = hashMatch[1];
       } catch (_) {}
       var resp = await _api('/api/hyrax/vn/conversations', {
@@ -244,7 +245,12 @@
 
   function _renderVN(content, profileId, name, token) {
     var conversationId = _activeConversation && (_activeConversation.id || _activeConversation.session_id);
-    if (!conversationId) return;
+    if (!conversationId) {
+      // Never leave the user on a silent "Connecting…" state
+      _showToast('Conversation could not be loaded.');
+      content.innerHTML = '<div class="vn-error" role="alert"><p>Conversation unavailable.</p></div>';
+      return;
+    }
 
     var assets = VN_ASSETS[profileId];
     if (!assets) {
@@ -253,9 +259,12 @@
       return;
     }
 
-    // Build VN stage
+    // Build VN stage.
+    // Use the backgroundImage longhand only — the `background` shorthand would
+    // reset background-size/repeat to initial, clobbering the cover/centering
+    // rules from .vn-stage (inline styles beat the stylesheet).
     var stage = _el('section', { className: 'vn-stage' });
-    stage.style.background = 'linear-gradient(180deg,rgba(8,12,18,.1),rgba(8,12,18,.92)),url(/api/hyrax/assets/' + assets.background + ')';
+    stage.style.backgroundImage = 'linear-gradient(180deg,rgba(8,12,18,.1),rgba(8,12,18,.92)),url(/api/hyrax/assets/' + assets.background + ')';
 
     // Back button → HQ map
     var back = _el('button', { className: 'vn-back' }, '\u2190 HQ');
@@ -264,13 +273,17 @@
       _showHqView(content);
     });
 
-    // Enter 3D Loft button → launches Tai's room
-    var loft = _el('button', { className: 'vn-back', style: 'left:auto;right:20px;' }, '3D Loft \u2192');
-    loft.addEventListener('click', function() {
-      if (typeof window.__hqLaunch3d === 'function') {
-        window.__hqLaunch3d();
-      }
-    });
+    // Enter 3D Loft button → launches Tai's room. Only Tai has a 3D space,
+    // so the button is only offered inside Tai's conversation.
+    var loft = null;
+    if (profileId === 'tai') {
+      loft = _el('button', { className: 'vn-back', style: 'left:auto;right:20px;' }, '3D Loft →');
+      loft.addEventListener('click', function() {
+        if (typeof window.__hqLaunch3d === 'function') {
+          window.__hqLaunch3d();
+        }
+      });
+    }
 
     // Escape key → HQ map
     function onKeyDown(e) {
@@ -334,21 +347,36 @@
       }
     });
 
-    form.append(input, newConv, send);
+    // Send next to the input (highest-frequency action); the rarer,
+    // session-archiving "New Conversation" goes last.
+    form.append(input, send, newConv);
 
     form.addEventListener('submit', function(event) {
       event.preventDefault();
       var text = input.value.trim();
       if (!text) return;
+      // Resolve the conversation id at send time — "New Conversation" swaps
+      // _activeConversation, so a closure-captured id would post to the
+      // archived session and every message would fail.
+      var cid = _activeConversation && (_activeConversation.id || _activeConversation.session_id);
+      if (!cid) {
+        _showToast('No active conversation.');
+        return;
+      }
       _appendLine('Josh', text);
       input.value = '';
       send.setAttribute('disabled', 'true');
-      _api('/api/hyrax/vn/conversations/' + conversationId + '/turns', {
+      _api('/api/hyrax/vn/conversations/' + cid + '/turns', {
         method: 'POST',
         body: JSON.stringify({ text: text }),
-      }).then(function() {
+      }).then(function(resp) {
         send.removeAttribute('disabled');
         input.focus();
+        // Immediate feedback: open the streaming bubble as soon as the
+        // turn is accepted, before the first token arrives.
+        if (resp && resp.pending && !_streamBubble) {
+          _streamBubble = _appendLine(name, '…');
+        }
       }).catch(function() {
         _appendLine('Infrastructure', 'Run failed');
         send.removeAttribute('disabled');
@@ -374,7 +402,8 @@
     });
 
     dialogue.append(header, backlog, form);
-    stage.append(back, loft, portrait, dialogue);
+    stage.append(back, portrait, dialogue);
+    if (loft) stage.append(loft);
 
     // Show empty/loading state
     content.replaceChildren(stage);
@@ -412,8 +441,11 @@
       }
       for (var i = 0; i < turns.length; i++) {
         var turn = turns[i];
-        if (turn.text) {
-          _appendLine(turn.role === 'user' ? 'Josh' : name, turn.text);
+        // Server sends bounded messages with `content`; older/mock payloads
+        // use `text`. Accept both so history actually renders.
+        var turnText = turn.content || turn.text;
+        if (turnText) {
+          _appendLine(turn.role === 'user' ? 'Josh' : name, turnText);
         }
       }
     } catch (_) {
@@ -429,7 +461,7 @@
     if (!_activeConversation) return;
     var cid = _activeConversation.id || _activeConversation.session_id;
 
-    // If we already have an EventSource for the same conversation, reuse
+    // Always replace any existing connection — there is no reuse path
     if (_eventSource) {
       try { _eventSource.close(); } catch (_) {}
     }
@@ -473,29 +505,36 @@
 
     // ── Normalize server-side payload shapes to client-side event_type+payload contract ──
     if (event.event_type === undefined) {
-      // token event: text delta
-      if (event.text !== undefined) {
+      // Prefer the typed SSE event name. Payload-shape guessing alone
+      // misfires on variants — e.g. cancel payloads that carry a session_id
+      // used to fall into the "ignore" branch, and apperror payloads with a
+      // message field used to be misread as cancels.
+      var type = event.__eventType;
+      if (type === 'token' || event.text !== undefined) {
+        // token event: text delta
         event = { event_type: 'message.delta', payload: { delta: event.text } };
       }
-      // done event: run completed
-      else if (event.session !== undefined) {
-        var finalOut = _streamed || '';
-        event = { event_type: 'run.completed', payload: { output: finalOut } };
+      else if (type === 'done' || event.session !== undefined) {
+        // done event: run completed
+        event = { event_type: 'run.completed', payload: { output: _streamed || '' } };
       }
-      // cancel event
-      else if (event.message !== undefined && event.session_id === undefined) {
-        event = { event_type: 'run.cancelled', payload: { message: event.message } };
-      }
-      // apperror event
-      else if (event.label !== undefined) {
+      else if (type === 'apperror' || event.label !== undefined) {
+        // apperror event
         event = { event_type: 'run.failed', payload: { error: event.message || event.label } };
       }
-      // tool event — already has event_type, just needs payload normalization
-      else if (event.name !== undefined) {
+      else if (type === 'tool' || event.name !== undefined) {
+        // tool event — normalize payload
         event = { event_type: 'tool.started', payload: { name: event.name, preview: event.preview, args: event.args } };
       }
-      // stream_end — ignore
-      else if (event.session_id !== undefined) {
+      else if (type === 'tool_complete') {
+        event = { event_type: 'tool.completed', payload: {} };
+      }
+      else if (type === 'cancel' || event.message !== undefined) {
+        // cancel event
+        event = { event_type: 'run.cancelled', payload: { message: event.message } };
+      }
+      // stream_end and anything unrecognized — ignore
+      else {
         return;
       }
     }
@@ -505,16 +544,7 @@
     var name = _currentSisterName;
 
     if (event.event_type === 'expression') {
-      _lastExpression = { current: payload.current || 'neutral', intensity: payload.intensity || 0.5 };
-      var badge = document.querySelector('.expression-badge');
-      if (badge) badge.textContent = payload.current || 'neutral';
-      var portrait = document.getElementById('vn-portrait');
-      if (portrait && assets) {
-        var clean = (payload.current || 'neutral').replace(/-/g, '_');
-        var assetKey = assets.expressions[clean] || profileId + '.portrait.neutral';
-        portrait.src = '/api/hyrax/assets/' + assetKey;
-        portrait.alt = name + ', ' + (payload.current || 'neutral');
-      }
+      _applyExpression(payload, assets, profileId);
     }
 
     if (event.event_type === 'run.started') {
@@ -523,6 +553,15 @@
     }
 
     if (event.event_type === 'message.delta') {
+      if (!_streamBubble) {
+        // The server vocabulary has no run.started — open the streaming
+        // bubble lazily on the first token so the user sees feedback
+        // while the response is generating, and switch the portrait to
+        // the speaking pose for the duration of the stream.
+        _streamBubble = _appendLine(name, '…');
+        var talking = document.getElementById('vn-portrait');
+        if (talking && assets) talking.src = '/api/hyrax/assets/' + assets.speaking;
+      }
       _streamed += payload.delta || '';
       if (_streamBubble) {
         var p = _streamBubble.querySelector('p');
@@ -537,6 +576,10 @@
       if (portrait2 && assets) portrait2.src = '/api/hyrax/assets/' + assets.focused;
     }
 
+    if (event.event_type === 'tool.completed') {
+      _restorePortrait(assets, profileId);
+    }
+
     if (event.event_type === 'run.completed') {
       var finalText = payload.output || _streamed;
       if (_streamBubble) {
@@ -547,11 +590,20 @@
         _appendLine(name, finalText);
       }
       _streamed = '';
-      var portrait3 = document.getElementById('vn-portrait');
-      if (portrait3 && assets) {
-        var clean2 = _lastExpression.current.replace(/-/g, '_');
-        var assetKey2 = assets.expressions[clean2] || profileId + '.portrait.neutral';
-        portrait3.src = '/api/hyrax/assets/' + assetKey2;
+      _restorePortrait(assets, profileId);
+      // The server derives a mood from the final reply text and exposes it
+      // on the conversation contract — re-fetch once and apply it so the
+      // portrait/badge react even without a live expression SSE event.
+      var doneCid = _activeConversation && (_activeConversation.id || _activeConversation.session_id);
+      if (doneCid) {
+        _api('/api/hyrax/vn/conversations/' + doneCid, { method: 'GET' }).then(function(conv) {
+          if (_raceToken !== token) return;
+          conv = (conv && conv.conversation) || conv;
+          var derived = conv && conv.expression;
+          if (derived && derived.current && derived.current !== _lastExpression.current) {
+            _applyExpression(derived, VN_ASSETS[profileId], profileId);
+          }
+        }).catch(function() { /* mood refresh is best-effort */ });
       }
     }
 
@@ -565,10 +617,53 @@
       if (_streamBubble) { _streamBubble.remove(); _streamBubble = null; }
       _appendLine('Infrastructure', payload.error || 'Response failed');
       _streamed = '';
+      // The server now treats apperror as run-terminal and closes the
+      // stream; re-subscribe anyway (defensively, and to cover older
+      // deployments) so the next turn's events arrive on a fresh stream.
+      _reconnectEvents(profileId, token);
     }
+  }
 
-    // Placeholder for native reconnect/replay: EventSource auto-reconnects
-    // and our race-token guard ensures stale sessions don't bleed in.
+  // Apply an expression payload to the mood badge and portrait. Shared by
+  // the live 'expression' SSE event and the post-run derived-mood refresh.
+  function _applyExpression(payload, assets, profileId) {
+    _lastExpression = { current: payload.current || 'neutral', intensity: payload.intensity || 0.5 };
+    var badge = document.querySelector('.expression-badge');
+    if (badge) {
+      badge.textContent = payload.current || 'neutral';
+      badge.title = 'Mood: ' + (payload.current || 'neutral');
+    }
+    var portrait = document.getElementById('vn-portrait');
+    if (portrait && assets) {
+      var clean = (payload.current || 'neutral').replace(/-/g, '_');
+      var assetKey = assets.expressions[clean] || profileId + '.portrait.neutral';
+      portrait.src = '/api/hyrax/assets/' + assetKey;
+      portrait.alt = _currentSisterName + ', ' + (payload.current || 'neutral');
+    }
+  }
+
+  // Restore the portrait to the current expression pose (after streaming,
+  // tool focus, or completion).
+  function _restorePortrait(assets, profileId) {
+    var portrait = document.getElementById('vn-portrait');
+    if (!portrait || !assets) return;
+    var clean = _lastExpression.current.replace(/-/g, '_');
+    var assetKey = assets.expressions[clean] || profileId + '.portrait.neutral';
+    portrait.src = '/api/hyrax/assets/' + assetKey;
+  }
+
+  // Close the current SSE connection and re-subscribe after a short delay.
+  // Used to escape a dead, non-terminal stream (see run.failed above).
+  function _reconnectEvents(profileId, token) {
+    if (_eventSource) {
+      try { _eventSource.close(); } catch (_) {}
+      _eventSource = null;
+    }
+    setTimeout(function() {
+      if (_raceToken !== token) return;
+      if (!_mounted) return;
+      _connectEvents(profileId, token);
+    }, 750);
   }
 
   // ── Backlog helpers (textContent only) ──

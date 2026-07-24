@@ -68,7 +68,7 @@
         });
       }
       // Keep unregister handle for any future cleanup
-      if (typeof p._unreg !== 'undefined') return;
+      if (typeof p._unreg !== 'undefined') continue;
       p._unreg = unreg;
     }
 
@@ -130,8 +130,10 @@
       div.className = 'main-view';
 
       if (mainOnlyPanels.indexOf(p.id) !== -1) {
-        // HQ — minimal container; hq.js fills #mainHqBody on mount
-        div.innerHTML = '<div id="mainHqBody"></div>';
+        // HQ — empty container; hq.js/vn.js render into #mainHq on mount.
+        // (index.html already ships #mainHq, so this branch is a fallback
+        // and must not duplicate ids like mainHqBody.)
+        div.innerHTML = '';
       } else {
         div.innerHTML = '<div class="main-view-header"><h2 class="main-view-title">' + p.label + '</h2></div>'
           + '<div class="main-view-content" id="hyrax-' + p.id + '-content">'
