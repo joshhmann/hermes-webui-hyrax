@@ -204,7 +204,12 @@
           var returnToVn = function() {
             if (typeof _unmount3d === 'function') _unmount3d();
             _unmount3d = null;
-            render2dFallback(content);
+            // Return to current VN conversation, not the 2D map
+            if (typeof window.__vnReopen === 'function') {
+              window.__vnReopen();
+            } else {
+              render2dFallback(content);
+            }
           };
           var cleanup = await mod.mountTaiLoft(
             content,
@@ -224,5 +229,10 @@
   window.__hqMount = __hqMount;
   window.__hqUnmount = __hqUnmount;
   window.__hqLaunch3d = launch3d;
+  // Force full 2D re-render (used by VN "back to HQ" which clears content first)
+  window.__hqShow2d = function(container) {
+    _mounted = false;  // reset so __hqMount does a full render
+    __hqMount('hq');
+  };
 
 })();

@@ -546,9 +546,14 @@
 
   function _showHqView(content) {
     content.dataset.vnActive = '';
-    content.innerHTML = '';
-    if (typeof window.__hqMount === 'function') {
-      window.__hqMount('hq');
+    // Force full 2D re-render regardless of _mounted state
+    if (typeof window.__hqShow2d === 'function') {
+      window.__hqShow2d(content);
+    } else {
+      content.innerHTML = '';
+      if (typeof window.__hqMount === 'function') {
+        window.__hqMount('hq');
+      }
     }
   }
 
@@ -578,6 +583,11 @@
   // ── Expose for hq.js / bootstrap ──
   window.__vnMount = __vnMount;
   window.__vnUnmount = __vnUnmount;
+  // Re-render current VN (used by 3D "Return to VN" button)
+  window.__vnReopen = function() {
+    if (!_mounted || !_currentSisterId) return;
+    __vnMount({ sisterId: _currentSisterId, sisterName: _currentSisterName });
+  };
 
   // ── Listen for chibi clicks from HQ 2D map ──
   document.addEventListener('hyrax:open-conversation', function(e) {
