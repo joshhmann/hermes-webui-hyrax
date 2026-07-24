@@ -377,12 +377,13 @@
   async function _showInitialTurns(conversationId, backlog, name, token) {
     try {
       var conv = _activeConversation;
-      if (!conv.turns || !conv.turns.length) {
+      // Backend API returns 'messages', but also check 'turns' for backward compat
+      if ((!conv.messages || !conv.messages.length) && (!conv.turns || !conv.turns.length)) {
         conv = await _api('/api/hyrax/vn/conversations/' + conversationId, { method: 'GET' });
         conv = (conv && conv.conversation) || conv;
         if (_raceToken !== token) return;
       }
-      var turns = conv.turns || [];
+      var turns = conv.messages || conv.turns || [];
       if (turns.length === 0) {
         // Empty state
         var emptyMsg = _el('div', { className: 'vn-empty', 'aria-label': 'No messages yet' }, 'Start the conversation\u2026');
