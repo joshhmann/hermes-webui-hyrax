@@ -30,6 +30,7 @@ import {
   ProceduralLocomotion,
   type ProceduralTuning,
 } from './locomotion/ProceduralLocomotion'
+import { ArdyMotionSource, type ArdyMotionState } from './motion/ArdyMotionSource'
 import { RoomNavigation } from './navigation/RoomNavigation'
 import { AvatarRig } from './rig/AvatarRig'
 import roomManifest from './room/roomObjects.json'
@@ -80,6 +81,7 @@ export class TaiRoomScene {
   private readonly timeOfDay: TimeOfDaySystem
   private rig: AvatarRig | null = null
   private locomotion: ProceduralLocomotion | null = null
+  private ardySource: ArdyMotionSource | null = null
   private skeletonHelper: SkeletonHelper | null = null
   private frame = 0
   private destroyed = false
@@ -158,6 +160,7 @@ export class TaiRoomScene {
     this.rig.scene.rotation.y = 0
     this.scene.add(this.rig.scene)
     this.locomotion = new ProceduralLocomotion(this.rig)
+    this.ardySource = new ArdyMotionSource({ rig: this.rig, navigation: this.navigation })
     this.face.applyIntent({ face: { expression: 'relaxed', intensity: 0.25, talking: false } })
     this.resize()
     this.setCameraMode('room')
@@ -189,6 +192,21 @@ export class TaiRoomScene {
 
   setProceduralTuning(tuning: Partial<ProceduralTuning>): void {
     this.locomotion?.setTuning(tuning)
+  }
+
+  setArdyPrompt(text: string): void {
+    this.ardySource?.setPrompt(text)
+  }
+
+  getArdyState(): ArdyMotionState {
+    return this.ardySource?.state ?? 'offline'
+  }
+
+  /** Hips bone world-space Y (ARDY E2E probe; null when no rig/bone). */
+  getHipsWorldY(): number | null {
+    const bone = this.rig?.getBone('hips')
+    if (!bone) return null
+    return bone.getWorldPosition(this.diagnosticVector).y
   }
 
   getProceduralTuning(): ProceduralTuning {
@@ -288,6 +306,8 @@ export class TaiRoomScene {
     this.rig?.scene.removeFromParent()
     this.locomotion?.dispose()
     this.locomotion = null
+    this.ardySource?.dispose()
+    this.ardySource = null
     this.skeletonHelper = null
 
     // Dispose face/viseme/gaze
@@ -343,6 +363,8 @@ export class TaiRoomScene {
     cancelAnimationFrame(this.frame)
     this.resizeObserver.disconnect()
     this.locomotion?.dispose()
+    this.ardySource?.dispose()
+    this.ardySource = null
     this.face.dispose()
     this.visemes.dispose()
     this.timeOfDay.dispose()
@@ -381,9 +403,19 @@ export class TaiRoomScene {
     if (this.rig && this.locomotion) {
       this.rig.beginPoseAuditFrame()
       this.rig.advanceAnimation(dt)
-      this.rig.beginPoseAuditPhase('proceduralIdle')
-      this.locomotion.update(dt, this.motionInput())
-      this.rig.endPoseAuditPhase()
+      // ARDY live stream and procedural locomotion are mutually exclusive per
+      // frame — the pose-ownership audit flags any bone written by two phases.
+      let ardyOwned = false
+      if (this.ardySource) {
+        this.rig.beginPoseAuditPhase('ardyMotion')
+        ardyOwned = this.ardySource.update(dt)
+        this.rig.endPoseAuditPhase()
+      }
+      if (!ardyOwned) {
+        this.rig.beginPoseAuditPhase('proceduralIdle')
+        this.locomotion.update(dt, this.motionInput())
+        this.rig.endPoseAuditPhase()
+      }
       this.rig.beginPoseAuditPhase('faceGaze')
       this.face.update(this.rig, dt)
       this.visemes.update(this.rig, dt)

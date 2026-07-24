@@ -11,6 +11,13 @@
 .tai-loft-controls button, .tai-loft-controls select { color: #c9d1d9; background: rgba(13, 17, 23, .88); border: 1px solid #30363d; border-radius: 8px; padding: 9px 11px; }
 .tai-loft-controls button { cursor: pointer; }
 .tai-loft-controls button:hover, .tai-loft-controls button:focus-visible { border-color: #6ecbf5; }
+.tai-loft-controls input { color: #c9d1d9; background: rgba(13, 17, 23, .88); border: 1px solid #30363d; border-radius: 8px; padding: 9px 11px; min-width: 150px; }
+.tai-loft-controls input:focus-visible { border-color: #6ecbf5; outline: none; }
+.tai-loft-ardy-status { align-self: center; width: 10px; height: 10px; border-radius: 50%; background: #6e7681; }
+.tai-loft-ardy-status[data-state='live'] { background: #3fb950; box-shadow: 0 0 6px rgba(63, 185, 80, .8); }
+.tai-loft-ardy-status[data-state='connecting'] { background: #d29922; }
+.tai-loft-ardy-status[data-state='stale'] { background: #d29922; box-shadow: 0 0 6px rgba(210, 153, 34, .8); }
+.tai-loft-ardy-status[data-state='offline'] { background: #f85149; }
 .tai-loft-error { position: absolute; left: 50%; top: 50%; translate: -50% -50%; padding: 20px; background: #21161a; border: 1px solid #f85149; border-radius: 10px; }
 .rig-workbench { position: absolute; z-index: 4; top: 84px; right: 18px; bottom: 18px; width: min(390px, calc(100vw - 36px)); display: flex; flex-direction: column; color: #c9d1d9; background: rgba(8, 12, 20, .96); border: 1px solid rgba(110, 203, 245, .42); border-radius: 12px; box-shadow: 0 20px 55px rgba(0, 0, 0, .45); backdrop-filter: blur(16px); transform: translateX(calc(100% + 36px)); opacity: 0; pointer-events: none; transition: transform .18s ease, opacity .18s ease; }
 .rig-workbench.is-open { transform: none; opacity: 1; pointer-events: auto; }

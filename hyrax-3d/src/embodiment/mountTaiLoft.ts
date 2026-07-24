@@ -40,6 +40,41 @@ export async function mountTaiLoft(
     button.addEventListener('click', () => room.setCameraMode(mode))
     controls.append(button)
   }
+
+  // ARDY live motion stream: status dot + prompt input.
+  // The stream URL comes from ?ardyWs= (see ArdyMotionSource).
+  const ardyStatus = document.createElement('span')
+  ardyStatus.className = 'tai-loft-ardy-status'
+  ardyStatus.dataset.state = 'connecting'
+  ardyStatus.title = 'ARDY motion stream'
+  const ardyInput = document.createElement('input')
+  ardyInput.className = 'tai-loft-ardy-prompt'
+  ardyInput.type = 'text'
+  ardyInput.placeholder = 'Motion prompt…'
+  ardyInput.setAttribute('aria-label', 'ARDY motion prompt')
+  const ardySend = document.createElement('button')
+  ardySend.textContent = 'Send'
+  ardySend.title = 'Send motion prompt to the ARDY stream'
+  const sendArdyPrompt = (): void => {
+    const text = ardyInput.value.trim()
+    if (text) room.setArdyPrompt(text)
+  }
+  ardySend.addEventListener('click', sendArdyPrompt)
+  ardyInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') sendArdyPrompt()
+  })
+  controls.append(ardyStatus, ardyInput, ardySend)
+  const ardyStatusTimer = setInterval(() => {
+    ardyStatus.dataset.state = room.getArdyState()
+  }, 500)
+
+  // Debug/E2E handle: ardy state, prompt sender, and a hips-height probe.
+  const debugWindow = window as unknown as { __ardy?: unknown }
+  debugWindow.__ardy = {
+    getState: () => room.getArdyState(),
+    setPrompt: (text: string) => room.setArdyPrompt(text),
+    hipsWorldY: () => room.getHipsWorldY(),
+  }
   let workbenchButton: HTMLButtonElement | null = null
   if (configuration.development) {
     const time = document.createElement('select')
@@ -65,6 +100,8 @@ export async function mountTaiLoft(
   const cleanup = (): void => {
     if (destroyed) return
     destroyed = true
+    clearInterval(ardyStatusTimer)
+    delete debugWindow.__ardy
     if (configuration.development) window.removeEventListener('keydown', onKeyDown)
     workbench?.destroy()
     room.destroy()
