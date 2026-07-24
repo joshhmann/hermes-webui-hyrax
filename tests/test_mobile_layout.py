@@ -677,7 +677,7 @@ def test_mobile_sidebar_open_syncs_panel_from_visible_detail_view():
     assert "MAIN_VIEW_PANELS.forEach" in panels_js
     panel_from_view = _js_function_body(panels_js, "_panelFromCurrentMainView")
     assert "mainEl.classList.contains('showing-'+panel)" in panel_from_view
-    assert "MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS[panel]||panel" in panel_from_view
+    assert "MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS[panel]||_EXT_SIDEBAR_FALLBACKS[panel]||panel" in panel_from_view
     assert "$('panel'+_currentPanel.charAt(0).toUpperCase()+_currentPanel.slice(1))" in panel_from_view
     assert "return 'chat'" in panel_from_view
     sync_body = _js_function_body(panels_js, "_syncMobileSidebarPanelFromMainView")

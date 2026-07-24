@@ -849,6 +849,7 @@ function esc(value) {
 const context = {
   console,
   setInterval(){ return 1; },
+  setTimeout(){ return 1; },
   document: { querySelectorAll(){ return []; }, getElementById(){ return null; }, addEventListener(){} },
   window: { addEventListener(){} },
   t(key){

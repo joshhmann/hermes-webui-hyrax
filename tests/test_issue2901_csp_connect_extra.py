@@ -10,7 +10,7 @@ def test_csp_connect_src_default_header_unchanged(monkeypatch):
 
     policy = Handler.csp_report_only_policy()
     expected = (
-        "connect-src 'self' http://127.0.0.1:* http://localhost:* "
+        "connect-src 'self' blob: http://127.0.0.1:* http://localhost:* "
         "http://ipc.localhost "
         "https://127.0.0.1:* https://localhost:* "
         "ws://127.0.0.1:* ws://localhost:* "
@@ -31,7 +31,7 @@ def test_csp_connect_src_includes_valid_extra_origins(monkeypatch):
     policy = Handler.csp_report_only_policy()
 
     assert (
-        "connect-src 'self' http://127.0.0.1:* http://localhost:* "
+        "connect-src 'self' blob: http://127.0.0.1:* http://localhost:* "
         "http://ipc.localhost "
         "https://127.0.0.1:* https://localhost:* "
         "ws://127.0.0.1:* ws://localhost:* "
