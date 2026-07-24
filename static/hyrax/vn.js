@@ -157,9 +157,15 @@
 
     // Create or resume conversation
     try {
+      // Include current session context if available
+      var body = { profile_id: profileId, fresh: false };
+      try {
+        var hashMatch = location.hash.match(/[?&]session=([a-f0-9]+)/i);
+        if (hashMatch) body.current_session_id = hashMatch[1];
+      } catch (_) {}
       var resp = await _api('/api/hyrax/vn/conversations', {
         method: 'POST',
-        body: JSON.stringify({ profile_id: profileId, fresh: false }),
+        body: JSON.stringify(body),
       });
       if (_raceToken !== token) return; // stale
       _activeConversation = (resp && resp.conversation) || resp;

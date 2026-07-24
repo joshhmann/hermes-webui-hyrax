@@ -740,8 +740,8 @@ def _vn_parse_conversation_body(data: dict) -> tuple[dict | None, int | None]:
     if not isinstance(data, dict):
         return None, 400
 
-    # Validate keys — allow only profile_id and fresh
-    allowed_keys = {"profile_id", "fresh"}
+    # Validate keys — allow only profile_id, fresh, and current_session_id
+    allowed_keys = {"profile_id", "fresh", "current_session_id"}
     extra = set(data.keys()) - allowed_keys
     if extra:
         return None, 400
@@ -758,7 +758,7 @@ def _vn_parse_conversation_body(data: dict) -> tuple[dict | None, int | None]:
     if fresh is None:
         return None, 400
 
-    return {"profile_id": pid, "fresh": bool(fresh)}, None
+    return {"profile_id": pid, "fresh": bool(fresh), "current_session_id": data.get("current_session_id")}, None
 
 
 def _vn_select_active_vn_session(profile: str):
@@ -877,7 +877,8 @@ def _vn_handle_create_conversation(handler, body: dict) -> bool:
         return True
 
     pid = data["profile_id"]
-    fresh = data["fresh"]
+    fresh = data.get("fresh", False)
+    current_session_id = data.get("current_session_id")
     lock = _VN_CONVERSATION_LOCKS.get(pid, _threading.Lock())
 
     from api.profiles import request_profile_context
@@ -932,6 +933,19 @@ def _vn_handle_create_conversation(handler, body: dict) -> bool:
         # Set a friendly title and persist
         display_name = VN_PROFILES.get(pid, {}).get("name", pid)
         session_obj.title = f"{display_name} VN"
+
+        # Inherit context from the current Hermes session if provided
+        if current_session_id:
+            try:
+                parent = _get_session(current_session_id)
+                if parent and parent.messages:
+                    # Take last 3 exchanges (user + assistant pairs) as seed context
+                    seed = list(parent.messages)[-6:]
+                    if seed:
+                        session_obj.context_messages = list(seed)
+            except Exception:
+                pass  # Non-critical — VN works without context injection
+
         try:
             session_obj.save()
         except Exception:
