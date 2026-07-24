@@ -428,7 +428,7 @@
             _handleRunEvent(JSON.parse(event.data), profileId, token);
           } catch (_) {}
         });
-      })(eventTypes[i]);
+      })(serverEvents[i]);
     }
   }
 

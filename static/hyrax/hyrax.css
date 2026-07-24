@@ -440,7 +440,7 @@
 
 /* ── HQ main content area (follows main-view pattern) ── */
 main.main > #mainHq { display: none; }
-main.main.showing-hq > #mainHq { display: flex; overflow-y: auto; }
+main.main.showing-hq > #mainHq { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 #mainHqBody { flex: 1; min-height: 0; }
 
 /* ── Hide main-chat when any Hyrax main-view panel is active ── */
