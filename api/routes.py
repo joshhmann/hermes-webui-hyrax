@@ -1050,6 +1050,14 @@ def _skill_view_from_active_dir(name: str) -> dict:
 _SSE_HEARTBEAT_INTERVAL_SECONDS = 5
 _SESSION_SSE_SENT_EVENT_ID_LIMIT = 4096
 
+# Events that terminate a run stream. The client-side contract already treats
+# apperror as run-terminal (see the "apperror already closes the stream on the
+# client side" note in streaming.py) — the server-side forward loops must
+# agree, otherwise a handler stays pinned to a dead run's subscriber queue
+# after a failed run and never sees subsequent runs (or leaks the thread
+# until client disconnect).
+_RUN_TERMINAL_EVENTS = ("stream_end", "error", "cancel", "apperror")
+
 
 def _normalize_messaging_source(raw_source) -> str:
     return str(raw_source or "").strip().lower()
@@ -17465,7 +17473,7 @@ def _stream_runner_run_events(handler, run_id: str, cursor: str | None = None) -
                 event = _runner_event_name(entry)
                 _sse_with_id(handler, event, _runner_event_payload(entry), _runner_event_id(run_id, entry))
                 emitted = True
-                if event in ("stream_end", "error", "cancel"):
+                if event in _RUN_TERMINAL_EVENTS:
                     terminal = True
             next_cursor = getattr(event_stream, "cursor", None)
             if next_cursor not in (None, ""):
@@ -17559,7 +17567,10 @@ def _handle_sse_stream(handler, parsed):
                 _sse_with_id(handler, event, data, event_id)
             else:
                 _sse(handler, event, data)
-            if event in ("stream_end", "error", "cancel"):
+            # NOTE: literal tuple kept (mirrors _RUN_TERMINAL_EVENTS) —
+            # tests/test_regressions.py probes this break condition's exact
+            # source shape and requires 'cancel' in the tuple.
+            if event in ("stream_end", "error", "cancel", "apperror"):
                 break
     except _CLIENT_DISCONNECT_ERRORS:
         pass
@@ -17697,7 +17708,7 @@ def _handle_session_run_journal_stream_for_session(handler, parsed, session_id):
                     queued_event_id = STREAM_LAST_EVENT_ID.get(active_stream_id)
                 event_id = queued_event_id or STREAM_LAST_EVENT_ID.get(active_stream_id)
                 event_seq = _run_journal_same_run_seq(event_id, active_stream_id)
-                _is_terminal = event in ("stream_end", "error", "cancel")
+                _is_terminal = event in _RUN_TERMINAL_EVENTS
                 _already_sent = (
                     (replay_cutoff_seq is not None and event_seq is not None and event_seq <= replay_cutoff_seq)
                     or (event_id and event_id in sent_event_ids)

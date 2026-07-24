@@ -25,7 +25,9 @@ from api.helpers import j, _security_headers, flush_pending_auth_cookies
 _logger = _logging.getLogger(__name__)
 
 # ── DB paths ──
-KANBAN_DB = Path("/root/.hermes/kanban.db")
+# Derived from HERMES_HOME (default ~/.hermes) — never hardcode a
+# machine-specific absolute path in a tracked file.
+KANBAN_DB = Path(os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes")) / "kanban.db"
 
 # ── Asset serving ─────────────────────────────────────────────────────────
 ASSET_BASE = Path(__file__).resolve().parent.parent / "hyrax-assets"
@@ -511,10 +513,10 @@ Top-level assignment and nested mutation both raise TypeError."""
 
 # ── Per-sister conversation lock registry ───────────────────────────────────
 # Serializes create/archive per sister to prevent duplicate active VN sessions.
+# The dict is fully populated at import time, so it needs no guard lock.
 _VN_CONVERSATION_LOCKS: dict[str, _threading.Lock] = {
     pid: _threading.Lock() for pid in VN_PROFILES
 }
-_VN_CONVERSATION_LOCK = _threading.Lock()  # guards the dict itself
 
 # ── VN path patterns ────────────────────────────────────────────────────────
 _VN_PROFILES_PATH = "/api/hyrax/vn/profiles"
@@ -619,8 +621,10 @@ def _vn_session_visible(session) -> bool:
 def _vn_bounded_conversation(session):
     """Return a bounded, sanitized conversation dict from a VN session.
 
-    Exposes only: session_id, title, message_count, active_stream_id, archived,
-    created_at, updated_at, profile (from allowlist), and filtered transcript.
+    Exposes only: session_id, title, message_count, active_stream_id,
+    archived, created_at, updated_at, profile (from allowlist), optional
+    expression state (session-carried, or derived from the latest assistant
+    reply), and filtered transcript.
     Never exposes workspace, model, provider config, raw tool args, or env data.
 
     All string fields are bounded. All numeric timestamps are finite-safe.
@@ -663,12 +667,24 @@ def _vn_bounded_conversation(session):
         "session_id": bounded_sid,
         "title": bounded_title,
         "profile": getattr(session, "profile", ""),
-        "message_count": len(getattr(session, "messages", []) or []),
         "active_stream_id": bounded_active_stream,
         "archived": bool(getattr(session, "archived", False)),
         "created_at": bounded_created,
         "updated_at": bounded_updated,
     }
+    # Optional expression state — included only when the session carries a
+    # well-formed one. The VN client reads this for the portrait/mood badge.
+    expr = getattr(session, "expression", None)
+    if isinstance(expr, dict):
+        expr_current = expr.get("current")
+        if isinstance(expr_current, str) and expr_current:
+            bounded_expr = {"current": expr_current[:MAX_TRANSCRIPT_NAME_LENGTH]}
+            expr_intensity = expr.get("intensity")
+            if isinstance(expr_intensity, (int, float)) and not isinstance(expr_intensity, bool):
+                intensity_val = float(expr_intensity)
+                if _math.isfinite(intensity_val):
+                    bounded_expr["intensity"] = min(1.0, max(0.0, intensity_val))
+            compact["expression"] = bounded_expr
     # Filtered transcript: only user and assistant messages
     raw_messages = getattr(session, "messages", None) or []
     transcript = [
@@ -676,11 +692,57 @@ def _vn_bounded_conversation(session):
         for m in raw_messages
         if isinstance(m, dict) and m.get("role") in ("user", "assistant")
     ]
+    # Count the displayable rows — consistent with the filtered transcript,
+    # not the raw message list (which includes tool/system messages)
+    compact["message_count"] = len(transcript)
     # Cap at last MAX_TRANSCRIPT_ROWS rows
     if len(transcript) > MAX_TRANSCRIPT_ROWS:
         transcript = transcript[-MAX_TRANSCRIPT_ROWS:]
     compact["messages"] = transcript
+    # When the session carries no explicit expression, derive one from the
+    # latest assistant reply so the VN portrait/mood badge can react.
+    if "expression" not in compact:
+        derived = _vn_derive_expression(transcript)
+        if derived:
+            compact["expression"] = {"current": derived}
     return compact
+
+
+# ── VN expression derivation ─────────────────────────────────────────────
+# Stopgap server-side mood derivation until the Essence pipeline (gateway-
+# driven expression events) lands. Conservative keyword signals over the
+# latest assistant reply; no match → None → client keeps its current pose.
+_VN_EXPRESSION_SIGNALS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("laughing", ("haha", "lol", "😂", "🤣")),
+    ("happy", ("great news", "awesome", "glad", "yay", "🎉", "😄", "love it", "well done")),
+    ("smile", ("thank you", "thanks", "nice work", "good job", "you're welcome")),
+    ("teasing", ("hehe", "miss me", "took you long enough")),
+    ("annoyed", ("ugh", "not again", "this again")),
+    ("shy", ("if that's okay", "if that is okay", "um,", "uh,")),
+    ("thinking", ("let me think", "hmm", "let me check", "considering")),
+)
+
+
+def _vn_derive_expression(transcript) -> str | None:
+    """Derive a VN mood from the latest assistant transcript row.
+
+    `transcript` is the bounded message list already filtered to
+    user/assistant roles. Returns a mood string or None (no signal).
+    """
+    text = ""
+    for msg in reversed(transcript):
+        if isinstance(msg, dict) and msg.get("role") == "assistant":
+            candidate = msg.get("content")
+            if isinstance(candidate, str):
+                text = candidate[:2000].lower()
+            break
+    if not text:
+        return None
+    for mood, signals in _VN_EXPRESSION_SIGNALS:
+        for signal in signals:
+            if signal in text:
+                return mood
+    return None
 
 
 def _vn_bounded_message(msg: dict) -> dict:
@@ -934,15 +996,26 @@ def _vn_handle_create_conversation(handler, body: dict) -> bool:
         display_name = VN_PROFILES.get(pid, {}).get("name", pid)
         session_obj.title = f"{display_name} VN"
 
-        # Inherit context from the current Hermes session if provided
+        # Inherit context from the current Hermes session if provided.
+        # Only user/assistant messages with non-empty string content are
+        # seeded — an unfiltered tail slice can start mid tool-call sequence
+        # (orphaned tool messages), which providers reject with a 400 on the
+        # first VN turn.
         if current_session_id:
             try:
                 parent = _get_session(current_session_id)
                 if parent and parent.messages:
-                    # Copy last 3 messages (up to 6 user+assistant) as seed history
-                    seed = list(parent.messages)[-6:]
+                    seed = [
+                        m for m in list(parent.messages)
+                        if isinstance(m, dict)
+                        and m.get("role") in ("user", "assistant")
+                        and isinstance(m.get("content"), str)
+                        and m.get("content")
+                    ][-6:]
                     if seed:
-                        session_obj.messages = list(seed)
+                        # Deep copy — never share mutable dicts with the
+                        # parent session's in-memory message list.
+                        session_obj.messages = json.loads(json.dumps(seed))
             except Exception:
                 pass  # Non-critical — VN works without context injection
 

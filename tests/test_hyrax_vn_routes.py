@@ -2343,3 +2343,39 @@ class TestAuthAndCsrf:
         result = auth_mod.check_auth(handler, parsed)
         assert result is False
         assert handler.status == 401
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: server-side expression derivation (stopgap until Essence pipeline)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestVnDeriveExpression:
+    """_vn_derive_expression maps the latest assistant reply to a mood."""
+
+    def test_no_assistant_row_returns_none(self):
+        from api.hyrax_routes import _vn_derive_expression
+        assert _vn_derive_expression([]) is None
+        assert _vn_derive_expression([{"role": "user", "content": "haha lol"}]) is None
+
+    def test_latest_assistant_row_wins(self):
+        from api.hyrax_routes import _vn_derive_expression
+        transcript = [
+            {"role": "assistant", "content": "haha that is funny"},
+            {"role": "user", "content": "right?"},
+            {"role": "assistant", "content": "thank you, glad to help"},
+        ]
+        # Only the LATEST assistant row is read: "glad" → happy. The older
+        # "haha" row must not leak through as laughing.
+        assert _vn_derive_expression(transcript) == "happy"
+
+    def test_laughing_signal(self):
+        from api.hyrax_routes import _vn_derive_expression
+        assert _vn_derive_expression([{"role": "assistant", "content": "Haha, good one!"}]) == "laughing"
+
+    def test_no_signal_returns_none(self):
+        from api.hyrax_routes import _vn_derive_expression
+        assert _vn_derive_expression([{"role": "assistant", "content": "pong"}]) is None
+
+    def test_non_string_content_ignored(self):
+        from api.hyrax_routes import _vn_derive_expression
+        assert _vn_derive_expression([{"role": "assistant", "content": ["haha"]}]) is None
