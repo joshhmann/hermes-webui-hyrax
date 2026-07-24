@@ -1,0 +1,56 @@
+Task: Technical analysis of `mountTaiLoft` and `TaiRoomScene` within the embodiment subsystem
+
+1. Source & Structure
+---------------------
+- `mountTaiLoft` (/frontend/src/embodiment/mountTaiLoft.ts): Mounts the Synthesis Loft UI, manages the host container, scene, and UI controls. Instantiates TaiRoomScene, sets up controls (camera, lighting, workbench), and handles destruction.
+- `TaiRoomScene` (/frontend/src/embodiment/TaiRoomScene.ts): Main 3D scene class handling geometry, navigation, VRM model, lights, procedural room/fixtures, and loading room manifest (roomObjects.json).
+- Both rely on `tai-room.css` for UI/chrome and on the operator/debug panel `RigDevelopmentPanel.ts` for advanced diagnostics/workbench functions.
+
+2. Manifest/Asset Coverage
+--------------------------
+- Only relevant manifest: `roomObjects.json` (defines all room objects, affordances, placement data).
+- `TaiRoomScene` imports this manifest; all furnishings/interactive objects are provided here.
+- No other JSON/assets detected for this subsystem.
+
+3. Build/Test/Config Coverage
+-----------------------------
+- Build system: Vite (see package.json `scripts` and devDependencies).
+- No formal vite config file; uses defaults.
+- No test/spec/unit/mock files present for either `mountTaiLoft` or `TaiRoomScene`.
+- Asset loading: VRM avatar only (`/api/v1/assets/tai.embodiment.vrm`).
+
+4. Relationships (direct evidence)
+-----------------------------------
+- `mountTaiLoft` mounts the DOM, imports TaiRoomScene and CSS, wires UI.
+- `TaiRoomScene` builds all geometry (room, walls, decor, lights) procedurally in TS; extracts affordances/fixtures from manifest.
+- Debug/operator panel is tied in via RigDevelopmentPanel.
+
+5. Table summary
+----------------
+| Entity                | File                                | Manifest      | Test | Role                    |
+|-----------------------|-------------------------------------|---------------|------|-------------------------|
+| mountTaiLoft          | mountTaiLoft.ts                     | No            | No   | Mount/init UI/scene     |
+| TaiRoomScene          | TaiRoomScene.ts                     | Yes           | No   | 3D & object logic       |
+| Manifest              | roomObjects.json                    | Self          | N/A  | Object affordances      |
+| Operator Panel        | debug/RigDevelopmentPanel.ts        | No            | No   | Manual diagnostics/lab  |
+| CSS                   | tai-room.css                        | No            | N/A  | Scene & chrome styling  |
+
+6. Gaps/Notes
+-------------
+- No direct automated tests for this subsystem.
+- All room object/layout data is centralized in one JSON manifest.
+- Build system: Vite (no custom config).
+
+References:
+- mountTaiLoft.ts
+- TaiRoomScene.ts
+- roomObjects.json
+- tai-room.css
+- debug/RigDevelopmentPanel.ts
+- package.json
+
+--
+
+All source, manifest, config, and test coverage for `mountTaiLoft` and `TaiRoomScene` have been fully documented. No formal tests were found for these modules.
+
+— rin

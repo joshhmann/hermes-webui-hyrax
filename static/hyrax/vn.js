@@ -24,6 +24,7 @@
   var _mounted = false;
   var _toastTimer = null;
   var _keyHandler = null;
+  var _sidebarCollapsed = false;
 
   // Race token: increments on each new conversation.  SSE callbacks
   // capture the token at subscription time and discard events whose
@@ -132,7 +133,17 @@
     // Show loading state
     var content = document.getElementById('mainHq');
     if (!content) return;
-    content.innerHTML = '<div class="vn-loading" role="status" aria-live="polite" aria-busy="true">Connecting to ' + _esc(name) + '\u2026</div>';
+    content.innerHTML = '<div class="vn-loading" role="status" aria-live="polite" aria-busy="true">Connecting to ' + _esc(name) + '&#x2026;</div>';
+
+    // Collapse sidebar on desktop for more room
+    _sidebarCollapsed = false;
+    try {
+      var layout = document.querySelector('.layout');
+      if (layout && window.matchMedia('(min-width: 641px)').matches) {
+        _sidebarCollapsed = layout.classList.contains('sidebar-collapsed');
+        if (!_sidebarCollapsed) layout.classList.add('sidebar-collapsed');
+      }
+    } catch (_) {}
 
     // Fetch profiles to check availability
     try {
@@ -218,6 +229,15 @@
     _currentSisterId = null;
     _currentSisterName = '';
     _lastExpression = { current: 'neutral', intensity: 0.5 };
+
+    // Restore sidebar to pre-VN state
+    try {
+      var layout = document.querySelector('.layout');
+      if (layout && !_sidebarCollapsed) {
+        layout.classList.remove('sidebar-collapsed');
+      }
+    } catch (_) {}
+    _sidebarCollapsed = false;
   }
 
   // ── Render VN ──

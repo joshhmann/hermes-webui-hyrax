@@ -939,10 +939,10 @@ def _vn_handle_create_conversation(handler, body: dict) -> bool:
             try:
                 parent = _get_session(current_session_id)
                 if parent and parent.messages:
-                    # Take last 3 exchanges (user + assistant pairs) as seed context
+                    # Copy last 3 messages (up to 6 user+assistant) as seed history
                     seed = list(parent.messages)[-6:]
                     if seed:
-                        session_obj.context_messages = list(seed)
+                        session_obj.messages = list(seed)
             except Exception:
                 pass  # Non-critical — VN works without context injection
 
