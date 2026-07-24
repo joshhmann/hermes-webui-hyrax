@@ -425,7 +425,9 @@
         es.addEventListener(type, function(event) {
           if (_raceToken !== token) { es.close(); return; }
           try {
-            _handleRunEvent(JSON.parse(event.data), profileId, token);
+            var data = JSON.parse(event.data);
+            data.__eventType = type;
+            _handleRunEvent(data, profileId, token);
           } catch (_) {}
         });
       })(serverEvents[i]);
@@ -437,11 +439,15 @@
   function _handleRunEvent(event, profileId, token) {
     if (_raceToken !== token) return;
 
+    // Early exit: silent events that should not render in dialogue
+    if (event.__eventType === 'reasoning' || event.__eventType === 'stream_end') {
+      return;
+    }
+
     // ── Normalize server-side payload shapes to client-side event_type+payload contract ──
     if (event.event_type === undefined) {
       // token event: text delta
       if (event.text !== undefined) {
-        _streamed += event.text;
         event = { event_type: 'message.delta', payload: { delta: event.text } };
       }
       // done event: run completed
