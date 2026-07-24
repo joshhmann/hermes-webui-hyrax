@@ -410,7 +410,7 @@
     var es = new EventSource('/api/hyrax/vn/conversations/' + cid + '/events');
     _eventSource = es;
 
-    // Generic handler
+    // Generic handler (unnamed events, if any)
     es.onmessage = function(event) {
       if (_raceToken !== token) { es.close(); return; }
       try {
@@ -418,9 +418,9 @@
       } catch (_) {}
     };
 
-    // Typed handlers
-    var eventTypes = ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'tool.started', 'expression'];
-    for (var i = 0; i < eventTypes.length; i++) {
+    // Typed handlers — match server-side SSE event type names
+    var serverEvents = ['token', 'tool', 'tool_complete', 'done', 'cancel', 'apperror', 'reasoning', 'stream_end'];
+    for (var i = 0; i < serverEvents.length; i++) {
       (function(type) {
         es.addEventListener(type, function(event) {
           if (_raceToken !== token) { es.close(); return; }
@@ -436,6 +436,37 @@
 
   function _handleRunEvent(event, profileId, token) {
     if (_raceToken !== token) return;
+
+    // ── Normalize server-side payload shapes to client-side event_type+payload contract ──
+    if (event.event_type === undefined) {
+      // token event: text delta
+      if (event.text !== undefined) {
+        _streamed += event.text;
+        event = { event_type: 'message.delta', payload: { delta: event.text } };
+      }
+      // done event: run completed
+      else if (event.session !== undefined) {
+        var finalOut = _streamed || '';
+        event = { event_type: 'run.completed', payload: { output: finalOut } };
+      }
+      // cancel event
+      else if (event.message !== undefined && event.session_id === undefined) {
+        event = { event_type: 'run.cancelled', payload: { message: event.message } };
+      }
+      // apperror event
+      else if (event.label !== undefined) {
+        event = { event_type: 'run.failed', payload: { error: event.message || event.label } };
+      }
+      // tool event — already has event_type, just needs payload normalization
+      else if (event.name !== undefined) {
+        event = { event_type: 'tool.started', payload: { name: event.name, preview: event.preview, args: event.args } };
+      }
+      // stream_end — ignore
+      else if (event.session_id !== undefined) {
+        return;
+      }
+    }
+
     var payload = event.payload || {};
     var assets = VN_ASSETS[profileId];
     var name = _currentSisterName;
