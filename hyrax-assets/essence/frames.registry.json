@@ -1,0 +1,616 @@
+{
+  "version": 1,
+  "policy": "fixed-sfw-allowlist",
+  "generated_by": "scripts/build_frame_registry.py",
+  "frames": [
+    {
+      "id": "frame.mai.background.supply-hub",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "a1c50f71926cde0c",
+      "state": {
+        "location": "supply-hub",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.background.supply-hub",
+        "sha256": "641420c94ea85d84d7e81e9527a6fe28bb28cd289dd2207bdfee55281797368d",
+        "size": 2261770
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.chibi.stand",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "ee6f4961f581d0f3",
+      "state": {
+        "pose": "stand",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.chibi.stand",
+        "sha256": "6db0c6d7e8c4294d860eac22806d62ea3072ad816f3a102b1412fc4d061184a5",
+        "size": 130952
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.composed",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "c91cb93057b6c239",
+      "state": {
+        "expression": "composed",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.composed",
+        "sha256": "dc741b0812d794aa63248405508f3a5b81c3982c3bfb144d445b7a12b80b3589",
+        "size": 2955132
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.laughing",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "22d756b6f27f652a",
+      "state": {
+        "expression": "laughing",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.laughing",
+        "sha256": "54ce5e5260b7bd09ac7aadb1752e44a04fdae93acf4bc82aca6512a1c2ec214a",
+        "size": 2968324
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.light-smile",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "13cf0129c8771a84",
+      "state": {
+        "expression": "light-smile",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.light-smile",
+        "sha256": "b46b9a13f7d9b8206da7bfa0abc75c5a3d971a7b39a918edda981d97211b764d",
+        "size": 2962038
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.neutral",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "4f51145d26a567ff",
+      "state": {
+        "expression": "neutral",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.neutral",
+        "sha256": "b46b9a13f7d9b8206da7bfa0abc75c5a3d971a7b39a918edda981d97211b764d",
+        "size": 2962038
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.observant",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "031e8b8298e0ed34",
+      "state": {
+        "expression": "observant",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.observant",
+        "sha256": "dc741b0812d794aa63248405508f3a5b81c3982c3bfb144d445b7a12b80b3589",
+        "size": 2955132
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.ohhoai",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "2d68e6a0ca97d3fc",
+      "state": {
+        "expression": "ohhoai",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.ohhoai",
+        "sha256": "1621c0a86f88e71788cf3ad813439920d49276d4c99cd55916fb5c9fdcc59e4c",
+        "size": 2954946
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.scream-of-fury",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "857178b283540032",
+      "state": {
+        "expression": "scream-of-fury",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.scream-of-fury",
+        "sha256": "4b1d604d31edd8eae921668f6edd72c642c19027c8007e496dced68220f8317d",
+        "size": 2965821
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.shy-smile",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "3a100e64f24fc23c",
+      "state": {
+        "expression": "shy-smile",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.shy-smile",
+        "sha256": "d7f89d3a7bb149a97ffd2411481d5fe8accc155f32eac803d9b786626db9139b",
+        "size": 2961135
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.smile",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "c7ddf1f90b9de836",
+      "state": {
+        "expression": "smile",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.smile",
+        "sha256": "dc741b0812d794aa63248405508f3a5b81c3982c3bfb144d445b7a12b80b3589",
+        "size": 2955132
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.mai.portrait.yandere-smile",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "413b105771766e7f",
+      "state": {
+        "expression": "yandere-smile",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/mai.portrait.yandere-smile",
+        "sha256": "e025cc8594e03127a9141c90dd96e06d46732d06500c4783c7b3ef222164e163",
+        "size": 2960344
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.nei.background.lab",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "bfd22b31225811a4",
+      "state": {
+        "location": "lab",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/nei.background.lab",
+        "sha256": "a813b31a7bde8e6aea892d56e6b1bdc910ec3857238427049e72fbca5c068133",
+        "size": 1943861
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.nei.chibi.stand",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "6bc4997dcd2883c7",
+      "state": {
+        "pose": "stand",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/nei.chibi.stand",
+        "sha256": "eaec128fdbc0d9b6e802bdbfdeea995c26e523b9cbc633f11525b156597a63b4",
+        "size": 123922
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.nei.portrait.neutral",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "5ea501786c27e3f8",
+      "state": {
+        "expression": "neutral",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/nei.portrait.neutral",
+        "sha256": "df65bd8b78d42c68ae8844752932ed6e934a45f0c7a0dba090600e466c2fe47c",
+        "size": 14689733
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.nei.portrait.observant",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "dfdfda31990ace74",
+      "state": {
+        "expression": "observant",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/nei.portrait.observant",
+        "sha256": "b0dcc282bbe59fc7b1dfd1bd2e101c111855ce740736ea3270fc99ecafe610fd",
+        "size": 2250504
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.nei.portrait.thinking",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "117953317acd4b7a",
+      "state": {
+        "expression": "thinking",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/nei.portrait.thinking",
+        "sha256": "110838b54a3c86dc4a775643a63011d56978f27c10221bcdcd6c62b061a5ae0d",
+        "size": 2046823
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.rei.background.security",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "b09f05ae80259fea",
+      "state": {
+        "location": "security",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/rei.background.security",
+        "sha256": "043c3aff1d97cc7abbf901cb345767c316e5bc4a13636a9a874d056f69f0ed80",
+        "size": 1798498
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.rei.chibi.stand",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "b930093cf5506536",
+      "state": {
+        "pose": "stand",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/rei.chibi.stand",
+        "sha256": "def597534d55d3e57703b18ea7334c35c0a632baed6eae038c9253ec2e0c07d9",
+        "size": 120633
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.rei.portrait.alert",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "4f3343a35b83ac4a",
+      "state": {
+        "expression": "alert",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/rei.portrait.alert",
+        "sha256": "61b45f4711696bb3d0e5f45eb8367c2e6fe6b97e0f904b47c1093ebeb0660326",
+        "size": 1916734
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.rei.portrait.calm",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "fd47fd08c0349652",
+      "state": {
+        "expression": "calm",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/rei.portrait.calm",
+        "sha256": "9758121c0ba9d0359c51c8853614546ee5ba490ddbb2aeae1116f3ab3c54d769",
+        "size": 1986641
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.rei.portrait.neutral",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "c4267dab0ceec3b7",
+      "state": {
+        "expression": "neutral",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/rei.portrait.neutral",
+        "sha256": "1d7d5a6495b1ab491c1d21e7f7c7df87e5712ac805798c4122d262c19b2e724d",
+        "size": 6072850
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.background.control-room",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "0a8713ef27cc4c89",
+      "state": {
+        "location": "control-room",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.background.control-room",
+        "sha256": "2f7cf030f1e7069a15994c85ba365c876218bf72b240cd219b2fb4b520764df2",
+        "size": 2138196
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.chibi.stand",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "ab46a46ef3ab12ca",
+      "state": {
+        "pose": "stand",
+        "camera": "wide"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.chibi.stand",
+        "sha256": "dd3ad4e83f39588697be6d30783d946356ea6f4f08548541585bd813f3cec5b5",
+        "size": 134954
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.portrait.focused",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "19b681b7eabd46a4",
+      "state": {
+        "expression": "focused",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.portrait.focused",
+        "sha256": "30459db3468ab394c3a2ec8d09356f1b61a9ef5a4659651eff4612657c3df6e2",
+        "size": 1860143
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.portrait.happy-emote",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "4599c8e275c75a4c",
+      "state": {
+        "expression": "happy-emote",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.portrait.happy-emote",
+        "sha256": "0f41ddf11b12b3b7020db045db2f17aaa5487bc926550ab3789dbe69e093c0d5",
+        "size": 3644466
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.portrait.neutral",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "531d6a016a09e6dd",
+      "state": {
+        "expression": "neutral",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.portrait.neutral",
+        "sha256": "50b989ba5a042a7d980cdbbcf2d2a85a15480e39699edfa990a45263754eedfe",
+        "size": 1861685
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.portrait.sarcastic",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "a0407e7fb132b966",
+      "state": {
+        "expression": "sarcastic",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.portrait.sarcastic",
+        "sha256": "5a33b17095cef9d6c636ad67ffcbdd8c217f81cf7828a9536d28b7a096b60bc4",
+        "size": 3638556
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    },
+    {
+      "id": "frame.tai.portrait.smile",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "fb42e4cd1e1da806",
+      "state": {
+        "expression": "smile",
+        "camera": "medium"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/assets/tai.portrait.smile",
+        "sha256": "92c1d829e7c9d2b5801336e18e7845eb7e4d10cf4925ce3b1f8adad42b11f8ea",
+        "size": 1929249
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {}
+    }
+  ]
+}

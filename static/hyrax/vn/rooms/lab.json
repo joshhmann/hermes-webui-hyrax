@@ -1,0 +1,22 @@
+{
+  "roomId": "lab",
+  "operatorId": "nei",
+  "displayName": "Research Lab",
+  "backgroundFrameIds": ["nei.background.lab"],
+  "visibleObjectIds": ["workbench", "specimen-shelf", "notebook", "lamp"],
+  "interactables": [
+    "room.workbench.inspect",
+    "room.workbench.ask",
+    "room.specimen-shelf.inspect",
+    "room.notebook.inspect",
+    "room.notebook.ask",
+    "room.lamp.inspect",
+    "room.lamp.use",
+    "room.enter",
+    "room.hq"
+  ],
+  "ambientState": {
+    "lamp": "on",
+    "lighting": "day"
+  }
+}

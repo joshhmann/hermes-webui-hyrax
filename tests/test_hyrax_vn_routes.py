@@ -1789,9 +1789,15 @@ class TestVnExplicitDispatch:
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestVnTranscriptTotalBounds:
-    """Tests for total transcript row bounds and adversarial fixtures."""
+    """Tests for total transcript row bounds and adversarial fixtures.
 
-    MAX_TRANSCRIPT_ROWS = 50
+    Contract change (Gestalt VN revamp): the fixed 50-row cap was replaced by
+    bounded paging — default page DEFAULT_TRANSCRIPT_ROWS (200), hard cap
+    MAX_TRANSCRIPT_ROWS (400) via ?limit=, plus has_more/total fields. The
+    module-level MAX_TRANSCRIPT_ROWS is now the hard cap, not the page size.
+    """
+
+    MAX_TRANSCRIPT_ROWS = 400  # mirrors api.hyrax_routes.MAX_TRANSCRIPT_ROWS (hard cap)
 
     def test_has_max_transcript_rows_constant(self):
         """Module must define MAX_TRANSCRIPT_ROWS."""
@@ -1800,7 +1806,11 @@ class TestVnTranscriptTotalBounds:
         assert MAX_TRANSCRIPT_ROWS > 0
 
     def test_transcript_capped_at_max_rows(self, monkeypatch):
-        """Transcript must not exceed MAX_TRANSCRIPT_ROWS rows."""
+        """Transcript must not exceed MAX_TRANSCRIPT_ROWS rows.
+
+        Updated for paging: request the hard cap explicitly (?limit=400) with
+        3x that many rows; the page must be exactly the hard cap.
+        """
         from api.hyrax_routes import MAX_TRANSCRIPT_ROWS, handle_hyrax_vn_get
         many_messages = []
         for i in range(MAX_TRANSCRIPT_ROWS * 3):
@@ -1810,7 +1820,10 @@ class TestVnTranscriptTotalBounds:
         monkeypatch.setattr("api.hyrax_routes._get_session", lambda sid, **kw: session)
 
         handler = _Handler()
-        parsed = SimpleNamespace(path="/api/hyrax/vn/conversations/big_session", query="")
+        parsed = SimpleNamespace(
+            path="/api/hyrax/vn/conversations/big_session",
+            query=f"limit={MAX_TRANSCRIPT_ROWS}",
+        )
         handle_hyrax_vn_get(handler, parsed)
         body = handler.json_body()
         conv = body.get("conversation", body)
@@ -1818,9 +1831,15 @@ class TestVnTranscriptTotalBounds:
         assert len(transcript) <= MAX_TRANSCRIPT_ROWS, (
             f"Transcript has {len(transcript)} rows, expected ≤ {MAX_TRANSCRIPT_ROWS}"
         )
+        assert len(transcript) == MAX_TRANSCRIPT_ROWS
+        assert conv.get("has_more") is True
 
     def test_transcript_includes_last_n_rows(self, monkeypatch):
-        """Transcript must include the last bounded user/assistant rows."""
+        """Transcript must include the last bounded user/assistant rows.
+
+        Updated for paging: with limit=MAX_TRANSCRIPT_ROWS and MAX+10 rows,
+        the window starts at row index 10.
+        """
         from api.hyrax_routes import MAX_TRANSCRIPT_ROWS, handle_hyrax_vn_get
         many_messages = []
         for i in range(MAX_TRANSCRIPT_ROWS + 10):
@@ -1830,7 +1849,10 @@ class TestVnTranscriptTotalBounds:
         monkeypatch.setattr("api.hyrax_routes._get_session", lambda sid, **kw: session)
 
         handler = _Handler()
-        parsed = SimpleNamespace(path="/api/hyrax/vn/conversations/big_session", query="")
+        parsed = SimpleNamespace(
+            path="/api/hyrax/vn/conversations/big_session",
+            query=f"limit={MAX_TRANSCRIPT_ROWS}",
+        )
         handle_hyrax_vn_get(handler, parsed)
         body = handler.json_body()
         conv = body.get("conversation", body)

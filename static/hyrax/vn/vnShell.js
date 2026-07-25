@@ -1,0 +1,572 @@
+/**
+ * Gestalt VN revamp (vn2) — vnShell.js
+ *
+ * Assembly + the external contract. Owns the layout regions (PRODUCT_SPEC
+ * §2) and the mount/unmount lifecycle; the experience layer (Track C) will
+ * populate stage/sidebar — the shell works with them ABSENT: static
+ * portrait + background in the stage, disabled-reason sidebar placeholder.
+ *
+ * Classic script, IIFE. Registers onto window.GestaltVN.shell and exposes
+ * the legacy-compatible globals:
+ *   window.__vnMount(props)   props: {sisterId, sisterName, role?, source?}
+ *   window.__vnUnmount()
+ *   window.__vnReopen()
+ * plus the `hyrax:open-conversation` document listener (same call semantics
+ * as legacy vn.js — hq.js keeps working unchanged).
+ *
+ * Lifecycle: single _mounted guard + one teardown path (ARCH §5) — every
+ * module dispose is called, every listener removed, the sidebar restored.
+ * All core-DOM reaching is centralized in _coreDom() with guards.
+ */
+(function() {
+  'use strict';
+
+  var root = typeof window !== 'undefined' ? window : globalThis;
+  var ns = root.GestaltVN = root.GestaltVN || {};
+
+  // Static fallback backgrounds (Track C replaces the stage contents; the
+  // portrait always comes from <op>.portrait.neutral). Missing entries or
+  // broken images degrade to no background — fail closed, never 404-spam.
+  var FALLBACK_BACKGROUNDS = {
+    tai: 'tai.background.control-room',
+    rei: 'rei.background.security',
+    nei: 'nei.background.lab',
+    mai: 'mai.background.supply-hub',
+  };
+
+  // ── State ──
+  var _mounted = false;
+  var _raceToken = 0;
+  var _props = null;
+  var _content = null;      // mount host (#mainHq)
+  var _rootEl = null;
+  var _regions = null;
+  var _keyHandler = null;
+  var _sessionUnsub = null;
+  var _eventUnsubs = [];
+  var _sidebarCollapsedByUs = false;
+
+  // ── Centralized, guarded core-DOM access (ARCH §7, audit debt #5) ──
+
+  function _coreDom(fn) {
+    try { return fn(document); } catch (_) { return undefined; }
+  }
+
+  function _collapseSidebar() {
+    _sidebarCollapsedByUs = false;
+    _coreDom(function(doc) {
+      var layout = doc.querySelector('.layout');
+      if (!layout) return;
+      var wide = true;
+      try {
+        wide = typeof root.matchMedia !== 'function' || root.matchMedia('(min-width: 641px)').matches;
+      } catch (_) { wide = true; }
+      if (wide && !layout.classList.contains('sidebar-collapsed')) {
+        layout.classList.add('sidebar-collapsed');
+        _sidebarCollapsedByUs = true;
+      }
+    });
+  }
+
+  function _restoreSidebar() {
+    if (!_sidebarCollapsedByUs) return;
+    _coreDom(function(doc) {
+      var layout = doc.querySelector('.layout');
+      if (layout) layout.classList.remove('sidebar-collapsed');
+    });
+    _sidebarCollapsedByUs = false;
+  }
+
+  // ── Small helpers ──
+
+  function _el(tag, className, text) {
+    var e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+
+  function _toast(msg) {
+    if (typeof root.showToast === 'function') {
+      try { root.showToast(msg); return; } catch (_) {}
+    }
+    // Fallback toast in the hyrax style when showToast is unavailable.
+    _coreDom(function(doc) {
+      var t = _el('div', 'hyrax-toast', String(msg));
+      t.setAttribute('role', 'status');
+      doc.body.appendChild(t);
+      setTimeout(function() { try { t.remove(); } catch (_) {} }, 5000);
+    });
+  }
+
+  function _api(url, opts) {
+    if (typeof root.api === 'function') return root.api(url, opts);
+    return fetch(url, opts).then(function(r) { return r.json(); });
+  }
+
+  function _prefKey(operatorId) {
+    return 'gestalt.vn.ui.' + operatorId;
+  }
+
+  function _readPrefs(operatorId) {
+    try {
+      var raw = root.localStorage && root.localStorage.getItem(_prefKey(operatorId));
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (_) { return {}; }
+  }
+
+  // ── Top bar / state API (consumed by the experience layer later) ──
+
+  function setTopBar(opts) {
+    if (!_regions) return;
+    opts = opts || {};
+    if (typeof opts.name === 'string' && _regions.nameEl) {
+      _regions.nameEl.textContent = opts.name;
+    }
+    if (typeof opts.mood === 'string' && _regions.moodEl) {
+      _regions.moodEl.textContent = opts.mood;
+      _regions.moodEl.setAttribute('title', 'Mood: ' + opts.mood);
+    }
+    if (typeof opts.state === 'string') {
+      _setStateChip(opts.state);
+    }
+  }
+
+  function setState(opts) {
+    if (!_regions) return;
+    opts = opts || {};
+    if (typeof opts.busy === 'boolean') {
+      _setStateChip(opts.busy ? 'busy' : 'idle');
+    }
+  }
+
+  function _setStateChip(state) {
+    var chip = _regions && _regions.stateEl;
+    if (!chip) return;
+    chip.textContent = state;
+    chip.setAttribute('data-state', state);
+  }
+
+  // ── Layout construction (PRODUCT_SPEC §2.1 desktop grid) ──
+
+  function _buildLayout(operatorId, name, prefs) {
+    var rootEl = _el('div', 'vn2');
+    if (prefs && prefs.textFirst) rootEl.classList.add('vn2--text-first');
+
+    // ── Top bar ──
+    var topBar = _el('header', 'vn2-topbar');
+    var backBtn = _el('button', 'vn2-btn vn2-back', '← HQ');
+    backBtn.setAttribute('type', 'button');
+    backBtn.addEventListener('click', _backToHq);
+    var nameEl = _el('span', 'vn2-name', name);
+    var moodEl = _el('span', 'vn2-mood', 'neutral');
+    moodEl.setAttribute('title', 'Mood: neutral');
+    var stateEl = _el('span', 'vn2-state-chip', 'connecting');
+    stateEl.setAttribute('data-state', 'connecting');
+    stateEl.setAttribute('role', 'status');
+    var techBtn = _el('button', 'vn2-btn vn2-tech-toggle', '⚙ tech');
+    techBtn.setAttribute('type', 'button');
+    var chatBtn = _el('button', 'vn2-btn vn2-chat-toggle', '💬 standard chat');
+    chatBtn.setAttribute('type', 'button');
+    chatBtn.addEventListener('click', function() {
+      var s = ns.session;
+      if (s && typeof s.openInStandardChat === 'function') s.openInStandardChat();
+    });
+    topBar.appendChild(backBtn);
+    topBar.appendChild(nameEl);
+    topBar.appendChild(moodEl);
+    topBar.appendChild(stateEl);
+    topBar.appendChild(techBtn);
+    topBar.appendChild(chatBtn);
+
+    // ── Main row: stage+dialogue column, sidebar ──
+    var main = _el('div', 'vn2-main');
+    var center = _el('div', 'vn2-center');
+
+    // Stage — static fallback until the experience layer populates it.
+    var stage = _el('section', 'vn2-stage');
+    var bgId = FALLBACK_BACKGROUNDS[operatorId];
+    if (bgId) {
+      var bg = _el('img', 'vn2-stage-bg');
+      bg.setAttribute('src', '/api/hyrax/assets/' + bgId);
+      bg.setAttribute('alt', '');
+      bg.setAttribute('aria-hidden', 'true');
+      bg.addEventListener('error', function() {
+        try { bg.remove(); } catch (_) {}
+      });
+      stage.appendChild(bg);
+    }
+    var portrait = _el('img', 'vn2-portrait');
+    portrait.setAttribute('src', '/api/hyrax/assets/' + operatorId + '.portrait.neutral');
+    portrait.setAttribute('alt', name + ', neutral');
+    portrait.addEventListener('error', function() {
+      // Fail closed: broken portrait → text-first presentation.
+      try { portrait.hidden = true; } catch (_) {}
+      rootEl.classList.add('vn2--text-first');
+    });
+    stage.appendChild(portrait);
+
+    // Dialogue region (transcript + approvals + composer).
+    var dialogueRegion = _el('section', 'vn2-dialogue');
+    var transcriptEl = _el('div', 'vn2-transcript-region');
+    var approvalsEl = _el('div', 'vn2-approvals-region');
+    var composerEl = _el('div', 'vn2-composer-region');
+    dialogueRegion.appendChild(transcriptEl);
+    dialogueRegion.appendChild(approvalsEl);
+    dialogueRegion.appendChild(composerEl);
+
+    center.appendChild(stage);
+    center.appendChild(dialogueRegion);
+
+    // Sidebar — placeholder until the experience layer registers actions.
+    var sidebar = _el('aside', 'vn2-sidebar');
+    var sbTitle = _el('div', 'vn2-sidebar-title', 'Actions');
+    var sbPlaceholder = _el('div', 'vn2-sidebar-placeholder',
+      'Interactables are provided by the experience layer, which is not active yet.');
+    sidebar.appendChild(sbTitle);
+    sidebar.appendChild(sbPlaceholder);
+    sidebar.initExperience = function() {
+      // Experience layer took over — drop the placeholder note.
+      try { sbPlaceholder.remove(); } catch (_) {}
+      sidebar.initExperience = function() {};
+    };
+
+    main.appendChild(center);
+    main.appendChild(sidebar);
+
+    // Tech drawer — slide-over.
+    var drawer = _el('aside', 'vn2-drawer-region');
+
+    rootEl.appendChild(topBar);
+    rootEl.appendChild(main);
+    rootEl.appendChild(drawer);
+
+    _regions = {
+      root: rootEl,
+      topBar: topBar,
+      nameEl: nameEl,
+      moodEl: moodEl,
+      stateEl: stateEl,
+      techBtn: techBtn,
+      chatBtn: chatBtn,
+      stage: stage,
+      portrait: portrait,
+      dialogue: transcriptEl,
+      approvals: approvalsEl,
+      composer: composerEl,
+      sidebar: sidebar,
+      drawer: drawer,
+    };
+    return rootEl;
+  }
+
+  // ── Back to HQ (mirrors legacy _showHqView) ──
+
+  function _backToHq() {
+    var content = _content;
+    unmount();
+    if (!content) return;
+    try { content.dataset.vnActive = ''; } catch (_) {}
+    if (typeof root.__hqShow2d === 'function') {
+      try { root.__hqShow2d(content); return; } catch (_) {}
+    }
+    _coreDom(function() {
+      try { content.innerHTML = ''; } catch (_) {}
+      if (typeof root.__hqMount === 'function') root.__hqMount('hq');
+    });
+  }
+
+  // ── Mount ──
+
+  async function mount(props) {
+    if (!props || typeof props.sisterId !== 'string' || !props.sisterId) return;
+    var operatorId = props.sisterId;
+    var name = typeof props.sisterName === 'string' && props.sisterName ? props.sisterName : operatorId;
+
+    _raceToken = (_raceToken + 1) % 1000000;
+    var token = _raceToken;
+    _teardown();
+    _mounted = true;
+    _props = { sisterId: operatorId, sisterName: name, role: props.role, source: props.source };
+
+    var content = _coreDom(function(doc) { return doc.getElementById('mainHq'); });
+    if (!content) { _mounted = false; return; }
+    _content = content;
+
+    _collapseSidebar();
+
+    try { content.innerHTML = ''; } catch (_) {}
+    var loading = _el('div', 'vn2-loading', 'Connecting to ' + name + '…');
+    loading.setAttribute('role', 'status');
+    loading.setAttribute('aria-live', 'polite');
+    content.appendChild(loading);
+
+    // Profile availability check (best-effort, mirrors legacy).
+    try {
+      var profileData = await _api('/api/hyrax/vn/profiles', { method: 'GET' });
+      if (_raceToken !== token || !_mounted) return;
+      var items = (profileData && profileData.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i] && items[i].id === operatorId && items[i].available === false) {
+          _toast(name + ' is not available.');
+          try { content.innerHTML = ''; } catch (_) {}
+          content.appendChild(_el('div', 'vn2-error', name + ' is not available.'));
+          return;
+        }
+      }
+    } catch (_) {
+      if (_raceToken !== token || !_mounted) return;
+      // Continue without the profile check — select-or-create is authoritative.
+    }
+
+    // Session continuity (ARCH §4).
+    var ref;
+    try {
+      ref = await ns.session.open({ operatorId: operatorId, source: props.source });
+    } catch (_) {
+      ref = null;
+    }
+    if (_raceToken !== token || !_mounted) return;
+    if (!ref) {
+      _toast('Conversation could not be created.');
+      try { content.innerHTML = ''; } catch (_) {}
+      var errEl = _el('div', 'vn2-error', 'Failed to start conversation.');
+      errEl.setAttribute('role', 'alert');
+      content.appendChild(errEl);
+      return;
+    }
+
+    // Archived elsewhere → explicit state + one-click fresh (SPEC §5).
+    if (ref.archived) {
+      try { content.innerHTML = ''; } catch (_) {}
+      var archivedBox = _el('div', 'vn2-error');
+      archivedBox.setAttribute('role', 'alert');
+      archivedBox.appendChild(_el('p', null, 'This conversation was archived.'));
+      var freshBtn = _el('button', 'vn2-btn', 'Start a fresh conversation');
+      freshBtn.setAttribute('type', 'button');
+      freshBtn.addEventListener('click', function() {
+        ns.session.fresh().then(function(freshRef) {
+          if (!freshRef) return;
+          if (_raceToken !== token || !_mounted) return;
+          mount(_props);
+        });
+      });
+      archivedBox.appendChild(freshBtn);
+      content.appendChild(archivedBox);
+      return;
+    }
+
+    // Build the layout.
+    var prefs = _readPrefs(operatorId);
+    var rootEl = _buildLayout(operatorId, name, prefs);
+    try { content.innerHTML = ''; } catch (_) {}
+    content.appendChild(rootEl);
+    _rootEl = rootEl;
+
+    var expr = ref.expression || {};
+    setTopBar({ name: name, mood: expr.current || 'neutral' });
+    setState({ busy: !!ref.busy });
+
+    // Wire the modules. Dialogue renders the authoritative history first
+    // (legacy pattern), then the single SSE subscriber connects.
+    ns.dialogue.init({ container: _regions.dialogue, operatorName: name });
+    ns.composer.init({ container: _regions.composer });
+    ns.approvals.init({ container: _regions.approvals, sessionId: ref.sessionId });
+    ns.techDrawer.init({ container: _regions.drawer, toggleButton: _regions.techBtn });
+
+    var connected = ns.events.init({ sessionId: ref.sessionId, operatorId: operatorId });
+    if (!connected) {
+      _setStateChip('disconnected');
+      _toast('Live updates unavailable — transcript still works.');
+    } else {
+      if (!ref.busy) _setStateChip('idle');
+      _eventUnsubs.push(ns.events.subscribe('reconnect', function() {
+        _setStateChip('reconnecting');
+        ns.session.refresh().then(function() {
+          if (_raceToken !== token || !_mounted) return;
+          ns.dialogue.resync();
+        }).catch(function() {});
+      }));
+    }
+
+    // Session change → top bar mood/busy (reconnect resync, done-refresh).
+    _sessionUnsub = ns.session.on(function(updated) {
+      if (!updated || _raceToken !== token || !_mounted) return;
+      var e2 = updated.expression || {};
+      setTopBar({ mood: e2.current || 'neutral' });
+      if (_regions && _regions.stateEl &&
+          _regions.stateEl.getAttribute('data-state') !== 'disconnected') {
+        setState({ busy: !!updated.busy });
+      }
+    });
+
+    // Experience layer (essence + stage + sidebar) — optional, fail-closed.
+    _wireExperience(operatorId, name, ref);
+
+    // Escape → HQ (legacy parity).
+    _keyHandler = function(event) {
+      if (event && event.key === 'Escape') {
+        if (event.preventDefault) event.preventDefault();
+        _backToHq();
+      }
+    };
+    _coreDom(function(doc) { doc.addEventListener('keydown', _keyHandler); });
+  }
+
+  // ── Experience-layer glue (essence state/intents, stage, sidebar) ──
+  // Every piece is optional and fail-closed: the shell stays fully usable
+  // with static imagery and the placeholder sidebar if any module is absent
+  // or errors during init (ARCH §7).
+
+  var OPERATOR_ROOM = { tai: 'ops', rei: 'security', nei: 'lab', mai: 'logistics' };
+
+  function _wireExperience(operatorId, name, ref) {
+    var vn = ns.vn || {};
+    var essence = ns.essence || {};
+
+    // 1. Stage (Essence frames + providers).
+    try {
+      if (vn.stage && typeof vn.stage.init === 'function') {
+        vn.stage.init(_regions.stage, { operatorId: operatorId });
+      }
+    } catch (_) {}
+
+    // 2. Essence state + intents → stage + top bar mood.
+    try {
+      if (essence.state && typeof essence.state.refresh === 'function') {
+        essence.state.refresh(operatorId).catch(function() {});
+      }
+      if (essence.intents && typeof essence.intents.init === 'function') {
+        essence.intents.init({ operatorId: operatorId });
+      }
+      if (essence.intents && typeof essence.intents.subscribe === 'function') {
+        _eventUnsubs.push(essence.intents.subscribe(function(intent) {
+          try {
+            if (vn.stage && typeof vn.stage.applyIntent === 'function') {
+              vn.stage.applyIntent(intent);
+            }
+            if (intent && intent.expressionIntent) {
+              setTopBar({ mood: intent.expressionIntent });
+            }
+          } catch (_) {}
+        }));
+      }
+    } catch (_) {}
+
+    // 3. Sidebar with full action context (INTERACTABLES_SPEC).
+    try {
+      if (vn.sidebar && typeof vn.sidebar.init === 'function') {
+        var ctx = {
+          operatorId: operatorId,
+          sessionId: ref.sessionId,
+          busy: !!ref.busy,
+          surface: 'vn',
+          sendText: function(text) {
+            if (ns.composer && typeof ns.composer.send === 'function') {
+              return ns.composer.send(text);
+            }
+          },
+          focusComposer: function() {
+            try {
+              var ta = _regions.composer && _regions.composer.querySelector('textarea');
+              if (ta && ta.focus) ta.focus();
+            } catch (_) {}
+          },
+        };
+        if (typeof _regions.sidebar.initExperience === 'function') {
+          _regions.sidebar.initExperience();
+        }
+        vn.sidebar.init(_regions.sidebar, ctx);
+        // Room manifest → sidebar room section + stage location context.
+        var roomId = OPERATOR_ROOM[operatorId];
+        if (roomId && vn.rooms && typeof vn.rooms.load === 'function') {
+          vn.rooms.load(roomId).then(function(manifest) {
+            if (!manifest || !_mounted) return;
+            try {
+              if (vn.sidebar && typeof vn.sidebar.setRoom === 'function') {
+                vn.sidebar.setRoom(manifest);
+              }
+            } catch (_) {}
+          }).catch(function() {});
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ── Teardown ──
+
+  function _teardown() {
+    for (var i = 0; i < _eventUnsubs.length; i++) {
+      try { _eventUnsubs[i](); } catch (_) {}
+    }
+    _eventUnsubs = [];
+    if (_sessionUnsub) {
+      try { _sessionUnsub(); } catch (_) {}
+      _sessionUnsub = null;
+    }
+    if (_keyHandler) {
+      _coreDom(function(doc) { doc.removeEventListener('keydown', _keyHandler); });
+      _keyHandler = null;
+    }
+    // Module teardown order: consumers first, the SSE source last.
+    var vn2 = ns.vn || {};
+    var ess2 = ns.essence || {};
+    if (vn2.sidebar) { try { vn2.sidebar.dispose(); } catch (_) {} }
+    if (vn2.stage) { try { vn2.stage.dispose(); } catch (_) {} }
+    if (ess2.intents && typeof ess2.intents.dispose === 'function') { try { ess2.intents.dispose(); } catch (_) {} }
+    if (ns.techDrawer) { try { ns.techDrawer.dispose(); } catch (_) {} }
+    if (ns.approvals) { try { ns.approvals.dispose(); } catch (_) {} }
+    if (ns.composer) { try { ns.composer.dispose(); } catch (_) {} }
+    if (ns.dialogue) { try { ns.dialogue.dispose(); } catch (_) {} }
+    if (ns.events) { try { ns.events.dispose(); } catch (_) {} }
+    if (_content && _rootEl) {
+      try { _rootEl.remove(); } catch (_) {}
+    }
+    _rootEl = null;
+    _regions = null;
+    _restoreSidebar();
+  }
+
+  function unmount() {
+    _raceToken = (_raceToken + 1) % 1000000;
+    _teardown();
+    _mounted = false;
+    _props = null;
+    _content = null;
+  }
+
+  function reopen() {
+    if (!_mounted || !_props) return;
+    mount(_props);
+  }
+
+  function isMounted() {
+    return _mounted;
+  }
+
+  // ── Exports ──
+
+  ns.shell = {
+    mount: mount,
+    unmount: unmount,
+    reopen: reopen,
+    isMounted: isMounted,
+    setTopBar: setTopBar,
+    setState: setState,
+    regions: function() { return _regions; },
+  };
+
+  root.__vnMount = mount;
+  root.__vnUnmount = unmount;
+  root.__vnReopen = reopen;
+
+  // HQ launches conversations through this event (same contract as legacy).
+  _coreDom(function(doc) {
+    doc.addEventListener('hyrax:open-conversation', function(e) {
+      if (!e || !e.detail || !e.detail.sisterId) return;
+      mount(e.detail);
+    });
+  });
+})();

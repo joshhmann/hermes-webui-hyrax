@@ -1,0 +1,22 @@
+{
+  "roomId": "security",
+  "operatorId": "rei",
+  "displayName": "Security Alcove",
+  "backgroundFrameIds": ["rei.background.security"],
+  "visibleObjectIds": ["camera-wall", "evidence-board", "lamp", "lockers"],
+  "interactables": [
+    "room.camera-wall.inspect",
+    "room.camera-wall.ask",
+    "room.evidence-board.inspect",
+    "room.evidence-board.ask",
+    "room.lamp.inspect",
+    "room.lamp.use",
+    "room.lockers.inspect",
+    "room.enter",
+    "room.hq"
+  ],
+  "ambientState": {
+    "lamp": "off",
+    "lighting": "dim"
+  }
+}

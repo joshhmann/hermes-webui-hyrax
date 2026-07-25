@@ -1,0 +1,24 @@
+{
+  "roomId": "ops",
+  "operatorId": "tai",
+  "displayName": "Operations Hub",
+  "backgroundFrameIds": ["tai.background.control-room"],
+  "visibleObjectIds": ["main-console", "kanban-wall", "lamp", "coffee-station"],
+  "interactables": [
+    "room.main-console.inspect",
+    "room.main-console.ask",
+    "room.kanban-wall.inspect",
+    "room.kanban-wall.ask",
+    "room.lamp.inspect",
+    "room.lamp.use",
+    "room.coffee-station.inspect",
+    "room.coffee-station.use",
+    "room.enter",
+    "room.hq"
+  ],
+  "ambientState": {
+    "lamp": "on",
+    "lighting": "day",
+    "coffee-station": "off"
+  }
+}

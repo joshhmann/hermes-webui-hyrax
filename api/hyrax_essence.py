@@ -1,0 +1,947 @@
+"""
+Hyraxknot Division — Essence runtime server half (Gestalt VN revamp).
+
+Read-only essence-state aggregation, per-sister presence, and the Essence
+Frame registry (read + manual authored-frame registration).
+
+Endpoints (dispatched from api.hyrax_routes):
+  - GET  /api/hyrax/essence/{operator}   — bounded essence state + normalized
+                                           expression + affinity, fail closed
+  - GET  /api/hyrax/essence/frames       — validated frame registry JSON
+  - GET  /api/hyrax/presence             — per-sister live aggregation
+  - POST /api/hyrax/essence/frames/register — register a manually dropped
+                                           authored frame image
+
+Design contract: docs/gestalt-vn/ESSENCE_RUNTIME_SPEC.md (§4 signatures,
+§6 expression enum, §7 registry) and GESTALT_VN_API_CONTRACTS.md (§2/§6/§7).
+
+Security principles (match api/hyrax_routes.py):
+  - Caller input NEVER becomes a filesystem path. The sister allowlist
+    (VN_PROFILES) is fixed and immutable; the register endpoint validates the
+    image as a bare filename inside the fixed drop directory only.
+  - Everything is bounded: file reads are size-capped, strings are truncated,
+    numbers are clamped finite.
+  - Fail closed: missing/corrupt state yields neutral defaults with
+    ``available: false`` and provenance "unknown" — never an exception.
+"""
+
+import hashlib
+import json
+import logging as _logging
+import math as _math
+import os
+import re as _re
+import threading as _threading
+from datetime import datetime as _datetime
+from datetime import timezone as _timezone
+from pathlib import Path
+from types import MappingProxyType as _MappingProxyType
+
+from api.helpers import j as _j
+
+# Reuse the fixed sister allowlist, kanban query helper, and native session
+# accessors from the VN adapter. Imported at module level so tests can
+# monkeypatch the names on THIS module (api.hyrax_essence.*).
+from api.hyrax_routes import (
+    KANBAN_DB as _KANBAN_DB,
+    VN_PROFILES as _VN_PROFILES,
+    _all_sessions,
+    _get_session,
+    _query,
+    _vn_derive_expression,
+)
+
+_logger = _logging.getLogger(__name__)
+
+# ── Paths (repo-owned; never derived from caller input) ─────────────────────
+ESSENCE_ASSET_DIR = Path(__file__).resolve().parent.parent / "hyrax-assets" / "essence"
+"""Root for Essence runtime assets (frame registry + manual frame drops)."""
+
+ESSENCE_FRAMES_DIR = ESSENCE_ASSET_DIR / "frames"
+"""Drop directory for manually authored frame images (register endpoint)."""
+
+FRAME_REGISTRY_FILE = ESSENCE_ASSET_DIR / "frames.registry.json"
+"""Versioned frame registry JSON (script-generated + register-appended)."""
+
+# ── Bounds ───────────────────────────────────────────────────────────────────
+MAX_STATE_FILE_BYTES = 256 * 1024        # essence/state.json + affinity.json reads
+MAX_REGISTRY_FILE_BYTES = 4 * 1024 * 1024  # frame registry read
+MAX_ESSENCE_STRING = 128                 # mood/mode/expression/last_updated
+MAX_BOUNDARY_KEYS = 16                   # affinity boundaries dict
+MAX_BOUNDARY_STRING = 64
+MAX_FRAME_ID_LENGTH = 128
+MAX_FRAME_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB authored frame image cap
+MAX_FRAME_STATE_PROPS = 8
+MAX_FRAME_PROP_LENGTH = 64
+MAX_IMAGE_URL_LENGTH = 512
+MAX_AFFINITY_SCORE = 100.0
+
+# ── Canonical per-sister expression enum (ESSENCE_RUNTIME_SPEC §6) ──────────
+# Single owner of the enum — unknown names normalize to the sister's neutral
+# plus an issues[] entry. Intersection of plugin EXPRESSION_MAP outputs with
+# manifest portraits available per sister.
+EXPRESSION_ENUM: _MappingProxyType = _MappingProxyType({
+    "tai": frozenset({"neutral", "smile", "happy-emote", "sarcastic", "focused"}),
+    "rei": frozenset({"neutral", "calm", "alert"}),
+    "nei": frozenset({"neutral", "observant", "thinking"}),
+    "mai": frozenset({
+        "neutral", "smile", "laughing", "light-smile", "ohhoai", "shy-smile",
+        "scream-of-fury", "yandere-smile", "sarcastic", "focused",
+    }),
+})
+
+NEUTRAL_EXPRESSION = "neutral"
+
+# ── Frame registry validation patterns ───────────────────────────────────────
+_FRAME_ID_RE = _re.compile(r"^frame\.[a-z0-9-]+(\.[a-z0-9-]+)*$")
+_FRAME_IMAGE_NAME_RE = _re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,126}\.(png|jpg|jpeg|webp)$", _re.IGNORECASE
+)
+_FRAME_SOURCES = frozenset({"generated", "authored", "cached", "fallback"})
+_FRAME_STATE_KEYS = frozenset({
+    "expression", "pose", "action", "wardrobe", "location", "lighting",
+    "timeOfDay", "props", "camera",
+})
+_FRAME_CAMERAS = frozenset({"close", "medium", "wide"})
+_TIME_OF_DAY_BANDS = frozenset({"morning", "day", "evening", "night"})
+
+# Serializes registry read-modify-write for the register endpoint.
+_REGISTRY_WRITE_LOCK = _threading.Lock()
+
+
+# ── Expression normalization (ESSENCE_RUNTIME_SPEC §6) ──────────────────────
+
+def normalize_expression(operator: str, raw) -> tuple[str, list[str]]:
+    """Normalize a raw expression name against the sister's canonical enum.
+
+    Returns (current, issues). Unknown names fall back to the sister's
+    neutral expression and record an issues[] entry. Absent/empty input is
+    not an error — it yields neutral with no issue.
+    """
+    enum = EXPRESSION_ENUM.get(operator) or frozenset({NEUTRAL_EXPRESSION})
+    if not isinstance(raw, str) or not raw.strip():
+        return NEUTRAL_EXPRESSION, []
+    name = raw.strip()[:MAX_ESSENCE_STRING]
+    if name in enum:
+        return name, []
+    return NEUTRAL_EXPRESSION, [
+        f"unknown expression '{name}' normalized to '{NEUTRAL_EXPRESSION}'"
+    ]
+
+
+# ── Scene signatures (ESSENCE_RUNTIME_SPEC §4) ───────────────────────────────
+
+def compute_scene_signature(operator_id: str, state) -> str:
+    """Stable hash of COARSE frame-state fields only.
+
+    operatorId · location · wardrobe · expressionFamily · poseFamily
+    · timeOfDayBand · framing · majorProps[≤3]
+
+    Conversational content, timestamps, and minor mood drift are explicitly
+    excluded. Shared by the registry build script and the register endpoint
+    so identical scenes always produce identical signatures.
+    """
+    state = state if isinstance(state, dict) else {}
+
+    def _field(key: str, default: str) -> str:
+        value = state.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()[:64]
+        return default
+
+    expression_family = _field("expression", NEUTRAL_EXPRESSION)
+    pose_family = _field("pose", NEUTRAL_EXPRESSION)
+    location = _field("location", "unspecified")
+    wardrobe = _field("wardrobe", "default")
+    time_of_day = _field("timeOfDay", "day")
+    band = time_of_day if time_of_day in _TIME_OF_DAY_BANDS else "day"
+    framing = _field("camera", "medium")
+    if framing not in _FRAME_CAMERAS:
+        framing = "medium"
+    props = state.get("props")
+    major_props: list[str] = []
+    if isinstance(props, list):
+        major_props = sorted({
+            p.strip().lower()[:64] for p in props if isinstance(p, str) and p.strip()
+        })[:3]
+    material = "|".join([
+        "v1",
+        str(operator_id),
+        location,
+        wardrobe,
+        expression_family,
+        pose_family,
+        band,
+        framing,
+        ",".join(major_props),
+    ])
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+# ── Bounded JSON file reads (fail closed) ────────────────────────────────────
+
+def _read_json_bounded(path: Path, max_bytes: int) -> dict | None:
+    """Read a JSON object from path with a hard size cap. None on any failure."""
+    try:
+        st = os.lstat(path)
+        if not os.path.isfile(path) or os.path.islink(path):
+            return None
+        if st.st_size <= 0 or st.st_size > max_bytes:
+            return None
+        with open(path, "rb") as fh:
+            raw = fh.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            return None
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _profile_home(operator: str) -> Path:
+    """Resolve a sister's HERMES_HOME without mutating any process state.
+
+    Derived via api.profiles (HERMES_HOME resolution) — never a hardcoded
+    machine-specific literal.
+    """
+    from api.profiles import get_hermes_home_for_profile
+
+    return get_hermes_home_for_profile(operator)
+
+
+# ── Bounded scalar coercion helpers ──────────────────────────────────────────
+
+def _bounded_str(value, max_len: int = MAX_ESSENCE_STRING) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()[:max_len]
+
+
+def _bounded_score(value, lo: float, hi: float) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    val = float(value)
+    if not _math.isfinite(val):
+        return None
+    return min(hi, max(lo, val))
+
+
+def _parse_iso_timestamp(raw) -> _datetime | None:
+    text = _bounded_str(raw, 64)
+    if text is None:
+        return None
+    try:
+        ts = _datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=_timezone.utc)
+    return ts
+
+
+def _now_utc() -> _datetime:
+    return _datetime.now(_timezone.utc)
+
+
+# ── GET /api/hyrax/essence/{operator} ────────────────────────────────────────
+
+def build_essence_payload(operator: str, *, now: _datetime | None = None) -> dict:
+    """Assemble the bounded essence payload for one sister. Never raises."""
+    now = now or _now_utc()
+    home = _profile_home(operator)
+    state = _read_json_bounded(home / "essence" / "state.json", MAX_STATE_FILE_BYTES)
+    affinity = _read_json_bounded(home / "affinity.json", MAX_STATE_FILE_BYTES)
+
+    available = state is not None
+    provenance: dict[str, str] = {}
+    issues: list[str] = []
+    if not available:
+        state = {}
+        issues.append("essence state unavailable — neutral defaults")
+
+    # mood / energy / mode / last_updated — read from state.json
+    mood = _bounded_str(state.get("mood"))
+    provenance["mood"] = "read" if mood is not None else "unknown"
+    mood = mood or NEUTRAL_EXPRESSION
+
+    energy = _bounded_score(state.get("energy"), 0.0, 1.0)
+    provenance["energy"] = "read" if energy is not None else "unknown"
+
+    mode = _bounded_str(state.get("mode"))
+    provenance["mode"] = "read" if mode is not None else "unknown"
+
+    last_updated = _bounded_str(state.get("last_updated"), 64)
+    provenance["last_updated"] = "read" if last_updated is not None else "unknown"
+
+    # staleness_days — derived from last_updated
+    staleness_days = None
+    ts = _parse_iso_timestamp(last_updated)
+    if ts is not None:
+        staleness_days = round(max(0.0, (now - ts).total_seconds()) / 86400.0, 2)
+    provenance["staleness_days"] = "derived" if staleness_days is not None else "unknown"
+
+    # expression — read raw from state.json, normalized via the canonical enum
+    raw_expression = None
+    raw_intensity = None
+    raw_expr_obj = state.get("expression")
+    if isinstance(raw_expr_obj, dict):
+        raw_expression = raw_expr_obj.get("current")
+        raw_intensity = raw_expr_obj.get("intensity")
+    current, expr_issues = normalize_expression(operator, raw_expression)
+    issues.extend(expr_issues)
+    if raw_expression is None:
+        provenance["expression"] = "unknown"
+        intensity = 0.0
+    elif expr_issues:
+        # Server-side normalization over a read value → derived
+        provenance["expression"] = "derived"
+        intensity = _bounded_score(raw_intensity, 0.0, 1.0)
+        intensity = intensity if intensity is not None else 0.0
+    else:
+        provenance["expression"] = "read"
+        intensity = _bounded_score(raw_intensity, 0.0, 1.0)
+        intensity = intensity if intensity is not None else 0.5
+
+    # affinity — read (affinity.json v4), all fields optional
+    rapport = trust = composite = None
+    boundaries = None
+    if affinity is not None:
+        dimensions = affinity.get("dimensions")
+        if isinstance(dimensions, dict):
+            rapport = _bounded_score(dimensions.get("rapport"), 0.0, MAX_AFFINITY_SCORE)
+            trust = _bounded_score(dimensions.get("trust"), 0.0, MAX_AFFINITY_SCORE)
+        composite = _bounded_score(affinity.get("bond"), 0.0, MAX_AFFINITY_SCORE)
+        global_blk = affinity.get("global")
+        if isinstance(global_blk, dict):
+            raw_boundaries = global_blk.get("boundaries")
+            if isinstance(raw_boundaries, dict):
+                effective = raw_boundaries.get("effective")
+                if isinstance(effective, dict):
+                    boundaries = _sanitize_boundaries(effective)
+    provenance["rapport"] = "read" if rapport is not None else "unknown"
+    provenance["trust"] = "read" if trust is not None else "unknown"
+    provenance["composite"] = "read" if composite is not None else "unknown"
+    provenance["boundaries"] = "read" if boundaries is not None else "unknown"
+
+    return {
+        "operator": operator,
+        "available": available,
+        "mood": mood,
+        "energy": energy,
+        "mode": mode,
+        "last_updated": last_updated,
+        "staleness_days": staleness_days,
+        "expression": {
+            "current": current,
+            "intensity": intensity,
+            "issues": issues,
+        },
+        "affinity": {
+            "rapport": rapport,
+            "trust": trust,
+            "composite": composite,
+            "boundaries": boundaries,
+        },
+        "provenance": provenance,
+        "generated_at": now.isoformat(),
+    }
+
+
+def _sanitize_boundaries(raw: dict) -> dict | None:
+    """Bounded primitive-only copy of an affinity boundaries dict."""
+    out: dict = {}
+    for key, value in raw.items():
+        if len(out) >= MAX_BOUNDARY_KEYS:
+            break
+        if not isinstance(key, str) or not key:
+            continue
+        safe_key = key[:MAX_BOUNDARY_STRING]
+        if isinstance(value, bool):
+            out[safe_key] = value
+        elif isinstance(value, (int, float)) and _math.isfinite(float(value)):
+            out[safe_key] = value
+        elif isinstance(value, str):
+            out[safe_key] = value[:MAX_BOUNDARY_STRING]
+    return out or None
+
+
+def _serve_operator_essence(handler, operator: str) -> bool:
+    """GET /api/hyrax/essence/{operator} — bounded essence state."""
+    try:
+        payload = build_essence_payload(operator)
+    except Exception:
+        # Fail closed — never surface an exception as a 500 with internals.
+        _logger.warning("essence payload build failed for one operator", exc_info=True)
+        payload = {
+            "operator": operator,
+            "available": False,
+            "mood": NEUTRAL_EXPRESSION,
+            "energy": None,
+            "mode": None,
+            "last_updated": None,
+            "staleness_days": None,
+            "expression": {
+                "current": NEUTRAL_EXPRESSION,
+                "intensity": 0.0,
+                "issues": ["essence state unavailable — neutral defaults"],
+            },
+            "affinity": {
+                "rapport": None,
+                "trust": None,
+                "composite": None,
+                "boundaries": None,
+            },
+            "provenance": {},
+            "generated_at": _now_utc().isoformat(),
+        }
+    _j(handler, payload)
+    return True
+
+
+# ── Frame registry: shared validation ────────────────────────────────────────
+
+def _sanitize_frame_state_lenient(raw) -> dict:
+    """Reader-side tolerant state cleanup: keep known keys with valid values."""
+    if not isinstance(raw, dict):
+        return {}
+    state: dict = {}
+    for key, value in raw.items():
+        if key not in _FRAME_STATE_KEYS:
+            continue
+        if key == "props":
+            if isinstance(value, list):
+                props = [
+                    p.strip()[:MAX_FRAME_PROP_LENGTH]
+                    for p in value
+                    if isinstance(p, str) and p.strip()
+                ][:MAX_FRAME_STATE_PROPS]
+                if props:
+                    state["props"] = props
+        elif key == "camera":
+            if value in _FRAME_CAMERAS:
+                state["camera"] = value
+        else:
+            text = _bounded_str(value)
+            if text is not None:
+                state[key] = text
+    return state
+
+
+def _validate_frame_state_strict(raw):
+    """Writer-side strict state validation → (state, None) or (None, error)."""
+    if raw is None:
+        return {}, None
+    if not isinstance(raw, dict):
+        return None, "state must be an object"
+    extra = set(raw.keys()) - _FRAME_STATE_KEYS
+    if extra:
+        return None, "state has unknown keys"
+    state: dict = {}
+    for key, value in raw.items():
+        if key == "props":
+            if not isinstance(value, list) or len(value) > MAX_FRAME_STATE_PROPS:
+                return None, "props must be a list of at most 8 strings"
+            props = []
+            for item in value:
+                if not isinstance(item, str) or not item.strip():
+                    return None, "props must be non-empty strings"
+                if len(item) > MAX_FRAME_PROP_LENGTH:
+                    return None, "prop string too long"
+                props.append(item.strip())
+            state["props"] = props
+        elif key == "camera":
+            if value not in _FRAME_CAMERAS:
+                return None, "camera must be close|medium|wide"
+            state["camera"] = value
+        else:
+            if not isinstance(value, str) or not value.strip():
+                return None, f"state.{key} must be a non-empty string"
+            if len(value) > MAX_ESSENCE_STRING:
+                return None, f"state.{key} too long"
+            state[key] = value.strip()
+    return state, None
+
+
+def _sanitize_registry_frame(raw) -> dict | None:
+    """Validate one registry frame for the GET reader. None → drop entry."""
+    if not isinstance(raw, dict):
+        return None
+    frame_id = raw.get("id")
+    if not isinstance(frame_id, str) or len(frame_id) > MAX_FRAME_ID_LENGTH:
+        return None
+    if not _FRAME_ID_RE.match(frame_id):
+        return None
+    operator = raw.get("operatorId")
+    if operator not in _VN_PROFILES:
+        return None
+    source = raw.get("source")
+    if source not in _FRAME_SOURCES:
+        return None
+    signature = raw.get("sceneSignature")
+    if not isinstance(signature, str) or not signature or len(signature) > 64:
+        return None
+    assets = raw.get("assets")
+    if not isinstance(assets, dict):
+        return None
+    image_url = assets.get("imageUrl")
+    if not isinstance(image_url, str) or not image_url:
+        return None
+    quality = raw.get("quality")
+    if not isinstance(quality, dict) or not isinstance(quality.get("approved"), bool):
+        return None
+    frame = {
+        "id": frame_id,
+        "operatorId": operator,
+        "version": _bounded_str(raw.get("version"), 16) or "1",
+        "source": source,
+        "sceneSignature": signature[:64],
+        "state": _sanitize_frame_state_lenient(raw.get("state")),
+        "assets": {"imageUrl": image_url[:MAX_IMAGE_URL_LENGTH]},
+        "quality": {
+            "approved": quality["approved"],
+            "issues": [
+                i[:MAX_ESSENCE_STRING] for i in quality.get("issues", [])
+                if isinstance(i, str)
+            ][:8] if isinstance(quality.get("issues"), list) else [],
+        },
+        "continuity": raw.get("continuity") if isinstance(raw.get("continuity"), dict) else {},
+    }
+    sha256 = assets.get("sha256")
+    if isinstance(sha256, str) and _re.match(r"^[a-f0-9]{64}$", sha256):
+        frame["assets"]["sha256"] = sha256
+    size = assets.get("size")
+    if isinstance(size, int) and not isinstance(size, bool) and size > 0:
+        frame["assets"]["size"] = size
+    for optional in ("thumbnailUrl", "maskUrl", "depthUrl"):
+        value = assets.get(optional)
+        if isinstance(value, str) and value:
+            frame["assets"][optional] = value[:MAX_IMAGE_URL_LENGTH]
+    registered_at = raw.get("registeredAt")
+    if isinstance(registered_at, str) and registered_at:
+        frame["registeredAt"] = registered_at[:64]
+    return frame
+
+
+# ── GET /api/hyrax/essence/frames ────────────────────────────────────────────
+
+def _load_registry_payload() -> dict:
+    """Read + validate the frame registry. Fail closed to an empty registry."""
+    raw = _read_json_bounded(FRAME_REGISTRY_FILE, MAX_REGISTRY_FILE_BYTES)
+    if raw is None or raw.get("version") != 1 or not isinstance(raw.get("frames"), list):
+        return {
+            "version": 1,
+            "frames": [],
+            "meta": {"total": 0, "dropped": 0, "available": False},
+        }
+    frames = []
+    dropped = 0
+    for entry in raw["frames"]:
+        frame = _sanitize_registry_frame(entry)
+        if frame is None:
+            dropped += 1
+        else:
+            frames.append(frame)
+    return {
+        "version": 1,
+        "frames": frames,
+        "meta": {"total": len(frames), "dropped": dropped, "available": True},
+    }
+
+
+def _serve_frames_registry(handler) -> bool:
+    """GET /api/hyrax/essence/frames — validated frame registry JSON."""
+    _j(handler, _load_registry_payload())
+    return True
+
+
+# ── POST /api/hyrax/essence/frames/register ──────────────────────────────────
+
+def _load_registry_raw() -> dict | None:
+    """Load the raw registry for read-modify-write.
+
+    Missing file → fresh skeleton. Corrupt/unreadable → None (fail closed;
+    appending to a corrupt registry would silently destroy entries).
+    """
+    if not FRAME_REGISTRY_FILE.is_file():
+        return {"version": 1, "policy": "fixed-sfw-allowlist", "frames": []}
+    raw = _read_json_bounded(FRAME_REGISTRY_FILE, MAX_REGISTRY_FILE_BYTES)
+    if raw is None or raw.get("version") != 1 or not isinstance(raw.get("frames"), list):
+        return None
+    return raw
+
+
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w") as fh:
+        json.dump(payload, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp, path)
+
+
+def _validate_dropped_image(filename):
+    """Validate a dropped frame image. → (digest, size, None) or (None, None, error).
+
+    The filename must be a bare basename inside the fixed drop directory —
+    never a caller-supplied path.
+    """
+    if not isinstance(filename, str) or not filename:
+        return None, None, "image filename required"
+    if len(filename) > MAX_FRAME_ID_LENGTH:
+        return None, None, "image filename too long"
+    if (
+        "/" in filename
+        or "\\" in filename
+        or ".." in filename
+        or "%" in filename
+        or not _FRAME_IMAGE_NAME_RE.match(filename)
+    ):
+        return None, None, "invalid image filename"
+    candidate = ESSENCE_FRAMES_DIR / filename
+    try:
+        base = ESSENCE_FRAMES_DIR.resolve(strict=True)
+        if candidate.is_symlink():
+            return None, None, "image not found"
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(base)
+        st = os.lstat(candidate)
+    except (OSError, ValueError):
+        return None, None, "image not found"
+    if not os.path.isfile(candidate):
+        return None, None, "image not found"
+    if st.st_size <= 0 or st.st_size > MAX_FRAME_IMAGE_BYTES:
+        return None, None, "image size out of bounds"
+    digest = hashlib.sha256()
+    try:
+        with open(candidate, "rb") as fh:
+            while True:
+                chunk = fh.read(64 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+    except OSError:
+        return None, None, "image unreadable"
+    return digest.hexdigest(), st.st_size, None
+
+
+def _handle_frame_register(handler, body) -> bool:
+    """POST /api/hyrax/essence/frames/register — register an authored frame."""
+    if not isinstance(body, dict):
+        _j(handler, {"error": "bad request"}, status=400)
+        return True
+    extra = set(body.keys()) - {"id", "operatorId", "state", "image"}
+    if extra:
+        _j(handler, {"error": "bad request"}, status=400)
+        return True
+
+    frame_id = body.get("id")
+    if (
+        not isinstance(frame_id, str)
+        or len(frame_id) > MAX_FRAME_ID_LENGTH
+        or not _FRAME_ID_RE.match(frame_id)
+    ):
+        _j(handler, {"error": "invalid frame id"}, status=400)
+        return True
+
+    operator = body.get("operatorId")
+    if operator not in _VN_PROFILES:
+        _j(handler, {"error": "unknown operator"}, status=400)
+        return True
+
+    state, state_err = _validate_frame_state_strict(body.get("state"))
+    if state_err is not None:
+        _j(handler, {"error": state_err}, status=400)
+        return True
+
+    digest, size, img_err = _validate_dropped_image(body.get("image"))
+    if img_err is not None:
+        _j(handler, {"error": img_err}, status=400)
+        return True
+
+    with _REGISTRY_WRITE_LOCK:
+        registry = _load_registry_raw()
+        if registry is None:
+            _j(handler, {"error": "registry unavailable"}, status=500)
+            return True
+        for entry in registry["frames"]:
+            if isinstance(entry, dict) and entry.get("id") == frame_id:
+                _j(handler, {"error": "conflict"}, status=409)
+                return True
+
+        frame = {
+            "id": frame_id,
+            "operatorId": operator,
+            "version": "1",
+            "source": "authored",
+            "sceneSignature": compute_scene_signature(operator, state),
+            "state": state,
+            "assets": {
+                # Repo-relative drop path — registered drops are not yet wired
+                # into the /api/hyrax/assets allowlist serving (Phase 6).
+                "imageUrl": f"essence/frames/{body['image']}",
+                "sha256": digest,
+                "size": size,
+            },
+            "quality": {"approved": True, "issues": []},
+            "continuity": {},
+            "registeredAt": _now_utc().isoformat(),
+        }
+        registry["frames"].append(frame)
+        try:
+            _atomic_write_json(FRAME_REGISTRY_FILE, registry)
+        except OSError:
+            _j(handler, {"error": "registry unavailable"}, status=500)
+            return True
+
+    _j(handler, {"frame": frame, "status": 200})
+    return True
+
+
+# ── GET /api/hyrax/presence ──────────────────────────────────────────────────
+
+_PRESENCE_KANBAN_SQL = (
+    "SELECT assignee AS name, "
+    "SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) AS running_count, "
+    "SUM(CASE WHEN status='blocked' THEN 1 ELSE 0 END) AS blocked_count "
+    "FROM tasks WHERE assignee IS NOT NULL AND assignee != '' GROUP BY assignee"
+)
+
+_ACTIVITY_INTERRUPTIBILITY = {
+    "idle": "free",
+    "conversing": "soft-busy",
+    "tool-working": "busy",
+    "waiting-approval": "busy",
+}
+
+
+def _bounded_count(value) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _presence_kanban_counts() -> dict:
+    """Kanban running/blocked counts grouped by assignee (lowercased)."""
+    counts: dict = {}
+    for row in _query(_KANBAN_DB, _PRESENCE_KANBAN_SQL):
+        name = row.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        counts[name.strip().lower()] = {
+            "running": _bounded_count(row.get("running_count")),
+            "blocked": _bounded_count(row.get("blocked_count")),
+        }
+    return counts
+
+
+def _pending_approval_count(session_id: str) -> int:
+    """Best-effort pending-approval count for one session.
+
+    Reads the in-memory approval queue under its lock. Returns 0 whenever the
+    approval subsystem is unavailable — presence must never block on it.
+    """
+    try:
+        from api.route_approvals import _lock as _approval_lock
+        from api.route_approvals import _pending as _approval_pending
+
+        with _approval_lock:
+            entries = _approval_pending.get(session_id)
+            if isinstance(entries, list):
+                return len(entries)
+            return 1 if entries else 0
+    except Exception:
+        return 0
+
+
+def _select_newest_vn_session(sessions: list, profile: str) -> dict | None:
+    """Newest unarchived hyrax-vn compact session dict for one sister."""
+    candidates = [
+        s for s in sessions
+        if isinstance(s, dict)
+        and not s.get("archived", False)
+        and s.get("profile") == profile
+        and s.get("project_id") == "hyrax-vn"
+    ]
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda s: (
+            s.get("updated_at", 0) or 0,
+            s.get("created_at", 0) or 0,
+            s.get("session_id", "") or "",
+        ),
+        reverse=True,
+    )
+    return candidates[0]
+
+
+def _session_has_active_tool(session) -> bool:
+    """Heuristic: the latest message is an assistant row with tool_calls.
+
+    Presentational only — during a streaming run, a trailing assistant
+    message with unresolved tool_calls means a tool is (likely) in flight;
+    a trailing tool/user row means the agent is composing (conversing).
+    """
+    messages = getattr(session, "messages", None) or []
+    for msg in reversed(messages[-8:]):
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        if role == "assistant":
+            tool_calls = msg.get("tool_calls")
+            return isinstance(tool_calls, list) and len(tool_calls) > 0
+        if role in ("tool", "user"):
+            return False
+    return False
+
+
+def _presence_expression(session) -> dict:
+    """Latest expression for presence: session-carried, else derived, else neutral."""
+    expr = getattr(session, "expression", None)
+    if isinstance(expr, dict):
+        current = _bounded_str(expr.get("current"))
+        if current is not None:
+            intensity = _bounded_score(expr.get("intensity"), 0.0, 1.0)
+            return {
+                "current": current,
+                "intensity": intensity if intensity is not None else 0.5,
+            }
+    messages = getattr(session, "messages", None) or []
+    tail = [
+        {"role": m.get("role"), "content": m.get("content") if isinstance(m.get("content"), str) else ""}
+        for m in messages[-20:]
+        if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+    ]
+    derived = _vn_derive_expression(tail)
+    if derived:
+        return {"current": derived[:MAX_ESSENCE_STRING], "intensity": 0.5}
+    return {"current": NEUTRAL_EXPRESSION, "intensity": 0.0}
+
+
+def _presence_item(profile: str, sessions: list, kanban: dict) -> dict:
+    meta = _VN_PROFILES[profile]
+    candidate = _select_newest_vn_session(sessions, profile)
+    sid = ""
+    session = None
+    if candidate is not None:
+        raw_sid = candidate.get("session_id")
+        if isinstance(raw_sid, str):
+            sid = raw_sid[:64]
+    pending = _pending_approval_count(sid) if sid else 0
+    streaming = bool(candidate.get("active_stream_id")) if candidate else False
+
+    if sid:
+        try:
+            session = _get_session(sid)
+        except Exception:
+            session = None
+
+    activity_type = "idle"
+    if sid:
+        if pending > 0:
+            activity_type = "waiting-approval"
+        elif streaming:
+            if session is not None and _session_has_active_tool(session):
+                activity_type = "tool-working"
+            else:
+                activity_type = "conversing"
+
+    expression = (
+        _presence_expression(session)
+        if session is not None
+        else {"current": NEUTRAL_EXPRESSION, "intensity": 0.0}
+    )
+
+    # essenceStateUpdatedAt — read-only, cheap, fail closed to omitted
+    essence_updated_at = None
+    try:
+        state = _read_json_bounded(
+            _profile_home(profile) / "essence" / "state.json", MAX_STATE_FILE_BYTES
+        )
+        if state is not None:
+            essence_updated_at = _bounded_str(state.get("last_updated"), 64)
+    except Exception:
+        essence_updated_at = None
+
+    item = {
+        "operatorId": profile,
+        "available": bool(meta["available"]),
+        "activity": {
+            "type": activity_type,
+            "interruptibility": _ACTIVITY_INTERRUPTIBILITY[activity_type],
+        },
+        "expression": expression,
+        "pendingApprovals": pending,
+        "kanban": dict(kanban.get(profile) or {"running": 0, "blocked": 0}),
+    }
+    if essence_updated_at is not None:
+        item["essenceStateUpdatedAt"] = essence_updated_at
+    return item
+
+
+def _presence_fallback_item(profile: str) -> dict:
+    """Neutral per-sister fallback when aggregation fails for that sister."""
+    return {
+        "operatorId": profile,
+        "available": bool(_VN_PROFILES[profile]["available"]),
+        "activity": {"type": "idle", "interruptibility": "free"},
+        "expression": {"current": NEUTRAL_EXPRESSION, "intensity": 0.0},
+        "pendingApprovals": 0,
+        "kanban": {"running": 0, "blocked": 0},
+    }
+
+
+def _serve_presence(handler) -> bool:
+    """GET /api/hyrax/presence — per-sister live aggregation (bounded)."""
+    try:
+        sessions = _all_sessions()
+    except Exception:
+        sessions = []
+    kanban = _presence_kanban_counts()
+    items = []
+    for profile in _VN_PROFILES:
+        try:
+            items.append(_presence_item(profile, sessions, kanban))
+        except Exception:
+            _logger.warning("presence aggregation failed for one sister", exc_info=True)
+            items.append(_presence_fallback_item(profile))
+    _j(handler, {"items": items, "meta": {"generatedAt": _now_utc().isoformat()}})
+    return True
+
+
+# ── Dispatch entry points (called from api.hyrax_routes) ─────────────────────
+
+_ESSENCE_PREFIX = "/api/hyrax/essence/"
+_PRESENCE_PATH = "/api/hyrax/presence"
+_FRAMES_PATH = "/api/hyrax/essence/frames"
+_REGISTER_PATH = "/api/hyrax/essence/frames/register"
+
+
+def handle_essence_get(handler, parsed) -> bool:
+    """Dispatch GET /api/hyrax/presence and /api/hyrax/essence/* requests."""
+    path = parsed.path
+
+    if path == _PRESENCE_PATH:
+        return _serve_presence(handler)
+
+    if path == _FRAMES_PATH:
+        return _serve_frames_registry(handler)
+
+    if path.startswith(_ESSENCE_PREFIX):
+        operator = path[len(_ESSENCE_PREFIX):]
+        # Single path segment only; unknown operators fail closed with 404.
+        if operator and "/" not in operator and operator in _VN_PROFILES:
+            return _serve_operator_essence(handler, operator)
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+
+    _j(handler, {"error": "not found"}, status=404)
+    return True
+
+
+def handle_essence_post(handler, parsed, body) -> bool:
+    """Dispatch POST /api/hyrax/essence/* requests (body pre-read by caller)."""
+    if parsed.path == _REGISTER_PATH:
+        return _handle_frame_register(handler, body)
+    _j(handler, {"error": "not found"}, status=404)
+    return True

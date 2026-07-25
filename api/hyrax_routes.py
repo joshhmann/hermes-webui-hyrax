@@ -198,6 +198,11 @@ def handle_hyrax_get(handler, parsed) -> bool:
     if path == "/api/hyrax/agents":
         return _serve_agents(handler)
 
+    # /api/hyrax/presence + /api/hyrax/essence/* — Essence runtime (read side)
+    if path == "/api/hyrax/presence" or path.startswith("/api/hyrax/essence"):
+        from api import hyrax_essence as _hyrax_essence
+        return _hyrax_essence.handle_essence_get(handler, parsed)
+
     # /api/hyrax/vn/* — VN native session adapter
     if path.startswith("/api/hyrax/vn/"):
         from api.hyrax_routes import handle_hyrax_vn_get
@@ -220,6 +225,16 @@ def handle_hyrax_post(handler, parsed) -> bool:
     # Only handle /api/hyrax/* paths; everything else returns False
     if not path.startswith("/api/hyrax/"):
         return False
+
+    # /api/hyrax/essence/frames/register — Essence frame registry writes
+    if path == "/api/hyrax/essence/frames/register":
+        from api import routes as _routes
+        try:
+            body = _routes.read_body(handler)
+        except Exception:
+            body = {}
+        from api import hyrax_essence as _hyrax_essence
+        return _hyrax_essence.handle_essence_post(handler, parsed, body)
 
     # /api/hyrax/vn/* — VN POST routes (need body read)
     if path.startswith("/api/hyrax/vn/"):
@@ -527,7 +542,8 @@ _VN_CONVERSATIONS_PREFIX = "/api/hyrax/vn/conversations"
 # prevent unbounded data leakage through the presentation layer.
 MAX_TRANSCRIPT_CONTENT_LENGTH = 100_000  # characters — assistant responses
 MAX_TRANSCRIPT_NAME_LENGTH = 128         # characters — message author names
-MAX_TRANSCRIPT_ROWS = 50                 # max rows in transcript response
+DEFAULT_TRANSCRIPT_ROWS = 200            # default transcript page size (?limit=)
+MAX_TRANSCRIPT_ROWS = 400                # hard cap for ?limit= (was: fixed 50-row cap)
 MAX_ID_LENGTH = 64                       # max length for string IDs
 MAX_TITLE_LENGTH = 256                   # max length for session titles
 
@@ -535,6 +551,13 @@ MAX_TITLE_LENGTH = 256                   # max length for session titles
 # The RFC requires "bounded trimmed non-empty UTF-8 text with a conservative
 # bounded length." We reject over-length input rather than silently truncating.
 MAX_TURN_TEXT_LENGTH = 4000
+
+# Bounds for VN turn attachments (mirrors the /api/chat/start attachment
+# shape {name, path, mime, size}, strictly validated — any other shape is
+# rejected rather than coerced).
+MAX_TURN_ATTACHMENTS = 8                 # max attachment items per turn
+MAX_ATTACHMENT_STRING = 256              # max chars for name/path/mime
+MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024   # 25 MB per attachment
 
 
 # ── Handlers called from handle_hyrax_get/handle_hyrax_post ──────────────────
@@ -561,12 +584,12 @@ def handle_hyrax_vn_get(handler, parsed) -> bool:
             _j(handler, {"error": "not found"}, status=404)
             return True
 
-        # /conversations/{session_id}  — bounded transcript
+        # /conversations/{session_id}  — bounded, paged transcript
         # Strip leading slash, reject sub-paths
         if "/" not in remainder[1:] if len(remainder) > 1 else True:
             sid = remainder[1:] if len(remainder) > 1 else ""
             if _is_safe_session_id(sid):
-                return _vn_serve_conversation(handler, sid)
+                return _vn_serve_conversation(handler, parsed, sid)
             _j(handler, {"error": "not found"}, status=404)
             return True
 
@@ -618,17 +641,25 @@ def _vn_session_visible(session) -> bool:
     return sp in VN_PROFILES
 
 
-def _vn_bounded_conversation(session):
+def _vn_bounded_conversation(session, limit: int | None = None, before: str | None = None):
     """Return a bounded, sanitized conversation dict from a VN session.
 
     Exposes only: session_id, title, message_count, active_stream_id,
     archived, created_at, updated_at, profile (from allowlist), optional
     expression state (session-carried, or derived from the latest assistant
     reply), and filtered transcript.
+
+    Transcript paging: the transcript is the filtered user/assistant rows,
+    optionally cut at the ``before`` cursor (message id or zero-based index
+    into the filtered rows), then windowed to the last ``limit`` rows
+    (default DEFAULT_TRANSCRIPT_ROWS, hard cap MAX_TRANSCRIPT_ROWS). The
+    response adds ``total`` (filtered row count, same as message_count) and
+    ``has_more`` (earlier rows exist beyond the window).
+
     Never exposes workspace, model, provider config, raw tool args, or env data.
 
     All string fields are bounded. All numeric timestamps are finite-safe.
-    Transcript is capped at MAX_TRANSCRIPT_ROWS rows.
+    Raises ValueError when the ``before`` cursor resolves to nothing.
     """
     # Bounded and type-sanitized top-level fields
     raw_sid = getattr(session, "session_id", "")
@@ -695,17 +726,42 @@ def _vn_bounded_conversation(session):
     # Count the displayable rows — consistent with the filtered transcript,
     # not the raw message list (which includes tool/system messages)
     compact["message_count"] = len(transcript)
-    # Cap at last MAX_TRANSCRIPT_ROWS rows
-    if len(transcript) > MAX_TRANSCRIPT_ROWS:
-        transcript = transcript[-MAX_TRANSCRIPT_ROWS:]
-    compact["messages"] = transcript
+    compact["total"] = len(transcript)
     # When the session carries no explicit expression, derive one from the
     # latest assistant reply so the VN portrait/mood badge can react.
+    # Derived over the full filtered transcript (latest row wins) before
+    # paging cuts the window.
     if "expression" not in compact:
         derived = _vn_derive_expression(transcript)
         if derived:
             compact["expression"] = {"current": derived}
+    # Paging: cut at the `before` cursor, then window to the last `limit` rows
+    if before is not None:
+        cut = _vn_resolve_before_cursor(transcript, before)
+        if cut is None:
+            raise ValueError("invalid before cursor")
+        transcript = transcript[:cut]
+    page_size = limit if limit is not None else DEFAULT_TRANSCRIPT_ROWS
+    page = transcript[-page_size:] if len(transcript) > page_size else transcript
+    compact["has_more"] = len(transcript) > len(page)
+    compact["messages"] = page
     return compact
+
+
+def _vn_resolve_before_cursor(transcript: list, before: str) -> int | None:
+    """Resolve a `before` cursor to a cut index into the filtered transcript.
+
+    Accepts a zero-based row index or a bounded message id. Returns the index
+    of the first EXCLUDED row (transcript[:cut] is the window), or None when
+    the cursor resolves to nothing (caller fails closed with 400).
+    """
+    if before.isdigit():
+        idx = int(before)
+        return idx if 0 <= idx <= len(transcript) else None
+    for i, msg in enumerate(transcript):
+        if msg.get("id") == before:
+            return i
+    return None
 
 
 # ── VN expression derivation ─────────────────────────────────────────────
@@ -1032,8 +1088,48 @@ def _vn_handle_create_conversation(handler, body: dict) -> bool:
 # ── GET /api/hyrax/vn/conversations/{session_id} ────────────────────────────
 
 
-def _vn_serve_conversation(handler, sid: str) -> bool:
-    """GET /api/hyrax/vn/conversations/{session_id} — bounded transcript."""
+def _vn_parse_transcript_paging(query: str):
+    """Parse ?limit=/&before= transcript paging params.
+
+    Returns (limit, before, error). limit defaults to DEFAULT_TRANSCRIPT_ROWS
+    and is hard-capped at MAX_TRANSCRIPT_ROWS; before is a bounded cursor
+    string (message id or zero-based row index). Invalid input → error=True
+    (fail closed with 400, never silently clamped).
+    """
+    from urllib.parse import parse_qs
+
+    limit = DEFAULT_TRANSCRIPT_ROWS
+    before = None
+    try:
+        # keep_blank_values: a bare "limit="/"before=" is invalid input,
+        # not an absent parameter (fail closed with 400).
+        qs = parse_qs(query or "", max_num_fields=8, keep_blank_values=True)
+    except ValueError:
+        return None, None, True
+    raw_limit = qs.get("limit", [None])[0]
+    if raw_limit is not None:
+        if not raw_limit.isdigit():
+            return None, None, True
+        limit = int(raw_limit)
+        if limit < 1 or limit > MAX_TRANSCRIPT_ROWS:
+            return None, None, True
+    raw_before = qs.get("before", [None])[0]
+    if raw_before is not None:
+        if not raw_before or len(raw_before) > MAX_ID_LENGTH:
+            return None, None, True
+        before = raw_before
+    return limit, before, False
+
+
+def _vn_serve_conversation(handler, parsed, sid: str) -> bool:
+    """GET /api/hyrax/vn/conversations/{session_id} — bounded, paged transcript."""
+    limit, before, paging_error = _vn_parse_transcript_paging(
+        getattr(parsed, "query", "") or ""
+    )
+    if paging_error:
+        _j(handler, {"error": "bad request"}, status=400)
+        return True
+
     try:
         session = _get_session(sid)
     except KeyError:
@@ -1044,11 +1140,73 @@ def _vn_serve_conversation(handler, sid: str) -> bool:
         _j(handler, {"error": "not found"}, status=404)
         return True
 
-    _j(handler, {"conversation": _vn_bounded_conversation(session)})
+    try:
+        conversation = _vn_bounded_conversation(session, limit=limit, before=before)
+    except ValueError:
+        _j(handler, {"error": "bad request"}, status=400)
+        return True
+    _j(handler, {"conversation": conversation})
     return True
 
 
 # ── POST /api/hyrax/vn/conversations/{session_id}/turns ─────────────────────
+
+
+def _vn_validate_turn_attachments(raw):
+    """Strictly validate a VN turn attachments list.
+
+    Mirrors the /api/chat/start attachment shape ({name, path, mime, size})
+    but rejects any other shape rather than coercing: every item must be a
+    dict with exactly the four keys, strings bounded, size a non-bool int
+    within the 25 MB cap, at most MAX_TURN_ATTACHMENTS items.
+
+    Returns the normalized list, or None when invalid.
+    """
+    if not isinstance(raw, list) or len(raw) > MAX_TURN_ATTACHMENTS:
+        return None
+    normalized = []
+    for item in raw:
+        if not isinstance(item, dict):
+            return None
+        if set(item.keys()) != {"name", "path", "mime", "size"}:
+            return None
+        name, path, mime, size = item["name"], item["path"], item["mime"], item["size"]
+        if not all(
+            isinstance(v, str) and len(v) <= MAX_ATTACHMENT_STRING
+            for v in (name, path, mime)
+        ):
+            return None
+        if not name or not path:
+            return None
+        if (
+            isinstance(size, bool)
+            or not isinstance(size, int)
+            or size < 0
+            or size > MAX_ATTACHMENT_SIZE
+        ):
+            return None
+        normalized.append({"name": name, "path": path, "mime": mime, "size": size})
+    return normalized
+
+
+def _start_turn_supports_attachments(fn) -> bool:
+    """True when the given start_session_turn accepts an attachments kwarg.
+
+    The native start_session_turn in api/routes.py currently hardcodes
+    attachments=[] (no parameter) — api/routes.py is outside this change's
+    scope, so attachment passthrough is gated on the runtime's signature and
+    the turn handler fails closed with a fixed 400 when unsupported (never
+    silently drops the user's files).
+    """
+    import inspect as _inspect
+
+    try:
+        params = _inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    if "attachments" in params:
+        return True
+    return any(p.kind is _inspect.Parameter.VAR_KEYWORD for p in params.values())
 
 
 def _vn_handle_turn(handler, sid: str, body: dict) -> bool:
@@ -1068,11 +1226,11 @@ def _vn_handle_turn(handler, sid: str, body: dict) -> bool:
         _j(handler, {"error": "not found"}, status=404)
         return True
 
-    # Validate body — must be a dict with **exactly** key 'text'
+    # Validate body — only 'text' and optional 'attachments' keys
     if not isinstance(body, dict):
         _j(handler, {"error": "bad request"}, status=400)
         return True
-    allowed_turn_keys = {"text"}
+    allowed_turn_keys = {"text", "attachments"}
     extra_turn_keys = set(body.keys()) - allowed_turn_keys
     if extra_turn_keys:
         _j(handler, {"error": "bad request"}, status=400)
@@ -1087,14 +1245,33 @@ def _vn_handle_turn(handler, sid: str, body: dict) -> bool:
         return True
     text = text.strip()
     if len(text) > MAX_TURN_TEXT_LENGTH:
-        _j(handler, {"error": "text exceeds maximum length"}, status=400)
+        # Include the limit so the client can display/match it
+        _j(handler, {
+            "error": "text exceeds maximum length",
+            "limit": MAX_TURN_TEXT_LENGTH,
+        }, status=400)
         return True
+
+    # Optional attachments — strict shape, bounded
+    attachments = None
+    if "attachments" in body:
+        attachments = _vn_validate_turn_attachments(body.get("attachments"))
+        if attachments is None:
+            _j(handler, {"error": "bad request"}, status=400)
+            return True
 
     # Delegate to native start_session_turn
     from api.routes import start_session_turn
 
+    turn_kwargs = {}
+    if attachments:
+        if not _start_turn_supports_attachments(start_session_turn):
+            _j(handler, {"error": "attachments not supported"}, status=400)
+            return True
+        turn_kwargs["attachments"] = attachments
+
     try:
-        result = start_session_turn(sid, text, source="hyrax_vn")
+        result = start_session_turn(sid, text, source="hyrax_vn", **turn_kwargs)
     except Exception:
         _j(handler, {"error": "internal error"}, status=500)
         return True

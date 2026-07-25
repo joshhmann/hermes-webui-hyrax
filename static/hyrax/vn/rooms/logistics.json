@@ -1,0 +1,23 @@
+{
+  "roomId": "logistics",
+  "operatorId": "mai",
+  "displayName": "Logistics Annex",
+  "backgroundFrameIds": ["mai.background.supply-hub"],
+  "visibleObjectIds": ["packing-bench", "inventory-shelves", "label-printer", "lamp"],
+  "interactables": [
+    "room.packing-bench.inspect",
+    "room.packing-bench.ask",
+    "room.inventory-shelves.inspect",
+    "room.label-printer.inspect",
+    "room.label-printer.use",
+    "room.lamp.inspect",
+    "room.lamp.use",
+    "room.enter",
+    "room.hq"
+  ],
+  "ambientState": {
+    "lamp": "on",
+    "lighting": "day",
+    "label-printer": "off"
+  }
+}
