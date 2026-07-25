@@ -614,9 +614,9 @@ async function testComposer() {
 async function testApprovals() {
   console.log('\n── vnApprovals: poll + respond ──');
   apiRoutes = [
-    { match: function(url) { return url.indexOf('/api/approval/pending') === 0; },
+    { match: function(url) { return url.indexOf('/approvals/pending') !== -1; },
       reply: { pending: { approval_id: 'a1', description: 'Run shell command', command: 'rm -rf /tmp/x', risk: 'high' }, pending_count: 1 } },
-    { match: function(url) { return url.indexOf('/api/clarify/pending') === 0; },
+    { match: function(url) { return url.indexOf('/clarify/pending') !== -1; },
       reply: { pending: { clarify_id: 'c1', question: 'Which environment?', choices_offered: ['staging', 'prod'] } } },
     { match: function(url, opts) { return url === '/api/approval/respond' && isPost(opts); }, reply: { ok: true } },
     { match: function(url, opts) { return url === '/api/clarify/respond' && isPost(opts); }, reply: { ok: true, response: 'staging' } },
@@ -690,8 +690,8 @@ async function testShell() {
           expression: { current: 'smile', intensity: 0.6 },
         } };
       } },
-    { match: function(url) { return url.indexOf('/api/approval/pending') === 0; }, reply: { pending: null } },
-    { match: function(url) { return url.indexOf('/api/clarify/pending') === 0; }, reply: { pending: null } },
+    { match: function(url) { return url.indexOf('/approvals/pending') !== -1; }, reply: { pending: null } },
+    { match: function(url) { return url.indexOf('/clarify/pending') !== -1; }, reply: { pending: null } },
   ];
 
   // Mount

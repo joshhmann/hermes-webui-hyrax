@@ -230,7 +230,9 @@
     if (_disposed || !_sessionId || _inFlight) return;
     _inFlight = true;
     var sid = encodeURIComponent(_sessionId);
-    var approvalQ = _api('/api/approval/pending?session_id=' + sid, { timeoutToast: false })
+    // Poll the VN aliases — the native endpoints 404 cross-profile for
+    // sister sessions (the alias delegates under the sister's profile).
+    var approvalQ = _api('/api/hyrax/vn/conversations/' + sid + '/approvals/pending', { timeoutToast: false })
       .then(function(data) {
         if (_disposed) return;
         var pending = data && data.pending;
@@ -242,7 +244,7 @@
         }
       })
       .catch(function() { /* poll errors ignored; next tick retries */ });
-    var clarifyQ = _api('/api/clarify/pending?session_id=' + sid, { timeoutToast: false })
+    var clarifyQ = _api('/api/hyrax/vn/conversations/' + sid + '/clarify/pending', { timeoutToast: false })
       .then(function(data) {
         if (_disposed) return;
         var pending = data && data.pending;

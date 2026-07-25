@@ -584,6 +584,25 @@ def handle_hyrax_vn_get(handler, parsed) -> bool:
             _j(handler, {"error": "not found"}, status=404)
             return True
 
+        # /conversations/{session_id}/approvals/pending — approval state alias.
+        # The native /api/approval/pending 404s cross-profile (sister sessions
+        # are invisible to the caller's active profile); this alias validates VN
+        # ownership and delegates under the sister's profile context.
+        if remainder.endswith("/approvals/pending"):
+            sid = remainder[1:-len("/approvals/pending")]
+            if _is_safe_session_id(sid):
+                return _vn_serve_approval_alias(handler, parsed, sid, kind="approval")
+            _j(handler, {"error": "not found"}, status=404)
+            return True
+
+        # /conversations/{session_id}/clarify/pending — same alias for clarify.
+        if remainder.endswith("/clarify/pending"):
+            sid = remainder[1:-len("/clarify/pending")]
+            if _is_safe_session_id(sid):
+                return _vn_serve_approval_alias(handler, parsed, sid, kind="clarify")
+            _j(handler, {"error": "not found"}, status=404)
+            return True
+
         # /conversations/{session_id}  — bounded, paged transcript
         # Strip leading slash, reject sub-paths
         if "/" not in remainder[1:] if len(remainder) > 1 else True:
@@ -1340,3 +1359,35 @@ def _vn_serve_events(handler, parsed, sid: str) -> bool:
 
         result = _handle_session_sse_stream_for_session(handler, parsed, sid)
         return True if result is None else result
+
+
+def _vn_serve_approval_alias(handler, parsed, sid: str, kind: str) -> bool:
+    """GET .../{sid}/approvals/pending and .../{sid}/clarify/pending.
+
+    The native /api/approval/pending and /api/clarify/pending endpoints 404
+    for sister-profile sessions because the caller's active profile can't see
+    them. This alias validates VN ownership, then delegates to the native
+    handlers under the owning sister's profile context (same pattern as the
+    events alias). kind is "approval" or "clarify".
+    """
+    try:
+        session = _get_session(sid, metadata_only=True)
+    except KeyError:
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+
+    if not _vn_session_visible(session):
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+
+    owner_profile = getattr(session, "profile", None) or ""
+    from api.profiles import request_profile_context
+
+    with request_profile_context(owner_profile):
+        if kind == "clarify":
+            from api.routes import _handle_clarify_pending
+
+            return _handle_clarify_pending(handler, parsed)
+        from api.routes import _handle_approval_pending
+
+        return _handle_approval_pending(handler, parsed)
