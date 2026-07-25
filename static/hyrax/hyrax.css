@@ -979,11 +979,18 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
   pointer-events: none;
 }
 .gestalt-vn-stage-frame {
-  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-  max-height: 86%; max-width: 62%;
-  object-fit: contain;
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  /* Camera-aware framing: cover + top anchor gives the half-cut VN
+     composition (character fills the stage, legs overflow) — the look of
+     the original mai portraits — without editing images. Old control
+     panel used object-position center 30% for exactly this. */
+  object-fit: cover; object-position: center 28%;
   filter: drop-shadow(0 8px 24px rgba(0,0,0,.5));
   opacity: 1; transition: opacity .3s ease;
+}
+.gestalt-vn-stage-frame[data-framing="close"] { object-position: center 11%; }
+.gestalt-vn-stage-frame[data-framing="wide"] {
+  object-fit: contain; object-position: center bottom;
 }
 .gestalt-vn-stage-frame.xfade-in { opacity: 1; }
 .gestalt-vn-stage-frame.xfade-out { opacity: 0; }
@@ -1005,7 +1012,7 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
   .gestalt-vn-stage-frame { transition: none; }
 }
 @media (max-width: 720px) {
-  .gestalt-vn-stage-frame { max-width: 88%; max-height: 78%; }
+  .gestalt-vn-stage-frame { object-position: center 22%; }
 }
 
 /* ── Sidebar confirm dialog (vnSidebar.js) ── */

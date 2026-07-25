@@ -136,7 +136,9 @@
       _norm(coarse.wardrobe),
       _norm(coarse.expressionFamily || expressionFamily(coarse.expression)),
       _norm(coarse.poseFamily || poseFamily(coarse.pose)),
-      timeOfDayBand(coarse.timeOfDay),
+      // Band used only when explicitly set — band-less scenes stay band-less
+      // so the registry is stable across hours (matches the server side).
+      _norm(coarse.timeOfDay),
       _norm(coarse.framing || 'medium'),
       props.join(','),
     ];
@@ -259,6 +261,7 @@
       if (currentFrame && frame.continuity &&
           frame.continuity.priorFrameId === currentFrame.id) score += 4;
       if (coarse.wardrobe && _norm(st.wardrobe) === _norm(coarse.wardrobe)) score += 2;
+      if (coarse.pose && _norm(st.pose) === _norm(coarse.pose)) score += 2;
       if (coarse.location && _norm(st.location) === _norm(coarse.location)) score += 1;
       return { frame: frame, score: score };
     });

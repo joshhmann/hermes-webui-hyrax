@@ -131,6 +131,12 @@
     back.alt = _altForFrame(frame);
     back.setAttribute('data-frame-id', frame.id || '');
     back.setAttribute('data-frame-source', frame.source || '');
+    // Camera-aware framing (close|medium|wide from the frame state; CSS
+    // handles cover/contain + anchor — the mai-style half-cut look without
+    // editing images).
+    var camera = (frame.state && frame.state.camera) || 'medium';
+    back.setAttribute('data-framing', camera);
+    front.setAttribute('data-framing', camera);
     if (transition === 'crossfade') {
       back.classList.add('xfade-in');
       front.classList.add('xfade-out');

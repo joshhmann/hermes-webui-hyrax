@@ -131,6 +131,35 @@ def normalize_expression(operator: str, raw) -> tuple[str, list[str]]:
 
 # ── Scene signatures (ESSENCE_RUNTIME_SPEC §4) ───────────────────────────────
 
+# Client-mirrored signature algorithm (static/hyrax/essence/essenceFrames.js).
+# The registry and the browser MUST produce identical signatures for
+# identical scenes or the exact-match tier is dead — keep these maps and the
+# field order in lockstep with the client.
+_EXPRESSION_FAMILY = {
+    "neutral": "neutral", "calm": "neutral",
+    "smile": "positive", "happy-emote": "positive", "laughing": "positive",
+    "light-smile": "positive", "shy-smile": "positive",
+    "sarcastic": "wry", "ohhoai": "wry",
+    "focused": "focused", "alert": "focused", "observant": "focused",
+    "thinking": "focused",
+    "scream-of-fury": "intense", "yandere-smile": "intense",
+}
+_POSE_FAMILY = {
+    "standing": "standing", "idle": "standing", "sitting": "sitting",
+    "working": "working", "gesturing": "gesture",
+}
+_TIME_BANDS = ("morning", "day", "evening", "night")
+
+
+def _fnv1a32_hex(text: str) -> str:
+    """FNV-1a 32-bit, 8 hex chars — mirrors the client's _hash()."""
+    h = 0x811C9DC5
+    for ch in text:
+        h ^= ord(ch)
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return f"{h:08x}"
+
+
 def compute_scene_signature(operator_id: str, state) -> str:
     """Stable hash of COARSE frame-state fields only.
 
@@ -138,44 +167,45 @@ def compute_scene_signature(operator_id: str, state) -> str:
     · timeOfDayBand · framing · majorProps[≤3]
 
     Conversational content, timestamps, and minor mood drift are explicitly
-    excluded. Shared by the registry build script and the register endpoint
-    so identical scenes always produce identical signatures.
+    excluded. Mirrors essenceFrames.computeSceneSignature EXACTLY (fields,
+    family maps, defaults, FNV-1a) — shared by the registry build script and
+    the register endpoint.
     """
     state = state if isinstance(state, dict) else {}
 
-    def _field(key: str, default: str) -> str:
-        value = state.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip().lower()[:64]
-        return default
+    def _norm(value) -> str:
+        if not isinstance(value, str):
+            return ""
+        return value.lower().strip()
 
-    expression_family = _field("expression", NEUTRAL_EXPRESSION)
-    pose_family = _field("pose", NEUTRAL_EXPRESSION)
-    location = _field("location", "unspecified")
-    wardrobe = _field("wardrobe", "default")
-    time_of_day = _field("timeOfDay", "day")
-    band = time_of_day if time_of_day in _TIME_OF_DAY_BANDS else "day"
-    framing = _field("camera", "medium")
-    if framing not in _FRAME_CAMERAS:
-        framing = "medium"
+    def _family(value, table, default):
+        return table.get(_norm(value), default)
+
     props = state.get("props")
     major_props: list[str] = []
     if isinstance(props, list):
         major_props = sorted({
-            p.strip().lower()[:64] for p in props if isinstance(p, str) and p.strip()
+            _norm(p) for p in props if isinstance(p, str) and p.strip()
         })[:3]
-    material = "|".join([
-        "v1",
-        str(operator_id),
-        location,
-        wardrobe,
-        expression_family,
-        pose_family,
-        band,
-        framing,
+
+    time_of_day = _norm(state.get("timeOfDay"))
+    if time_of_day not in _TIME_BANDS:
+        # Band-less scenes stay band-less (empty field): frames without an
+        # explicit timeOfDay must not bake in the generation hour, or the
+        # registry goes stale every time the band rolls over.
+        time_of_day = ""
+
+    fields = [
+        _norm(operator_id),
+        _norm(state.get("location")),
+        _norm(state.get("wardrobe")),
+        _family(state.get("expression"), _EXPRESSION_FAMILY, "neutral"),
+        _family(state.get("pose"), _POSE_FAMILY, "standing"),
+        time_of_day,
+        _norm(state.get("camera")) or "medium",
         ",".join(major_props),
-    ])
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+    ]
+    return _fnv1a32_hex("|".join(fields))
 
 
 # ── Bounded JSON file reads (fail closed) ────────────────────────────────────

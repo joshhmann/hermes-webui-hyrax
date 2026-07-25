@@ -321,16 +321,18 @@ class TestFramesRegistryGet:
         assert handler.status == 200
         body = handler.json_body()
         assert body["meta"]["available"] is True
-        assert body["meta"]["total"] == 29
+        assert body["meta"]["total"] == len(body["frames"]) and body["meta"]["total"] >= 29
         import re
         id_re = re.compile(r"^frame\.[a-z0-9-]+(\.[a-z0-9-]+)*$")
         for frame in body["frames"]:
             assert id_re.match(frame["id"]), frame["id"]
             assert frame["operatorId"] in ("tai", "rei", "nei", "mai")
             assert frame["source"] == "authored"
-            assert frame["quality"]["approved"] is True
+            # Approved unless intentionally demoted (e.g. superseded neutrals)
+            if not frame["quality"]["approved"]:
+                assert any("superseded" in i for i in frame["quality"].get("issues", [])), frame["id"]
             assert frame["sceneSignature"]
-            assert frame["assets"]["imageUrl"].startswith("/api/hyrax/assets/")
+            assert frame["assets"]["imageUrl"].startswith(("/api/hyrax/assets/", "/api/hyrax/essence/frames/file/"))
 
     def test_missing_registry_fails_closed(self, frames_drop_dir):
         _, registry = frames_drop_dir
@@ -962,7 +964,7 @@ class TestSceneSignature:
     def test_registry_frames_have_valid_signatures(self):
         import api.hyrax_essence as essence
         payload = essence._load_registry_payload()
-        assert payload["meta"]["total"] == 29
+        assert payload["meta"]["total"] == len(payload["frames"]) and payload["meta"]["total"] >= 29
         for frame in payload["frames"]:
             assert essence.compute_scene_signature(
                 frame["operatorId"], frame["state"]

@@ -464,6 +464,7 @@
         vn.stage.applyIntent({
           operatorId: operatorId,
           location: OPERATOR_ROOM[operatorId],
+          poseIntent: 'standing',
           trigger: 'scene-entry',
         });
       }

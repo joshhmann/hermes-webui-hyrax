@@ -9,7 +9,7 @@
       "kind": "background",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "a1c50f71926cde0c",
+      "sceneSignature": "1d2c1b5f",
       "state": {
         "location": "supply-hub",
         "camera": "wide"
@@ -31,7 +31,7 @@
       "kind": "chibi",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "ee6f4961f581d0f3",
+      "sceneSignature": "c66476ac",
       "state": {
         "pose": "stand",
         "camera": "wide"
@@ -53,7 +53,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "c91cb93057b6c239",
+      "sceneSignature": "8d9f25dc",
       "state": {
         "expression": "composed",
         "camera": "medium"
@@ -75,7 +75,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "22d756b6f27f652a",
+      "sceneSignature": "6142d2e8",
       "state": {
         "expression": "laughing",
         "camera": "medium"
@@ -97,7 +97,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "13cf0129c8771a84",
+      "sceneSignature": "6142d2e8",
       "state": {
         "expression": "light-smile",
         "camera": "medium"
@@ -119,7 +119,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "4f51145d26a567ff",
+      "sceneSignature": "8d9f25dc",
       "state": {
         "expression": "neutral",
         "camera": "medium"
@@ -130,8 +130,10 @@
         "size": 2962038
       },
       "quality": {
-        "approved": true,
-        "issues": []
+        "approved": false,
+        "issues": [
+          "superseded by sprite set 2026-07-24"
+        ]
       },
       "continuity": {}
     },
@@ -141,7 +143,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "031e8b8298e0ed34",
+      "sceneSignature": "37ec5916",
       "state": {
         "expression": "observant",
         "camera": "medium"
@@ -163,7 +165,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "2d68e6a0ca97d3fc",
+      "sceneSignature": "7c46d73b",
       "state": {
         "expression": "ohhoai",
         "camera": "medium"
@@ -185,7 +187,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "857178b283540032",
+      "sceneSignature": "4db08f51",
       "state": {
         "expression": "scream-of-fury",
         "camera": "medium"
@@ -207,7 +209,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "3a100e64f24fc23c",
+      "sceneSignature": "6142d2e8",
       "state": {
         "expression": "shy-smile",
         "camera": "medium"
@@ -229,7 +231,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "c7ddf1f90b9de836",
+      "sceneSignature": "6142d2e8",
       "state": {
         "expression": "smile",
         "camera": "medium"
@@ -251,7 +253,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "413b105771766e7f",
+      "sceneSignature": "4db08f51",
       "state": {
         "expression": "yandere-smile",
         "camera": "medium"
@@ -273,7 +275,7 @@
       "kind": "background",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "bfd22b31225811a4",
+      "sceneSignature": "e0f4f506",
       "state": {
         "location": "lab",
         "camera": "wide"
@@ -295,7 +297,7 @@
       "kind": "chibi",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "6bc4997dcd2883c7",
+      "sceneSignature": "262c5a79",
       "state": {
         "pose": "stand",
         "camera": "wide"
@@ -317,7 +319,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "5ea501786c27e3f8",
+      "sceneSignature": "2e7004a9",
       "state": {
         "expression": "neutral",
         "camera": "medium"
@@ -328,8 +330,10 @@
         "size": 14689733
       },
       "quality": {
-        "approved": true,
-        "issues": []
+        "approved": false,
+        "issues": [
+          "superseded by sprite set 2026-07-24"
+        ]
       },
       "continuity": {}
     },
@@ -339,7 +343,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "dfdfda31990ace74",
+      "sceneSignature": "e6ee6b6b",
       "state": {
         "expression": "observant",
         "camera": "medium"
@@ -361,7 +365,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "117953317acd4b7a",
+      "sceneSignature": "e6ee6b6b",
       "state": {
         "expression": "thinking",
         "camera": "medium"
@@ -383,7 +387,7 @@
       "kind": "background",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "b09f05ae80259fea",
+      "sceneSignature": "3260a213",
       "state": {
         "location": "security",
         "camera": "wide"
@@ -405,7 +409,7 @@
       "kind": "chibi",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "b930093cf5506536",
+      "sceneSignature": "9feb7fd5",
       "state": {
         "pose": "stand",
         "camera": "wide"
@@ -427,7 +431,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "4f3343a35b83ac4a",
+      "sceneSignature": "0e210d37",
       "state": {
         "expression": "alert",
         "camera": "medium"
@@ -449,7 +453,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "fd47fd08c0349652",
+      "sceneSignature": "3d407995",
       "state": {
         "expression": "calm",
         "camera": "medium"
@@ -471,7 +475,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "c4267dab0ceec3b7",
+      "sceneSignature": "3d407995",
       "state": {
         "expression": "neutral",
         "camera": "medium"
@@ -482,8 +486,10 @@
         "size": 6072850
       },
       "quality": {
-        "approved": true,
-        "issues": []
+        "approved": false,
+        "issues": [
+          "superseded by sprite set 2026-07-24"
+        ]
       },
       "continuity": {}
     },
@@ -493,7 +499,7 @@
       "kind": "background",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "0a8713ef27cc4c89",
+      "sceneSignature": "12d1b53a",
       "state": {
         "location": "control-room",
         "camera": "wide"
@@ -515,7 +521,7 @@
       "kind": "chibi",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "ab46a46ef3ab12ca",
+      "sceneSignature": "5dd1ba1b",
       "state": {
         "pose": "stand",
         "camera": "wide"
@@ -537,7 +543,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "19b681b7eabd46a4",
+      "sceneSignature": "4f774809",
       "state": {
         "expression": "focused",
         "camera": "medium"
@@ -559,7 +565,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "4599c8e275c75a4c",
+      "sceneSignature": "702e10c1",
       "state": {
         "expression": "happy-emote",
         "camera": "medium"
@@ -581,7 +587,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "531d6a016a09e6dd",
+      "sceneSignature": "c0e29ad7",
       "state": {
         "expression": "neutral",
         "camera": "medium"
@@ -592,8 +598,10 @@
         "size": 1861685
       },
       "quality": {
-        "approved": true,
-        "issues": []
+        "approved": false,
+        "issues": [
+          "superseded by sprite set 2026-07-24"
+        ]
       },
       "continuity": {}
     },
@@ -603,7 +611,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "a0407e7fb132b966",
+      "sceneSignature": "d6d2fe0c",
       "state": {
         "expression": "sarcastic",
         "camera": "medium"
@@ -625,7 +633,7 @@
       "kind": "portrait",
       "version": "1",
       "source": "authored",
-      "sceneSignature": "fb42e4cd1e1da806",
+      "sceneSignature": "702e10c1",
       "state": {
         "expression": "smile",
         "camera": "medium"
@@ -640,6 +648,466 @@
         "issues": []
       },
       "continuity": {}
+    },
+    {
+      "id": "frame.tai.sprite.neutral.0001",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "0ffe5e86",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0001.png",
+        "sha256": "24c3f4182c203973bea5006285827214417bc59abce8304c52cee27658c6e3fd",
+        "size": 6930784
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.715193+00:00"
+    },
+    {
+      "id": "frame.tai.sprite.neutral.0002",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "0f56e43e",
+      "state": {
+        "expression": "neutral",
+        "pose": "sitting",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0002.png",
+        "sha256": "cba64368a8a80f0c641bc27e48e3b967fc3ab379475aec9c93554e24294c715d",
+        "size": 6258166
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.726314+00:00"
+    },
+    {
+      "id": "frame.tai.sprite.neutral.0003",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "18bc9c18",
+      "state": {
+        "expression": "thinking",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0003.png",
+        "sha256": "2b092cd2462566b37c34575d3065b64380232c4e6fc159f4544165946c42d0bc",
+        "size": 6688898
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.736667+00:00"
+    },
+    {
+      "id": "frame.tai.sprite.neutral.0004",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "0ffe5e86",
+      "state": {
+        "expression": "neutral",
+        "pose": "hands-on-hips",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0004.png",
+        "sha256": "1b67c547099bf7e7af49fd95412f6c6ae9e8dbc0bd45dc11bd4bd1b9348294bb",
+        "size": 6644768
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.746997+00:00"
+    },
+    {
+      "id": "frame.tai.sprite.neutral.0005",
+      "operatorId": "tai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "0ffe5e86",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0005.png",
+        "sha256": "a49a608ae95fcbd2b99cfe4612eee356c08afb80d74ea79ad49f7fa92bf8e25e",
+        "size": 6987005
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.757221+00:00"
+    },
+    {
+      "id": "frame.rei.sprite.neutral.0001",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "70bfb96c",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0001.png",
+        "sha256": "79f06409fa656d934f82bdb6ae888d1f30ec569ff00ce95d743c414c4f892f35",
+        "size": 6339602
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.767563+00:00"
+    },
+    {
+      "id": "frame.rei.sprite.neutral.0002",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "f1cbc1d4",
+      "state": {
+        "expression": "neutral",
+        "pose": "sitting",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0002.png",
+        "sha256": "04bbdccdfd3b09a2a63d528d0b0f06f0cbc7bafac769b453935b926d769947b3",
+        "size": 5633096
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.777898+00:00"
+    },
+    {
+      "id": "frame.rei.sprite.neutral.0003",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "fb34b566",
+      "state": {
+        "expression": "thinking",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0003.png",
+        "sha256": "43954f83fcd97ab64aa7cce7efa3b21b0ef9a62080d4fa52ba33dee8cba9b0c7",
+        "size": 6341683
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.787779+00:00"
+    },
+    {
+      "id": "frame.rei.sprite.neutral.0004",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "70bfb96c",
+      "state": {
+        "expression": "neutral",
+        "pose": "hands-on-hips",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0004.png",
+        "sha256": "db6bc64c9b4272b386a60c710e3dfdd56e446823dc7c8f22d7dc89bb45e8e406",
+        "size": 6244411
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.798389+00:00"
+    },
+    {
+      "id": "frame.rei.sprite.neutral.0005",
+      "operatorId": "rei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "70bfb96c",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0005.png",
+        "sha256": "dcc2a640daf47fb58e32a3910f750cafd42e65825c66852d46cb199eb2897487",
+        "size": 6432461
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.808370+00:00"
+    },
+    {
+      "id": "frame.nei.sprite.neutral.0001",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "b7fa0338",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0001.png",
+        "sha256": "d8ad1e78d57c7e68e9f83baa0d71d15f0d04cff9e37474f23358ed07d6a8db1d",
+        "size": 5613281
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.818004+00:00"
+    },
+    {
+      "id": "frame.nei.sprite.neutral.0002",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "b5740da0",
+      "state": {
+        "expression": "neutral",
+        "pose": "sitting",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0002.png",
+        "sha256": "628df69266d1e91e310c2c80c520f415821a6a91ec42183a1686c3eb1a2410ac",
+        "size": 6353483
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.828362+00:00"
+    },
+    {
+      "id": "frame.nei.sprite.neutral.0003",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "fe269542",
+      "state": {
+        "expression": "thinking",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0003.png",
+        "sha256": "b1f17225cac22b6ae460c63373426f3d99e258a6f09705c1afd84573efb9a3ea",
+        "size": 5504694
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.838297+00:00"
+    },
+    {
+      "id": "frame.nei.sprite.neutral.0004",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "b7fa0338",
+      "state": {
+        "expression": "neutral",
+        "pose": "hands-on-hips",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0004.png",
+        "sha256": "febfbed174b9f547a8a3218654f4d123d63470ba3e6b444a7eb79b2766cae4f1",
+        "size": 5369915
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.848222+00:00"
+    },
+    {
+      "id": "frame.nei.sprite.neutral.0005",
+      "operatorId": "nei",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "b7fa0338",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0005.png",
+        "sha256": "0f5023f2dbc529b9b00da70691a5faa4546adcffea97d87697b316676f25cabb",
+        "size": 5814753
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.857926+00:00"
+    },
+    {
+      "id": "frame.mai.sprite.neutral.0001",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "21c28bb3",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
+        "sha256": "55758e0434d6f03d5bc31111a035d90a84d145552f48da6190b81e0362e12387",
+        "size": 6713519
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.868034+00:00"
+    },
+    {
+      "id": "frame.mai.sprite.neutral.0002",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "4680f0d9",
+      "state": {
+        "expression": "neutral",
+        "pose": "sitting",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0002.png",
+        "sha256": "866513431245a614088a7e2d8bffd13c28932b957e242d7b0412dd0d8058c2b4",
+        "size": 6007445
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.877674+00:00"
+    },
+    {
+      "id": "frame.mai.sprite.neutral.0003",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "3e4873c5",
+      "state": {
+        "expression": "thinking",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0003.png",
+        "sha256": "df01374270b8a9d3afbc1ba60fae5d69f1b8890d512fe06600ea750f6e6a5870",
+        "size": 6690411
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.887752+00:00"
+    },
+    {
+      "id": "frame.mai.sprite.neutral.0004",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "21c28bb3",
+      "state": {
+        "expression": "neutral",
+        "pose": "hands-on-hips",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0004.png",
+        "sha256": "b0c2d910538404f0861a11c7cd00f60c7cab567a8348b60eebc439ce96aae8a4",
+        "size": 6653887
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.898514+00:00"
+    },
+    {
+      "id": "frame.mai.sprite.neutral.0005",
+      "operatorId": "mai",
+      "version": "1",
+      "source": "authored",
+      "sceneSignature": "21c28bb3",
+      "state": {
+        "expression": "neutral",
+        "pose": "standing",
+        "camera": "close"
+      },
+      "assets": {
+        "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0005.png",
+        "sha256": "8b33d5ded65e621778c08fae728dcad1071a49d92f363bac1385fddf9fd587e7",
+        "size": 6857033
+      },
+      "quality": {
+        "approved": true,
+        "issues": []
+      },
+      "continuity": {},
+      "registeredAt": "2026-07-25T03:10:24.908564+00:00"
     }
   ]
 }

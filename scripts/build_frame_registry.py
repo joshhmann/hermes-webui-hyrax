@@ -84,10 +84,24 @@ def build_registry() -> dict:
     with open(MANIFEST_PATH, "r") as fh:
         manifest = json.load(fh)
     frames = []
+    manifest_ids = set()
     for asset in manifest.get("assets", []):
         frame = frame_from_manifest_asset(asset)
         if frame is not None:
+            manifest_ids.add(frame["id"])
             frames.append(frame)
+
+    # Merge: preserve previously REGISTERED frames (drops from
+    # /api/hyrax/essence/frames/register) — a rebuild must not clobber them.
+    if REGISTRY_PATH.is_file():
+        try:
+            existing = json.loads(REGISTRY_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+        for frame in existing.get("frames", []):
+            if isinstance(frame, dict) and frame.get("id") not in manifest_ids:
+                frames.append(frame)
+
     frames.sort(key=lambda f: f["id"])
     return {
         "version": 1,
