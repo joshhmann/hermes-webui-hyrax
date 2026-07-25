@@ -470,27 +470,13 @@ main.main.showing-hq > #mainHq { display: flex; flex: 1; min-height: 0; overflow
 /* ── Hide main-chat when any Hyrax main-view panel is active ── */
 /* Upstream uses a high-specificity :not() chain; !important is the standard
    CSS extension mechanism to override without touching upstream source. */
-main.main.showing-hq > #mainChat,
-main.main.showing-projects > #mainChat,
-main.main.showing-warroom > #mainChat,
-main.main.showing-dispatch > #mainChat,
-main.main.showing-verify > #mainChat,
-main.main.showing-promises > #mainChat { display: none !important; }
+main.main.showing-hq > #mainChat { display: none !important; }
 
 /* ── Show Hyrax main-view panels when active ── */
-main.main.showing-projects > #mainProjects,
-main.main.showing-warroom > #mainWarroom,
-main.main.showing-dispatch > #mainDispatch,
-main.main.showing-verify > #mainVerify,
-main.main.showing-promises > #mainPromises { display: flex !important; }
+main.main.showing-hq > #mainHq { display: flex !important; }
 
 /* Shared hyrax main-view content styling */
-main.main > .main-view[id^="main"][id$="Hq"],
-main.main > .main-view[id^="main"][id$="Projects"],
-main.main > .main-view[id^="main"][id$="Warroom"],
-main.main > .main-view[id^="main"][id$="Dispatch"],
-main.main > .main-view[id^="main"][id$="Verify"],
-main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-direction: column; flex: 1; }
+main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 1; }
 .hyrax-placeholder { color: var(--muted, #8b949e); padding: 24px; font-size: 14px; }
 
 /* ── VN revamp (vn2) ── */
@@ -1077,3 +1063,11 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
   width: 26px; height: 26px; cursor: pointer; font-size: 12px;
 }
 .vn2-drawer-close:hover { color: #fff; border-color: #8b949e; }
+
+/* ── Stage 3D Loft button (Tai only) ── */
+.vn2-stage-loft {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 8;
+}

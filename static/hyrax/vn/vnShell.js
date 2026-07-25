@@ -228,6 +228,20 @@
     });
     stage.appendChild(portrait);
 
+    // 3D Loft — only Tai has a 3D space (legacy contract); launches the
+    // loft on demand via hq.js. Top-right stage overlay, same spot as legacy.
+    if (operatorId === 'tai') {
+      var loftBtn = _el('button', 'vn2-btn vn2-stage-loft', '3D Loft →');
+      loftBtn.setAttribute('type', 'button');
+      loftBtn.setAttribute('aria-label', 'Enter the 3D loft');
+      loftBtn.addEventListener('click', function() {
+        if (typeof root.__hqLaunch3d === 'function') {
+          root.__hqLaunch3d();
+        }
+      });
+      stage.appendChild(loftBtn);
+    }
+
     // Dialogue region (transcript + approvals + composer).
     var dialogueRegion = _el('section', 'vn2-dialogue');
     var transcriptEl = _el('div', 'vn2-transcript-region');

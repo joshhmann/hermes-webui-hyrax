@@ -11,15 +11,12 @@
   'use strict';
 
   // ── Panel definitions ──
-  // HQ gets mount/unmount for lazy-loaded 3D.  Simple panels are
-  // informational / placeholder only (mount stays null).
+  // Hyrax is HQ-centric: the only added rail panel is HQ. The upstream
+  // WebUI panels stay untouched (AGENTS: don't mess with the OEM surface).
+  // (Retired 2026-07-24: projects/warroom/dispatch/verify/promises were
+  // placeholder panels — redundant with the native panels.)
   var HYRAX_PANELS = [
-    { id: 'projects', label: 'Projects', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
-    { id: 'warroom',  label: 'War Room', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-    { id: 'dispatch', label: 'Dispatch', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-    { id: 'verify',   label: 'Verify', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { id: 'promises', label: 'Promises', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { id: 'hq',       label: 'HQ', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { id: 'hq', label: 'HQ', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   ];
 
   // ── HQ mount/unmount hooks (lazy 3D) ──
@@ -38,14 +35,6 @@
     }
   }
 
-  // Projects panel mount hook — projects.js defines loadProjects()
-  // globally; call it each time the panel mounts so cards refresh.
-  function mountProjects(id) {
-    if (typeof window.loadProjects === 'function') {
-      return window.loadProjects();
-    }
-  }
-
   // ── 1. Init: register panels via HermesPanels ──
   function init() {
     // Graceful: if HermesPanels isn't installed yet, wait for the
@@ -55,32 +44,17 @@
       return;
     }
 
-    // Register each panel.  HQ gets lifecycle hooks; the rest are
-    // static (mount=null).
+    // Register each panel with its lifecycle hooks.
     var hp = window.HermesPanels;
     var i, p, unreg;
     for (i = 0; i < HYRAX_PANELS.length; i++) {
       p = HYRAX_PANELS[i];
-      if (p.id === 'hq') {
-        unreg = hp.register({
-          id: p.id,
-          label: p.label,
-          mount: mountHq,
-          unmount: unmountHq,
-        });
-      } else if (p.id === 'projects') {
-        unreg = hp.register({
-          id: p.id,
-          label: p.label,
-          mount: mountProjects,
-        });
-      } else {
-        unreg = hp.register({
-          id: p.id,
-          label: p.label,
-          // mainView default (true) — gets its own main-content area
-        });
-      }
+      unreg = hp.register({
+        id: p.id,
+        label: p.label,
+        mount: mountHq,
+        unmount: unmountHq,
+      });
       // Keep unregister handle for any future cleanup
       if (typeof p._unreg !== 'undefined') continue;
       p._unreg = unreg;

@@ -296,12 +296,13 @@ function runTests() {
 
   // 3. Verify panels were registered
   console.log('\n── Panel registration counts ──');
-  // We expect at minimum hq + the five simple panels (projects, warroom, dispatch, verify, promises)
-  assert(registerCalls.length >= 6, `at least 6 panels registered (got ${registerCalls.length})`);
+  // HQ-centric surface: only the hq panel is registered (placeholder panels
+  // retired 2026-07-24 — upstream panels stay untouched).
+  assert(registerCalls.length === 1, `exactly 1 panel registered (got ${registerCalls.length})`);
 
   const registeredIds = registerCalls.map(d => d.id);
   assert(registeredIds.includes('hq'), '"hq" panel registered');
-  assert(registeredIds.includes('projects'), '"projects" panel registered');
+  assert(!registeredIds.includes('projects'), '"projects" panel NOT registered (retired)');
 
   // 4. HQ mount/unmount hooks
   console.log('\n── HQ mount/unmount hooks ──');
@@ -352,7 +353,7 @@ function runTests() {
   const projectsPanelDiv = fakeMain._children.find(el =>
     el.id === 'mainProjects'
   );
-  assert(projectsPanelDiv !== undefined, 'mainProjects div injected into main.main');
+  assert(projectsPanelDiv === undefined, 'mainProjects div NOT injected (retired)');
 
   // 9. CSS link injected
   console.log('\n── CSS injection ──');
