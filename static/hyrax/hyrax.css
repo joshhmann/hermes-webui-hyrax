@@ -563,15 +563,39 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
 }
 .vn2-center {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: var(--vn2-stage-h, 38%) 6px minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
 }
+.vn2--chat-collapsed .vn2-center {
+  grid-template-rows: minmax(0, 1fr) 6px auto;
+}
+.vn2--chat-collapsed .vn2-transcript-region,
+.vn2--chat-collapsed .vn2-approvals-region { display: none; }
+.vn2-splitter {
+  position: relative;
+  background: var(--line, #30363d);
+  cursor: row-resize;
+  touch-action: none;
+}
+.vn2-splitter:hover, .vn2-splitter:active { background: #2f81f7; }
+.vn2-splitter-toggle {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 34px; height: 14px;
+  border: 1px solid var(--line, #30363d);
+  border-radius: 7px;
+  background: #161b22; color: var(--muted, #8b949e);
+  font-size: 9px; line-height: 1;
+  cursor: pointer; padding: 0;
+}
+.vn2-splitter-toggle:hover { color: #fff; border-color: #8b949e; }
 
 /* Scene stage — static fallback layers until the experience layer mounts */
 .vn2-stage {
   position: relative;
-  min-height: 220px;
+  min-height: 120px;
   overflow: hidden;
   background: #080c12;
   display: flex;
@@ -909,7 +933,7 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
   }
-  .vn2-center { grid-template-rows: auto minmax(0, 1fr); }
+  .vn2-center { grid-template-rows: var(--vn2-stage-h, 38%) 6px minmax(0, 1fr); }
   .vn2-stage {
     min-height: 0;
     aspect-ratio: 16 / 9;

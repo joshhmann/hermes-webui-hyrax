@@ -117,6 +117,14 @@
     } catch (_) { return {}; }
   }
 
+  function _writePrefs(operatorId, patch) {
+    try {
+      var prefs = _readPrefs(operatorId);
+      for (var k in patch) prefs[k] = patch[k];
+      root.localStorage.setItem(_prefKey(operatorId), JSON.stringify(prefs));
+    } catch (_) {}
+  }
+
   // ── Top bar / state API (consumed by the experience layer later) ──
 
   function setTopBar(opts) {
@@ -217,7 +225,55 @@
     dialogueRegion.appendChild(approvalsEl);
     dialogueRegion.appendChild(composerEl);
 
+    // Draggable splitter between stage and chat (PRODUCT: the chat must not
+    // eat the scene). Persisted per operator via prefs.split (0.15–0.7).
+    var split = prefs && typeof prefs.split === 'number' ? prefs.split : 0.38;
+    if (split < 0.15 || split > 0.7) split = 0.38;
+    center.style.setProperty('--vn2-stage-h', (split * 100).toFixed(1) + '%');
+    var splitter = _el('div', 'vn2-splitter');
+    splitter.setAttribute('role', 'separator');
+    splitter.setAttribute('aria-orientation', 'horizontal');
+    splitter.setAttribute('aria-label', 'Resize chat and scene areas');
+    var collapseBtn = _el('button', 'vn2-splitter-toggle',
+      prefs && prefs.chatCollapsed ? '▲' : '▼');
+    collapseBtn.setAttribute('type', 'button');
+    collapseBtn.setAttribute('aria-label', 'Collapse or expand chat area');
+    collapseBtn.setAttribute('title', 'Collapse / expand chat');
+    if (prefs && prefs.chatCollapsed) rootEl.classList.add('vn2--chat-collapsed');
+    collapseBtn.addEventListener('click', function() {
+      var collapsed = rootEl.classList.toggle('vn2--chat-collapsed');
+      collapseBtn.textContent = collapsed ? '▲' : '▼';
+      _writePrefs(operatorId, { chatCollapsed: collapsed });
+    });
+    splitter.appendChild(collapseBtn);
+
+    var dragging = false;
+    splitter.addEventListener('pointerdown', function(e) {
+      if (e.target === collapseBtn) return;
+      dragging = true;
+      try { splitter.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    splitter.addEventListener('pointermove', function(e) {
+      if (!dragging) return;
+      var rect = center.getBoundingClientRect();
+      if (!rect.height) return;
+      var ratio = (e.clientY - rect.top) / rect.height;
+      if (ratio < 0.15) ratio = 0.15;
+      if (ratio > 0.7) ratio = 0.7;
+      center.style.setProperty('--vn2-stage-h', (ratio * 100).toFixed(1) + '%');
+      split = ratio;
+    });
+    var endDrag = function() {
+      if (!dragging) return;
+      dragging = false;
+      _writePrefs(operatorId, { split: split });
+    };
+    splitter.addEventListener('pointerup', endDrag);
+    splitter.addEventListener('pointercancel', endDrag);
+
     center.appendChild(stage);
+    center.appendChild(splitter);
     center.appendChild(dialogueRegion);
 
     // Sidebar — placeholder until the experience layer registers actions.
