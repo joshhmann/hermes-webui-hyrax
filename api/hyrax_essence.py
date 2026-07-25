@@ -675,9 +675,9 @@ def _handle_frame_register(handler, body) -> bool:
             "sceneSignature": compute_scene_signature(operator, state),
             "state": state,
             "assets": {
-                # Repo-relative drop path — registered drops are not yet wired
-                # into the /api/hyrax/assets allowlist serving (Phase 6).
-                "imageUrl": f"essence/frames/{body['image']}",
+                # Servable URL — GET /api/hyrax/essence/frames/file/<image>
+                # (hardened serving, registry-membership enforced).
+                "imageUrl": f"/api/hyrax/essence/frames/file/{body['image']}",
                 "sha256": digest,
                 "size": size,
             },
@@ -909,11 +909,122 @@ def _serve_presence(handler) -> bool:
     return True
 
 
+# ── GET /api/hyrax/essence/frames/file/<filename> ─────────────────────────────
+
+_FRAME_FILENAME_RE = _re.compile(r"^[A-Za-z0-9._-]+\.(?:png|jpg|jpeg|webp)$")
+_FRAME_CONTENT_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+MAX_FRAME_FILE_BYTES = 8 * 1024 * 1024
+_FRAME_CHUNK = 64 * 1024
+
+
+def _frame_file_registered(filename: str) -> bool:
+    """True only when a registered frame references this exact filename.
+
+    The registry is the allowlist: an arbitrary file dropped into the frames
+    directory is NOT servable until registered.
+    """
+    registry = _load_registry_raw()
+    if registry is None:
+        return False
+    suffix_new = f"/api/hyrax/essence/frames/file/{filename}"
+    suffix_old = f"essence/frames/{filename}"
+    for entry in registry.get("frames", []):
+        if not isinstance(entry, dict):
+            continue
+        assets = entry.get("assets")
+        if not isinstance(assets, dict):
+            continue
+        url = assets.get("imageUrl")
+        if isinstance(url, str) and (url.endswith(suffix_new) or url == suffix_old or url.endswith("/" + suffix_old)):
+            return True
+    return False
+
+
+def _serve_frame_file(handler, filename: str) -> bool:
+    """Stream a registered frame image with the same hardening as the VN
+    asset allowlist (symlink rejection, dev/ino identity check, size cap)."""
+    if not _FRAME_FILENAME_RE.match(filename):
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+    if not _frame_file_registered(filename):
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+
+    candidate = ESSENCE_FRAMES_DIR / filename
+    try:
+        base = ESSENCE_FRAMES_DIR.resolve(strict=True)
+        if ESSENCE_FRAMES_DIR.is_symlink() or candidate.is_symlink():
+            raise OSError("symlinked frame path")
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(base)
+        expected = resolved.stat()
+
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(candidate, flags)
+        try:
+            stream = os.fdopen(fd, "rb")
+        except Exception:
+            os.close(fd)
+            raise
+        opened = os.fstat(stream.fileno())
+        import stat as _stat
+
+        if (
+            not _stat.S_ISREG(opened.st_mode)
+            or (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino)
+        ):
+            stream.close()
+            raise OSError("frame identity changed")
+    except (OSError, RuntimeError, ValueError):
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+
+    if opened.st_size > MAX_FRAME_FILE_BYTES:
+        stream.close()
+        _j(handler, {"error": "not found"}, status=404)
+        return True
+
+    ext = "." + filename.rsplit(".", 1)[-1].lower()
+    content_type = _FRAME_CONTENT_TYPES.get(ext, "application/octet-stream")
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(opened.st_size))
+    handler.send_header("Content-Disposition", "inline")
+    handler.send_header("Cache-Control", "private, max-age=3600")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    from api.helpers import _security_headers, flush_pending_auth_cookies
+
+    _security_headers(handler)
+    flush_pending_auth_cookies(handler)
+    handler.end_headers()
+    try:
+        with stream:
+            while True:
+                chunk = stream.read(_FRAME_CHUNK)
+                if not chunk:
+                    break
+                try:
+                    handler.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+    except OSError:
+        pass
+    return True
+
+
 # ── Dispatch entry points (called from api.hyrax_routes) ─────────────────────
 
 _ESSENCE_PREFIX = "/api/hyrax/essence/"
 _PRESENCE_PATH = "/api/hyrax/presence"
 _FRAMES_PATH = "/api/hyrax/essence/frames"
+_FRAME_FILE_PREFIX = "/api/hyrax/essence/frames/file/"
 _REGISTER_PATH = "/api/hyrax/essence/frames/register"
 
 
@@ -926,6 +1037,13 @@ def handle_essence_get(handler, parsed) -> bool:
 
     if path == _FRAMES_PATH:
         return _serve_frames_registry(handler)
+
+    if path.startswith(_FRAME_FILE_PREFIX):
+        filename = path[len(_FRAME_FILE_PREFIX):]
+        if filename and "/" not in filename:
+            return _serve_frame_file(handler, filename)
+        _j(handler, {"error": "not found"}, status=404)
+        return True
 
     if path.startswith(_ESSENCE_PREFIX):
         operator = path[len(_ESSENCE_PREFIX):]

@@ -21512,6 +21512,7 @@ def start_session_turn(
     message: str,
     *,
     source: str = "process_wakeup",
+    attachments=None,
 ):
     """Start a server-side agent turn for ``session_id`` with ``message``.
 
@@ -21694,7 +21695,7 @@ def start_session_turn(
     resp = _start_run(
         s,
         msg=msg,
-        attachments=[],
+        attachments=list(attachments or []),
         workspace=workspace,
         model=model,
         model_provider=model_provider,

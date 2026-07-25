@@ -38,6 +38,14 @@
     }
   }
 
+  // Projects panel mount hook — projects.js defines loadProjects()
+  // globally; call it each time the panel mounts so cards refresh.
+  function mountProjects(id) {
+    if (typeof window.loadProjects === 'function') {
+      return window.loadProjects();
+    }
+  }
+
   // ── 1. Init: register panels via HermesPanels ──
   function init() {
     // Graceful: if HermesPanels isn't installed yet, wait for the
@@ -59,6 +67,12 @@
           label: p.label,
           mount: mountHq,
           unmount: unmountHq,
+        });
+      } else if (p.id === 'projects') {
+        unreg = hp.register({
+          id: p.id,
+          label: p.label,
+          mount: mountProjects,
         });
       } else {
         unreg = hp.register({

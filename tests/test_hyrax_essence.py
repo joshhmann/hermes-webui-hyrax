@@ -967,3 +967,71 @@ class TestSceneSignature:
             assert essence.compute_scene_signature(
                 frame["operatorId"], frame["state"]
             ) == frame["sceneSignature"]
+
+
+class TestFrameFileServing:
+    """GET /api/hyrax/essence/frames/file/<name> — hardened, registry-gated."""
+
+    def _setup_drop(self, tmp_path, monkeypatch):
+        import api.hyrax_essence as he
+        drop = tmp_path / "frames"
+        drop.mkdir()
+        img = drop / "test-frame.png"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+        monkeypatch.setattr(he, "ESSENCE_FRAMES_DIR", drop)
+        registry = {"version": 1, "frames": [
+            {"id": "frame.test.a", "assets": {"imageUrl": "/api/hyrax/essence/frames/file/test-frame.png"}},
+        ]}
+        monkeypatch.setattr(he, "_load_registry_raw", lambda: registry)
+        return he
+
+    def test_registered_file_serves(self, tmp_path, monkeypatch):
+        he = self._setup_drop(tmp_path, monkeypatch)
+        handler = _Handler(path="/api/hyrax/essence/frames/file/test-frame.png")
+        assert he._serve_frame_file(handler, "test-frame.png") is True
+        assert handler.status == 200
+        assert handler.wfile.getvalue().startswith(b"\x89PNG")
+
+    def test_unregistered_file_404(self, tmp_path, monkeypatch):
+        he = self._setup_drop(tmp_path, monkeypatch)
+        handler = _Handler(path="/api/hyrax/essence/frames/file/other.png")
+        assert he._serve_frame_file(handler, "other.png") is True
+        assert handler.status == 404
+
+    def test_traversal_and_bad_extension_404(self, tmp_path, monkeypatch):
+        he = self._setup_drop(tmp_path, monkeypatch)
+        for bad in ("..%2f..%2fsecret", "evil.txt", "x.png.exe", "noext"):
+            handler = _Handler(path="/x")
+            assert he._serve_frame_file(handler, bad) is True
+            assert handler.status == 404
+
+    def test_legacy_repo_relative_url_counts_as_registered(self, tmp_path, monkeypatch):
+        he = self._setup_drop(tmp_path, monkeypatch)
+        monkeypatch.setattr(he, "_load_registry_raw", lambda: {"version": 1, "frames": [
+            {"id": "frame.test.b", "assets": {"imageUrl": "essence/frames/test-frame.png"}},
+        ]})
+        handler = _Handler(path="/x")
+        assert he._serve_frame_file(handler, "test-frame.png") is True
+        assert handler.status == 200
+
+    def test_dispatch_routes_file_prefix(self, tmp_path, monkeypatch):
+        he = self._setup_drop(tmp_path, monkeypatch)
+        handler = _Handler(path="/api/hyrax/essence/frames/file/test-frame.png")
+        from types import SimpleNamespace
+        assert he.handle_essence_get(handler, SimpleNamespace(path="/api/hyrax/essence/frames/file/test-frame.png", query="")) is True
+        assert handler.status == 200
+
+    def test_register_stores_servable_url(self, tmp_path, monkeypatch):
+        import api.hyrax_essence as he
+        drop = tmp_path / "frames"
+        drop.mkdir()
+        (drop / "new.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8)
+        monkeypatch.setattr(he, "ESSENCE_FRAMES_DIR", drop)
+        written = {}
+        monkeypatch.setattr(he, "_atomic_write_json", lambda p, d: written.update(d))
+        monkeypatch.setattr(he, "_load_registry_raw", lambda: {"version": 1, "frames": []})
+        monkeypatch.setattr(he, "FRAME_REGISTRY_FILE", tmp_path / "reg.json")
+        handler = _Handler(path="/api/hyrax/essence/frames/register", command="POST")
+        body = {"id": "frame.test.new", "operatorId": "tai", "state": {"expression": "smile"}, "image": "new.png"}
+        assert he._handle_frame_register(handler, body) is True
+        assert written["frames"][0]["assets"]["imageUrl"] == "/api/hyrax/essence/frames/file/new.png"

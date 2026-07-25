@@ -938,3 +938,31 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
     transition-duration: .01ms !important;
   }
 }
+
+/* ── HQ chibi presence indicators ── */
+.chibi .chibi-activity {
+  display: block;
+  font-size: 9px;
+  color: var(--muted, #8b949e);
+  text-shadow: 0 2px 5px #000;
+  letter-spacing: .04em;
+}
+.chibi-active-tool-working .chibi-activity { color: #6ecbf5; }
+.chibi-active-conversing .chibi-activity { color: #8fce8f; }
+.chibi-active-waiting-approval .chibi-activity { color: var(--hq-gold, #f5c542); }
+.chibi-approval-dot {
+  position: absolute;
+  top: -4px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--hq-gold, #f5c542);
+  color: #0d1117;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 8px #000;
+}

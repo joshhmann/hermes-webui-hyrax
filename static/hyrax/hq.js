@@ -102,14 +102,15 @@
     });
     stage.appendChild(floor);
 
-    // Chibis
-    fetchProfiles().then(function(profiles) {
+    // Chibis — presence endpoint first (live activity/mood/approvals),
+    // profiles endpoint as availability fallback.
+    fetchPresence().then(function(presenceMap) {
       HQ_SISTERS.forEach(function(s) {
-        stage.appendChild(createChibi(s, profiles));
+        stage.appendChild(createChibi(s, presenceMap[s.id] || null));
       });
     }).catch(function() {
       HQ_SISTERS.forEach(function(s) {
-        stage.appendChild(createChibi(s, []));
+        stage.appendChild(createChibi(s, null));
       });
     });
 
@@ -118,7 +119,17 @@
   }
 
   // ── Chibi element factory ──
-  function createChibi(sister, profiles) {
+  var ACTIVITY_LABELS = {
+    'idle': 'idle',
+    'conversing': 'chatting',
+    'tool-working': 'working',
+    'waiting-approval': 'needs approval',
+    'background-working': 'background',
+    'resting': 'resting',
+    'offline': 'offline',
+  };
+
+  function createChibi(sister, presence) {
     var chibi = document.createElement('button');
     chibi.className = 'chibi chibi-' + sister.id;
     chibi.setAttribute('aria-label', 'Talk with ' + sister.name);
@@ -132,15 +143,36 @@
     name.textContent = sister.name;
 
     var role = document.createElement('span');
+    role.className = 'chibi-role';
     role.textContent = sister.role;
+
+    // Live presence line: activity + mood (never color-only, ARCH a11y).
+    var activity = document.createElement('span');
+    activity.className = 'chibi-activity';
+    var type = presence && presence.activity && presence.activity.type;
+    var mood = presence && presence.expression && presence.expression.current;
+    activity.textContent = (ACTIVITY_LABELS[type] || 'idle') + (mood && mood !== 'neutral' ? ' · ' + mood : '');
+    if (type && type !== 'idle') chibi.classList.add('chibi-active-' + type);
 
     chibi.appendChild(img);
     chibi.appendChild(name);
     chibi.appendChild(role);
+    chibi.appendChild(activity);
 
-    // Presence gating
-    var profile = profiles.find(function(p) { return p.id === sister.id; });
-    if (!profile || !profile.available) {
+    // Pending-approval dot with count (truthful, not ambient color).
+    var approvals = presence && typeof presence.pendingApprovals === 'number'
+      ? presence.pendingApprovals : 0;
+    if (approvals > 0) {
+      var dot = document.createElement('span');
+      dot.className = 'chibi-approval-dot';
+      dot.textContent = String(approvals);
+      dot.title = approvals + ' approval' + (approvals > 1 ? 's' : '') + ' pending';
+      dot.setAttribute('aria-label', dot.title);
+      chibi.appendChild(dot);
+    }
+
+    // Availability gating (presence endpoint carries `available`).
+    if (!presence || presence.available === false) {
       chibi.classList.add('staged');
       chibi.setAttribute('aria-disabled', 'true');
     }
@@ -158,30 +190,57 @@
   }
 
   // ── Presence ──
-  function fetchProfiles() {
+  // GET /api/hyrax/presence aggregates per-sister activity, expression,
+  // approvals, and kanban counts server-side (one request, no SSE fan-out).
+  function fetchPresence() {
     try {
-      var data = api('/api/hyrax/vn/profiles');
+      var data = api('/api/hyrax/presence');
+      var toMap = function(items) {
+        var map = {};
+        (items || []).forEach(function(p) { if (p && p.operatorId) map[p.operatorId] = p; });
+        return map;
+      };
       if (data && typeof data.then === 'function') {
-        return data.then(function(r) { return r?.items || []; }).catch(function() { return []; });
+        return data.then(function(r) { return toMap(r && r.items); }).catch(function() { return {}; });
       }
-      return Promise.resolve(data?.items || []);
+      return Promise.resolve(toMap(data && data.items));
     } catch (_) {
-      return Promise.resolve([]);
+      return Promise.resolve({});
     }
   }
 
   function refreshPresence() {
-    fetchProfiles().then(function(profiles) {
+    fetchPresence().then(function(map) {
       HQ_SISTERS.forEach(function(s) {
         var chibiEl = document.querySelector('.chibi-' + s.id);
         if (!chibiEl) return;
-        var profile = profiles.find(function(p) { return p.id === s.id; });
-        if (!profile || !profile.available) {
+        var presence = map[s.id] || null;
+        if (!presence || presence.available === false) {
           chibiEl.classList.add('staged');
           chibiEl.setAttribute('aria-disabled', 'true');
         } else {
           chibiEl.classList.remove('staged');
           chibiEl.removeAttribute('aria-disabled');
+        }
+        var activityEl = chibiEl.querySelector('.chibi-activity');
+        if (activityEl) {
+          var type = presence && presence.activity && presence.activity.type;
+          var mood = presence && presence.expression && presence.expression.current;
+          activityEl.textContent = (ACTIVITY_LABELS[type] || 'idle') + (mood && mood !== 'neutral' ? ' · ' + mood : '');
+        }
+        var dot = chibiEl.querySelector('.chibi-approval-dot');
+        var approvals = presence && typeof presence.pendingApprovals === 'number'
+          ? presence.pendingApprovals : 0;
+        if (dot && approvals === 0) dot.remove();
+        else if (!dot && approvals > 0) {
+          var d = document.createElement('span');
+          d.className = 'chibi-approval-dot';
+          d.textContent = String(approvals);
+          d.title = approvals + ' approval' + (approvals > 1 ? 's' : '') + ' pending';
+          d.setAttribute('aria-label', d.title);
+          chibiEl.appendChild(d);
+        } else if (dot) {
+          dot.textContent = String(approvals);
         }
       });
     });
