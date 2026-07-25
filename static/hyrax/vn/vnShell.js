@@ -125,6 +125,18 @@
     } catch (_) {}
   }
 
+  // style.setProperty is not guaranteed (test fakes expose plain style
+  // objects) — fall back to direct assignment harmlessly.
+  function _setStyleVar(el, name, value) {
+    try {
+      if (el && el.style && typeof el.style.setProperty === 'function') {
+        el.style.setProperty(name, value);
+      } else if (el && el.style) {
+        el.style[name] = value;
+      }
+    } catch (_) {}
+  }
+
   // ── Top bar / state API (consumed by the experience layer later) ──
 
   function setTopBar(opts) {
@@ -229,7 +241,7 @@
     // eat the scene). Persisted per operator via prefs.split (0.15–0.7).
     var split = prefs && typeof prefs.split === 'number' ? prefs.split : 0.38;
     if (split < 0.15 || split > 0.7) split = 0.38;
-    center.style.setProperty('--vn2-stage-h', (split * 100).toFixed(1) + '%');
+    _setStyleVar(center, '--vn2-stage-h', (split * 100).toFixed(1) + '%');
     var splitter = _el('div', 'vn2-splitter');
     splitter.setAttribute('role', 'separator');
     splitter.setAttribute('aria-orientation', 'horizontal');
@@ -261,7 +273,7 @@
       var ratio = (e.clientY - rect.top) / rect.height;
       if (ratio < 0.15) ratio = 0.15;
       if (ratio > 0.7) ratio = 0.7;
-      center.style.setProperty('--vn2-stage-h', (ratio * 100).toFixed(1) + '%');
+      _setStyleVar(center, '--vn2-stage-h', (ratio * 100).toFixed(1) + '%');
       split = ratio;
     });
     var endDrag = function() {
