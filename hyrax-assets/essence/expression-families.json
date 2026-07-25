@@ -1,0 +1,1112 @@
+{
+  "version": 1,
+  "source": "AHEKOT/ComfyUI_VNCCS emotions-config/emotions.json",
+  "families": [
+    "neutral",
+    "positive",
+    "wry",
+    "focused",
+    "intense"
+  ],
+  "emotions": {
+    "angry": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "angry, furrowed_brow, clenched_teeth, glaring, scowl, annoyed",
+      "sfw": true
+    },
+    "rage": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "angry, screaming, open_mouth, wide-eyed, furrowed_brow, furious, anger_vein, roaring",
+      "sfw": true
+    },
+    "annoyed": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "annoyed, raised_eyebrow, closed_mouth, narrowed_eyes, unamused, scowl",
+      "sfw": true
+    },
+    "frustrated": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "frustrated, furrowed_brow, narrowed_eyes, scowl, sweatdrop, nervous_sweating, grimace",
+      "sfw": true
+    },
+    "scowl": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "scowl, frown, furrowed_brow, glaring, angry, annoyed",
+      "sfw": true
+    },
+    "boiling-rage": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "angry, anger_vein, clenched_teeth, glaring, furious, trembling",
+      "sfw": true
+    },
+    "cold-anger": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "angry, closed_mouth, narrowed_eyes, serious, glaring, scowl",
+      "sfw": true
+    },
+    "disdain": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "disdain, sneer, narrowed_eyes, unamused, glaring",
+      "sfw": true
+    },
+    "gritted-teeth": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "clenched_teeth, narrowed_eyes, angry, scowl",
+      "sfw": true
+    },
+    "furious-snarl": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "angry, roaring, open_mouth, wide-eyed, furious, clenched_teeth, anger_vein",
+      "sfw": true
+    },
+    "seething": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "angry, closed_mouth, trembling, glaring, furious, clenched_teeth, anger_vein",
+      "sfw": true
+    },
+    "explosive-fury": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "screaming, open_mouth, raised_eyebrows, angry, furious, roaring, anger_vein",
+      "sfw": true
+    },
+    "glare-of-judgment": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "glaring, furrowed_brow, closed_mouth, serious, disdain, unamused",
+      "sfw": true
+    },
+    "trembling-rage": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "trembling, angry, clenched_teeth, glaring, furious, anger_vein",
+      "sfw": true
+    },
+    "angry-pout-2": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "pout, furrowed_brow, puffy_cheeks, angry, cheek_bulge, annoyed",
+      "sfw": true
+    },
+    "veins-pop": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "anger_vein, angry, clenched_teeth, glaring, furious, trembling",
+      "sfw": true
+    },
+    "scream-of-fury": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": "scream-of-fury",
+      "description": "screaming, open_mouth, tongue, tears, angry, furious, roaring, crying",
+      "sfw": true
+    },
+    "evil-cackle": {
+      "category": "Anger \ud83d\ude20",
+      "family": "intense",
+      "canonical": null,
+      "description": "evil-cackle, evil_grin, grin, open_mouth, angry, evil, laughing, evil_smile, crazy_smile, crazy_grin, empty_eyes",
+      "sfw": true
+    },
+    "smile": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": "smile",
+      "description": "smile, happy, closed_mouth, light_smile",
+      "sfw": true
+    },
+    "grin": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "grin, happy, teeth, open_mouth, smile",
+      "sfw": true
+    },
+    "laughing": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": "laughing",
+      "description": "laughing, open_mouth, squinting, happy, smile, closed_eyes",
+      "sfw": true
+    },
+    "light-smile": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": "light-smile",
+      "description": "light_smile, happy, closed_mouth, smile",
+      "sfw": true
+    },
+    "radiant-smile": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, happy, open_mouth, sparkling_eyes, grin",
+      "sfw": true
+    },
+    "shy-smile": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": "shy-smile",
+      "description": "shy, smile, blush, downcast_eyes, light_smile",
+      "sfw": true
+    },
+    "mischievous-grin": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "mischievous, grin, raised_eyebrow, squinting, smirk, naughty_face",
+      "sfw": true
+    },
+    "content-smile": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, happy, closed_eyes, light_smile, relaxing",
+      "sfw": true
+    },
+    "smile-dimples": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, happy, cheek_bulge, light_smile",
+      "sfw": true
+    },
+    "gentle-grin": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "grin, happy, closed_eyes, smile",
+      "sfw": true
+    },
+    "sweet-smile": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, happy, closed_eyes, blush, light_smile",
+      "sfw": true
+    },
+    "cat-smile-nyan": {
+      "category": "Smile \ud83d\ude0a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, :3, happy, mischievous",
+      "sfw": true
+    },
+    "smirk": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "smirk, raised_eyebrow, sideways_mouth, smug",
+      "sfw": true
+    },
+    "smug": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "smug, grin, narrowed_eyes, smirk",
+      "sfw": true
+    },
+    "troll-face": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "troll_face, grin, mischievous, smug, evil_grin",
+      "sfw": true
+    },
+    "doyagao": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "doyagao, smug, grin, smirk",
+      "sfw": true
+    },
+    "victorious-smirk": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "smirk, smug, narrowed_eyes, happy, victory",
+      "sfw": true
+    },
+    "mocking-smile": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "smirk, smug, evil_smile, taunting",
+      "sfw": true
+    },
+    "knowing-grin": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "grin, smug, raised_eyebrow, smirk",
+      "sfw": true
+    },
+    "sly-smile": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "smirk, sideways_mouth, narrowed_eyes, smug",
+      "sfw": true
+    },
+    "condescending-smirk": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "smirk, raised_eyebrow, unamused, smug, disdain",
+      "sfw": true
+    },
+    "tsundere-pout": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "tsundere, pout, blush, averted_eyes, angry",
+      "sfw": true
+    },
+    "yandere-smile": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": "yandere-smile",
+      "description": "yandere, shaded face, naughty face, grin, crazy_smile, empty_eyes, smile, heavy_breathing",
+      "sfw": true
+    },
+    "wry-smile": {
+      "category": "Smug \ud83d\ude0f",
+      "family": "wry",
+      "canonical": null,
+      "description": "sad_smile, sideways_mouth, closed_mouth, smirk",
+      "sfw": true
+    },
+    "surprised": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, raised_eyebrows, wide-eyed, open_mouth, gasp, parted_lips",
+      "sfw": true
+    },
+    "shocked": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "shocked, wide-eyed, open_mouth, raised_eyebrows, stunned, parted_lips",
+      "sfw": true
+    },
+    "traumatized": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "traumatized, empty_eyes, trembling, open_mouth, despair, hollow_eyes, tears, crying, shaded_face, sweat",
+      "sfw": true
+    },
+    "turn-pale": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "turn_pale, pale_face, wide-eyed, trembling, sweat, shocked, parted_lips, fear",
+      "sfw": true
+    },
+    "delighted-surprise": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, happy, wide-eyed, open_mouth, sparkling_eyes, blush, smile",
+      "sfw": true
+    },
+    "shocked-silence": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "shocked, wide-eyed, closed_mouth, expressionless",
+      "sfw": true
+    },
+    "sudden-realization": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, wide-eyed, open_mouth, parted_lips",
+      "sfw": true
+    },
+    "startled-blink": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, parted_lips, wide-eyed, blinking, startled, raised_eyebrows",
+      "sfw": true
+    },
+    "jaw-drop": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "jaw_drop, open_mouth, wide-eyed, surprised, sweatdrop, stunned",
+      "sfw": true
+    },
+    "sudden-shock": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "shocked, wide-eyed, empty_eyes, surprised, open_mouth, trembling",
+      "sfw": true
+    },
+    "awe-reverence": {
+      "category": "Surprise \ud83d\ude32",
+      "family": "positive",
+      "canonical": null,
+      "description": "awestruck, open_mouth, wide-eyed, sparkling_eyes, parted_lips, wonder",
+      "sfw": true
+    },
+    "sad": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sad, frown, downcast_eyes, depressed, closed_mouth",
+      "sfw": true
+    },
+    "crying": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "crying, tears, frown, sobbing, crying_with_eyes_open, open_mouth, trembling",
+      "sfw": true
+    },
+    "depressed": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "depressed, closed_mouth, bags_under_eyes",
+      "sfw": true
+    },
+    "despair": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "despair, crying, tears, open_mouth, grimace, clenched_teeth",
+      "sfw": true
+    },
+    "sobbing": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sobbing, streaming_tears, crying, tears, closed_eyes, sad, trembling, open_mouth",
+      "sfw": true
+    },
+    "nostalgic-sadness": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sad_smile, tears, downcast_eyes, sad, wistful, closed_mouth",
+      "sfw": true
+    },
+    "bittersweet": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sad_smile, tears, sad, closed_eyes, wistful, closed_mouth",
+      "sfw": true
+    },
+    "emotional-vulnerability": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "tearing_up, trembling, sad, crying, tears, open_mouth, vulnerable",
+      "sfw": true
+    },
+    "silent-tears": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "tears, closed_mouth, sad, crying, streaming_tears, no_mouth, expressionless",
+      "sfw": true
+    },
+    "aching-heart": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sad, frown, furrowed_brow, crying, tears, despair, closed_eyes",
+      "sfw": true
+    },
+    "silent-scream-anguish": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "screaming, tears, open_mouth, expressionless, sad, despair, mouth_open",
+      "sfw": true
+    },
+    "downtrodden": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sad, frown, heavy_eyelids, depressed",
+      "sfw": true
+    },
+    "exhausted-sigh": {
+      "category": "Emotional \ud83d\ude22",
+      "family": "neutral",
+      "canonical": null,
+      "description": "sigh, exhausted, closed_eyes, open_mouth, tired, heavy_eyelids",
+      "sfw": true
+    },
+    "seductive-smile": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "seductive_smile, smirk, heavy_eyelids, come_hither, narrowed_eyes, smile",
+      "sfw": false
+    },
+    "aroused": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "aroused, blush, sweat, open_mouth, heart, smile",
+      "sfw": false
+    },
+    "in-heat": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "in_heat, blush, drooling, aroused, open_mouth, sweat, heart, heavy_breathing",
+      "sfw": false
+    },
+    "afterglow": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "smile, happy, blush, closed_eyes, relaxing, soft, peaceful, satisfied",
+      "sfw": false
+    },
+    "torogao": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "torogao, drooling, blush, open_mouth, mouth_drool, saliva, smile, happy",
+      "sfw": false
+    },
+    "naughty-face": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "naughty_face, smirk, raised_eyebrow, evil_smile, blush, narrow_eyes, smile",
+      "sfw": false
+    },
+    "ohhoai": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": "ohhoai",
+      "description": "ohhoai, tongue_out, open_mouth, blush, aroused, smile, happy",
+      "sfw": false
+    },
+    "ahegao": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": "ahegao",
+      "description": "ahegao, tongue_out, rolling_eyes, open_mouth, drooling, blush, cum, smile",
+      "sfw": false
+    },
+    "teasing-glance": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "smirk, sideways_mouth, heavy_eyelids, seductive_smile, smile, narrowed_eyes",
+      "sfw": false
+    },
+    "dominant-allure": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "smirk, serious, narrowed_eyes, seductive_smile, glaring, confident",
+      "sfw": false
+    },
+    "submissive-blush": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "blush, downcast_eyes, shy, parted_lips, embarrassed, sad_smile, trembling",
+      "sfw": false
+    },
+    "sensual-tension": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "heavy_eyelids, parted_lips, blush, trembling, aroused, sweat, open_mouth",
+      "sfw": false
+    },
+    "bedroom-eyes": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "heavy_eyelids, seductive_smile, blush, aroused, smile",
+      "sfw": false
+    },
+    "soft-moan": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "moaning, parted_lips, heavy_eyelids, blush, aroused, open_mouth, smile",
+      "sfw": false
+    },
+    "biting-lip": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "biting_lip, heavy_eyelids, blush, seductive_smile, smile, parted_lips",
+      "sfw": false
+    },
+    "tongue-tease": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "tongue_out, smirk, heavy_eyelids, naughty_face, smile, blush, open_mouth",
+      "sfw": false
+    },
+    "flushed-desire": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "full-face_blush, aroused, heavy_eyelids, sweat, open_mouth, smile, heart",
+      "sfw": false
+    },
+    "sultry-pout": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "pout, heavy_eyelids, blush, seductive_smile, smile, parted_lips, closed_eyes",
+      "sfw": false
+    },
+    "erotic-daze": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "dazed, heavy_eyelids, blush, parted_lips, aroused, rolling_eyes, open_mouth",
+      "sfw": false
+    },
+    "tongue-out-sexual": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "tongue_out, parted_lips, blush, open_mouth, smile, heart",
+      "sfw": false
+    },
+    "moaning-face": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "moaning, open_mouth, drooling, blush, aroused, mouth_drool, saliva, smile",
+      "sfw": false
+    },
+    "glazed-eyes-sexual": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "dazed, parted_lips, aroused, empty_eyes, rolling_eyes, heavy_eyelids",
+      "sfw": false
+    },
+    "choking-face-strain": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "pain, tongue_out, wide-eyed, blush, open_mouth, drooling, gagging",
+      "sfw": false
+    },
+    "kissing-face": {
+      "category": "Sexual \ud83d\udd25",
+      "family": "intense",
+      "canonical": null,
+      "description": "kissing, closed_eyes, puckered_lips, blush, puckered_face, smile, closed_mouth, happy",
+      "sfw": false
+    },
+    "concentration": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "thinking, closed_mouth, narrowed_eyes, serious",
+      "sfw": true
+    },
+    "meditation": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "closed_eyes, smile, relaxing, happy",
+      "sfw": true
+    },
+    "deep-thought": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "thinking, furrowed_brow, pensive, looking_away",
+      "sfw": true
+    },
+    "unimpressed": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "closed_mouth, narrowed_eyes, frown, deadpan, unamused",
+      "sfw": true
+    },
+    "deadpan-face": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "expressionless, closed_mouth",
+      "sfw": true
+    },
+    "bored": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "heavy_eyelids, closed_eyes, expressionless",
+      "sfw": true
+    },
+    "skeptical": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "raised_eyebrow, frown, unamused, narrowed_eyes",
+      "sfw": true
+    },
+    "cynical-face": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "rolling_eyes, smirk, unamused, narrowed_eyes, looking_away",
+      "sfw": true
+    },
+    "side-eye": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "looking_to_the_side, frown, serious, narrowed_eyes",
+      "sfw": true
+    },
+    "puzzled": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "raised_eyebrow, parted_lips, confused, thinking, open_mouth",
+      "sfw": true
+    },
+    "amusement-disbelief": {
+      "category": "Focus/Thought \ud83e\udd14",
+      "family": "focused",
+      "canonical": null,
+      "description": "laughing, open_mouth, closed_eyes, smile, surprised",
+      "sfw": true
+    },
+    "physical-pain": {
+      "category": "Pain/Ailment \ud83e\udd15",
+      "family": "intense",
+      "canonical": null,
+      "description": "open_mouth, closed_eyes, wince, clenched_teeth, tears",
+      "sfw": true
+    },
+    "headache": {
+      "category": "Pain/Ailment \ud83e\udd15",
+      "family": "intense",
+      "canonical": null,
+      "description": "closed_eyes, wince, pain, open_mouth",
+      "sfw": true
+    },
+    "wincing": {
+      "category": "Pain/Ailment \ud83e\udd15",
+      "family": "intense",
+      "canonical": null,
+      "description": "clenched_teeth, scrunched_eyes, pain, closed_eyes, open_mouth",
+      "sfw": true
+    },
+    "biting-lower-lip": {
+      "category": "Pain/Ailment \ud83e\udd15",
+      "family": "intense",
+      "canonical": null,
+      "description": "biting_lip, wince, narrowed_eyes, pain, open_mouth",
+      "sfw": true
+    },
+    "confused-perplexity": {
+      "category": "Pain/Ailment \ud83e\udd15",
+      "family": "intense",
+      "canonical": null,
+      "description": "confused, open_mouth, furrowed_brow, thinking, wide-eyed",
+      "sfw": true
+    },
+    "wink": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "wink, smile, closed_mouth, one_eye_closed, happy",
+      "sfw": true
+    },
+    "cheeky-grin": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "grin, open_mouth, smile, closed_eyes, squinting, raised_eyebrows",
+      "sfw": true
+    },
+    "laughing-face": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "laughing, closed_eyes, open_mouth, smile",
+      "sfw": true
+    },
+    "shock-face": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "shocked, wide-eyed, open_mouth, surprised",
+      "sfw": true
+    },
+    "cat-smile": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, closed_mouth, happy, :3",
+      "sfw": true
+    },
+    "flirty-cat": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, wink, one_eye_closed, closed_mouth, happy, :3",
+      "sfw": true
+    },
+    "anime-grin": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "grin, smile, closed_eyes, open_mouth, happy",
+      "sfw": true
+    },
+    "pout-face": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "pout, narrowed_eyes, frown, closed_mouth, angry",
+      "sfw": true
+    },
+    "excited-anime": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, wide-eyed, open_mouth, smile, happy, sparkling_eyes",
+      "sfw": true
+    },
+    "uwu": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, closed_eyes, blush, happy, shy",
+      "sfw": true
+    },
+    "tongue-out": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "tongue_out, open_mouth, smile, happy, closed_eyes",
+      "sfw": true
+    },
+    "wink-tongue": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "tongue_out, wink, one_eye_closed, open_mouth, smile, happy",
+      "sfw": true
+    },
+    "quirky-face": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "open_mouth, puckered_lips, raised_eyebrows, smile, happy",
+      "sfw": true
+    },
+    "flirty-pucker": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "puckered_lips, wink, one_eye_closed, closed_eyes, smile, happy",
+      "sfw": true
+    },
+    "evil-grin": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "evil_grin, grin, narrowed_eyes, raised_eyebrows, smirk, open_mouth",
+      "sfw": true
+    },
+    "angry-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "angry, furrowed_brow, clenched_teeth, scowl, open_mouth",
+      "sfw": true
+    },
+    "awkward-face": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "clenched_teeth, serious, narrowed_eyes, closed_mouth, nervous",
+      "sfw": true
+    },
+    "indifferent": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "expressionless, closed_mouth, deadpan",
+      "sfw": true
+    },
+    "uncertain": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "sideways_mouth, raised_eyebrow, uncertain, frown, closed_mouth",
+      "sfw": true
+    },
+    "neutral-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "expressionless, closed_mouth, deadpan, neutral",
+      "sfw": true
+    },
+    "x-mouth": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "closed_mouth, expressionless, silent, no_mouth",
+      "sfw": true
+    },
+    "sad-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "sad, frown, closed_mouth, tears, crying",
+      "sfw": true
+    },
+    "hopeful-smile": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, closed_mouth, happy",
+      "sfw": true
+    },
+    "disappointed": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "frown, sad, closed_mouth, disappointed",
+      "sfw": true
+    },
+    "winking-frown": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "frown, wink, one_eye_closed, sad, closed_mouth",
+      "sfw": true
+    },
+    "diamond-mouth": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, open_mouth, wide-eyed",
+      "sfw": true
+    },
+    "smug-smile": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smirk, smile, narrowed_eyes, closed_mouth",
+      "sfw": true
+    },
+    "awkward-grin": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "grin, awkward, squinting, clenched_teeth, closed_eyes",
+      "sfw": true
+    },
+    "surprised-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, open_mouth, wide-eyed",
+      "sfw": true
+    },
+    "winking-surprise": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "surprised, open_mouth, wink, wide-eyed, one_eye_closed",
+      "sfw": true
+    },
+    "anime-pout": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "pout, open_mouth, puckered_lips, closed_eyes",
+      "sfw": true
+    },
+    "scrunched-pout": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "pout, closed_eyes, scrunched, clenched_teeth, frown",
+      "sfw": true
+    },
+    "blank-stare": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "wide-eyed, expressionless, open_mouth",
+      "sfw": true
+    },
+    "anime-shock": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "wide-eyed, shocked, surprised, open_mouth",
+      "sfw": true
+    },
+    "expressionless": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "expressionless, closed_eyes, closed_mouth",
+      "sfw": true
+    },
+    "tired-face": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "heavy_eyelids, expressionless, closed_mouth",
+      "sfw": true
+    },
+    "circle-eyes": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "expressionless, blank_eyes, closed_mouth",
+      "sfw": true
+    },
+    "heart-eyes": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "smile, blush, closed_eyes, happy",
+      "sfw": true
+    },
+    "happy-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": "happy-emote",
+      "description": "smile, closed_eyes, happy",
+      "sfw": true
+    },
+    "cheering": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "open_mouth, smile, happy, closed_eyes",
+      "sfw": true
+    },
+    "playful-pucker": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "puckered_lips, closed_eyes, smile, happy",
+      "sfw": true
+    },
+    "frustrated-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "closed_eyes, frustrated, clenched_teeth, frown, scrunched",
+      "sfw": true
+    },
+    "angry-pout": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "pout, angry, closed_eyes, clenched_teeth, frown",
+      "sfw": true
+    },
+    "dizzy": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "dizzy, expressionless, rolling_eyes",
+      "sfw": true
+    },
+    "suspicious": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "narrowed_eyes, raised_eyebrow, suspicious, looking_to_the_side",
+      "sfw": true
+    },
+    "exhausted": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "exhausted, expressionless, closed_eyes",
+      "sfw": true
+    },
+    "sarcastic": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": "sarcastic",
+      "description": "narrowed_eyes, smirk, unamused, closed_mouth, looking_away",
+      "sfw": true
+    },
+    "deadpan": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "closed_eyes, expressionless, deadpan, closed_mouth",
+      "sfw": true
+    },
+    "crying-emote": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "crying, tears, closed_eyes, sad, frown",
+      "sfw": true
+    },
+    "anime-glare": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "glaring, angry, narrowed_eyes, frown",
+      "sfw": true
+    },
+    "focused-glare": {
+      "category": "Emotes \ud83e\udd2a",
+      "family": "positive",
+      "canonical": null,
+      "description": "glaring, serious, narrowed_eyes",
+      "sfw": true
+    }
+  }
+}
