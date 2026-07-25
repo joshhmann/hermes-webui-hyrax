@@ -62,7 +62,23 @@
 
     injectNavButtons();
     injectPanelDivs();
+    injectHqSidebarView();
     injectCss();
+  }
+
+  // ── 3b. Inject the HQ sidebar panel-view (Operators list) ──
+  // The sidebar falls back to the chat panel on HQ because no #panelHq
+  // panel-view exists. Inject one; hq.js fills #hyraxHqOperators on mount.
+  function injectHqSidebarView() {
+    if (document.getElementById('panelHq')) return;
+    var ref = document.getElementById('panelChat');
+    if (!ref || !ref.parentNode) return;
+    var view = document.createElement('div');
+    view.className = 'panel-view';
+    view.id = 'panelHq';
+    view.innerHTML = '<div class="panel-head"><span>Operators</span></div>'
+      + '<div class="hyrax-hq-operators" id="hyraxHqOperators"></div>';
+    ref.parentNode.appendChild(view);
   }
 
   // ── 2. Inject nav buttons into rail + sidebar-nav ──

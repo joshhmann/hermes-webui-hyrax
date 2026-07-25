@@ -305,6 +305,24 @@
     // Sidebar — placeholder until the experience layer registers actions.
     var sidebar = _el('aside', 'vn2-sidebar');
     var sbTitle = _el('div', 'vn2-sidebar-title', 'Actions');
+    // Mobile: actions collapse to a toggle so they don't dominate the
+    // viewport (default collapsed ≤719px; desktop always expanded).
+    var actionsToggle = _el('button', 'vn2-actions-toggle', '▾');
+    actionsToggle.setAttribute('type', 'button');
+    actionsToggle.setAttribute('aria-label', 'Show or hide actions');
+    var mobileActions = false;
+    try {
+      mobileActions = !!(root.matchMedia && root.matchMedia('(max-width: 719px)').matches);
+    } catch (_) {}
+    if (mobileActions) {
+      sidebar.classList.add('vn2-sidebar--collapsed');
+      actionsToggle.textContent = '▸';
+    }
+    actionsToggle.addEventListener('click', function() {
+      var collapsed = sidebar.classList.toggle('vn2-sidebar--collapsed');
+      actionsToggle.textContent = collapsed ? '▸' : '▾';
+    });
+    sbTitle.appendChild(actionsToggle);
     var sbPlaceholder = _el('div', 'vn2-sidebar-placeholder',
       'Interactables are provided by the experience layer, which is not active yet.');
     sidebar.appendChild(sbTitle);

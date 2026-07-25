@@ -1071,3 +1071,44 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
   right: 20px;
   z-index: 8;
 }
+
+/* ── HQ Operators sidebar panel-view ── */
+.hyrax-hq-operators { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.hyrax-op-card {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel, #161b22);
+  border: 1px solid var(--line, #30363d);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.hyrax-op-card:hover { border-color: #8b949e; }
+.hyrax-op-card:focus-visible { outline: 2px solid currentColor; }
+.hyrax-op-card img { width: 40px; height: 40px; object-fit: contain; }
+.hyrax-op-meta { display: flex; flex-direction: column; gap: 2px; }
+.hyrax-op-meta strong { font-size: 13px; color: #e6edf3; }
+.hyrax-op-meta span { font-size: 11px; color: var(--muted, #8b949e); }
+.hyrax-op-card.staged { opacity: .45; filter: grayscale(.8); pointer-events: none; }
+.hyrax-op-tai { border-left: 3px solid var(--hq-tai); }
+.hyrax-op-rei { border-left: 3px solid var(--hq-rei); }
+.hyrax-op-nei { border-left: 3px solid var(--hq-nei); }
+.hyrax-op-mai { border-left: 3px solid var(--hq-mai); }
+
+/* Placeholder must yield to the hidden attribute (author display:grid
+   would otherwise override it — mobile "loading scene…" bleed-through) */
+.gestalt-vn-stage-placeholder[hidden] { display: none; }
+
+/* Mobile: Actions collapse toggle */
+.vn2-sidebar-title {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+.vn2-sidebar-title .vn2-actions-toggle {
+  background: transparent; border: 0; color: var(--muted, #8b949e);
+  font-size: 12px; cursor: pointer; padding: 2px 6px;
+}
+@media (max-width: 719px) {
+  .vn2-sidebar.vn2-sidebar--collapsed .gestalt-vn-sidebar { display: none; }
+}

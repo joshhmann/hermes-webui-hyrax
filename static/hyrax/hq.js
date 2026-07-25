@@ -108,14 +108,69 @@
       HQ_SISTERS.forEach(function(s) {
         stage.appendChild(createChibi(s, presenceMap[s.id] || null));
       });
+      renderOperatorsPanel(presenceMap);
     }).catch(function() {
       HQ_SISTERS.forEach(function(s) {
         stage.appendChild(createChibi(s, null));
       });
+      renderOperatorsPanel({});
     });
 
     page.appendChild(stage);
     container.replaceChildren(page);
+  }
+
+  // ── Operators sidebar panel-view (get creative: the HQ sidebar shows
+  // the same presence data as quick-switch cards) ──
+  function renderOperatorsPanel(presenceMap) {
+    var host = document.getElementById('hyraxHqOperators');
+    if (!host) return;
+    host.replaceChildren();
+    HQ_SISTERS.forEach(function(s) {
+      var presence = presenceMap[s.id] || null;
+      var card = document.createElement('button');
+      card.className = 'hyrax-op-card hyrax-op-' + s.id;
+      card.setAttribute('aria-label', 'Talk with ' + s.name);
+
+      var img = document.createElement('img');
+      img.src = '/api/hyrax/assets/' + s.id + '.chibi.stand';
+      img.alt = '';
+      img.loading = 'lazy';
+
+      var meta = document.createElement('div');
+      meta.className = 'hyrax-op-meta';
+      var nm = document.createElement('strong');
+      nm.textContent = s.name;
+      var act = document.createElement('span');
+      var type = presence && presence.activity && presence.activity.type;
+      var mood = presence && presence.expression && presence.expression.current;
+      act.textContent = (ACTIVITY_LABELS[type] || 'idle') + (mood && mood !== 'neutral' ? ' · ' + mood : '');
+      meta.appendChild(nm);
+      meta.appendChild(act);
+
+      card.appendChild(img);
+      card.appendChild(meta);
+
+      if (presence && typeof presence.pendingApprovals === 'number' && presence.pendingApprovals > 0) {
+        var dot = document.createElement('span');
+        dot.className = 'chibi-approval-dot';
+        dot.textContent = String(presence.pendingApprovals);
+        dot.title = presence.pendingApprovals + ' approval(s) pending';
+        card.appendChild(dot);
+      }
+      if (!presence || presence.available === false) {
+        card.classList.add('staged');
+        card.setAttribute('aria-disabled', 'true');
+      }
+
+      card.addEventListener('click', function() {
+        document.dispatchEvent(new CustomEvent('hyrax:open-conversation', {
+          detail: { sisterId: s.id, sisterName: s.name, role: s.role },
+          bubbles: true,
+        }));
+      });
+      host.appendChild(card);
+    });
   }
 
   // ── Chibi element factory ──
@@ -211,6 +266,7 @@
 
   function refreshPresence() {
     fetchPresence().then(function(map) {
+      renderOperatorsPanel(map);
       HQ_SISTERS.forEach(function(s) {
         var chibiEl = document.querySelector('.chibi-' + s.id);
         if (!chibiEl) return;
