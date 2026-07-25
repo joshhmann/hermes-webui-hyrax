@@ -242,9 +242,16 @@
     _applyVignette();
     _updateStaleBadge();
 
+    // Re-init replay: the persisted current frame outlives the DOM on
+    // re-mount — put it straight back into the fresh layers (cut, no
+    // crossfade) so the "loading scene…" placeholder never lingers and
+    // follow-up no-op intents stay honest. Guarded by operator match.
+    if (_currentFrame && _currentFrame.operatorId === _operatorId) {
+      _showFrame(_currentFrame, 'cut');
+    }
+
     // Subtle pointer parallax — off under reducedMotion.
-    if (!_reducedMotion && _root.addEventListener) {
-      _parallaxHandler = function (ev) {
+    if (!_reducedMotion && _root.addEventListener) {      _parallaxHandler = function (ev) {
         if (!_root || !_frameWrap) return;
         var rect = _root.getBoundingClientRect
           ? _root.getBoundingClientRect() : { width: 1, height: 1, left: 0, top: 0 };
@@ -339,7 +346,9 @@
     if (_root && _root.remove) _root.remove();
     _root = _bgImg = _frameWrap = _overlay = _staleBadge = _placeholder = null;
     _frameImgs = [];
-    _currentFrame = null;
+    // _currentFrame intentionally persists across re-mounts: init() replays
+    // it into the fresh DOM (guarded by operator match), which keeps the
+    // loading placeholder from lingering and no-op selections honest.
     _operatorId = null;
     _mounted = false;
   }
@@ -375,7 +384,12 @@
                 currentFrame: ctx.currentFrame,
               });
               if (sel.noOp) {
-                return { applied: false, frame: sel.frame, transition: 'none',
+                // No-op is a SUCCESS state (the right frame is already
+                // displayed) — not a decline. Returning applied:true stops
+                // the provider chain; otherwise the fallback provider would
+                // swap the correct frame for a generic portrait on re-entry
+                // (found in dogfood: sprite replaced by the old portrait).
+                return { applied: true, frame: sel.frame, transition: 'none',
                   reason: sel.reason };
               }
               // Below the static tiers the ladder belongs to the fallback
@@ -419,7 +433,9 @@
           }
           var current = stageCtx.getCurrentFrame();
           if (current && current.id === frame.id) {
-            return Promise.resolve({ applied: false, frame: frame,
+            // Already displayed — success with no transition (declining
+            // would leave the loading placeholder up forever).
+            return Promise.resolve({ applied: true, frame: frame,
               transition: 'none', reason: 'generic portrait already shown' });
           }
           var transition = stageCtx.reducedMotion ? 'cut' : 'crossfade';
