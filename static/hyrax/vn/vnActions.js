@@ -464,10 +464,10 @@
     label: 'Workspace',
     category: 'system',
     icon: 'folder',
-    action: { kind: 'navigation', target: 'workspace' },
+    action: { kind: 'navigation', target: 'workspaces' },
     when: function () { return { visible: true, enabled: true }; },
     run: function () {
-      if (!_navigate('workspace')) _toast('Workspace panel unavailable');
+      if (!_navigate('workspaces')) _toast('Workspace panel unavailable');
     },
   });
 
@@ -608,7 +608,13 @@
           icon: 'map',
           action: { kind: 'navigation', target: 'hq' },
           when: function () { return { visible: true, enabled: true }; },
-          run: function () {
+          run: function (ctx) {
+            // The VN lives INSIDE the HQ panel — switchPanel('hq') is a no-op
+            // when already active. Use the real back path (unmount + 2D map).
+            if (ctx && typeof ctx.backToHq === 'function') {
+              ctx.backToHq();
+              return;
+            }
             if (!_navigate('hq')) _toast('HQ unavailable');
           },
         });

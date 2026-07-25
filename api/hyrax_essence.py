@@ -506,6 +506,10 @@ def _sanitize_registry_frame(raw) -> dict | None:
         },
         "continuity": raw.get("continuity") if isinstance(raw.get("continuity"), dict) else {},
     }
+    # Layer kind (portrait/background/chibi) — the frame layer filters on it.
+    kind = raw.get("kind")
+    if isinstance(kind, str) and kind in ("portrait", "background", "chibi"):
+        frame["kind"] = kind
     sha256 = assets.get("sha256")
     if isinstance(sha256, str) and _re.match(r"^[a-f0-9]{64}$", sha256):
         frame["assets"]["sha256"] = sha256
@@ -548,9 +552,23 @@ def _load_registry_payload() -> dict:
     }
 
 
-def _serve_frames_registry(handler) -> bool:
-    """GET /api/hyrax/essence/frames — validated frame registry JSON."""
-    _j(handler, _load_registry_payload())
+def _serve_frames_registry(handler, parsed=None) -> bool:
+    """GET /api/hyrax/essence/frames[?operator=<id>] — validated registry JSON."""
+    payload = _load_registry_payload()
+    if parsed is not None:
+        from urllib.parse import parse_qs
+
+        operator = (parse_qs(getattr(parsed, "query", "") or "").get("operator") or [""])[0]
+        if operator:
+            payload = dict(payload)
+            payload["frames"] = [
+                f for f in payload.get("frames", [])
+                if isinstance(f, dict) and f.get("operatorId") == operator
+            ]
+            meta = dict(payload.get("meta") or {})
+            meta["total"] = len(payload["frames"])
+            payload["meta"] = meta
+    _j(handler, payload)
     return True
 
 
@@ -1036,7 +1054,7 @@ def handle_essence_get(handler, parsed) -> bool:
         return _serve_presence(handler)
 
     if path == _FRAMES_PATH:
-        return _serve_frames_registry(handler)
+        return _serve_frames_registry(handler, parsed)
 
     if path.startswith(_FRAME_FILE_PREFIX):
         filename = path[len(_FRAME_FILE_PREFIX):]

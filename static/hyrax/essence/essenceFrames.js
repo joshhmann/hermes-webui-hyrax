@@ -175,6 +175,12 @@
         else if (Array.isArray(payload.items)) frames = payload.items;
         else if (Array.isArray(payload)) frames = payload;
       }
+      // Defensive scoping: the frame layer is per-operator. The server may
+      // return the whole registry — selection must never cross sisters
+      // (QA: nei's stage picked mai's frame when unfiltered).
+      frames = frames.filter(function (f) {
+        return f && f.operatorId === operatorId;
+      });
       _registry[operatorId] = { loaded: true, loading: null, frames: frames };
       return frames;
     }).catch(function () {
@@ -294,6 +300,11 @@
     var approved = [];
     var i;
     for (i = 0; i < frames.length; i++) {
+      // Layer filter: the operator frame layer only ever shows portraits.
+      // Backgrounds/chibis are valid registry entries for OTHER layers
+      // (stage bg, HQ chibis) — they must never win the frame slot
+      // (QA: sparse intent rendered the room background as the portrait).
+      if (frames[i].kind && frames[i].kind !== 'portrait') continue;
       if (_approved(frames[i])) approved.push(frames[i]);
     }
 

@@ -6,6 +6,7 @@
     {
       "id": "frame.mai.background.supply-hub",
       "operatorId": "mai",
+      "kind": "background",
       "version": "1",
       "source": "authored",
       "sceneSignature": "a1c50f71926cde0c",
@@ -27,6 +28,7 @@
     {
       "id": "frame.mai.chibi.stand",
       "operatorId": "mai",
+      "kind": "chibi",
       "version": "1",
       "source": "authored",
       "sceneSignature": "ee6f4961f581d0f3",
@@ -48,6 +50,7 @@
     {
       "id": "frame.mai.portrait.composed",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "c91cb93057b6c239",
@@ -69,6 +72,7 @@
     {
       "id": "frame.mai.portrait.laughing",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "22d756b6f27f652a",
@@ -90,6 +94,7 @@
     {
       "id": "frame.mai.portrait.light-smile",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "13cf0129c8771a84",
@@ -111,6 +116,7 @@
     {
       "id": "frame.mai.portrait.neutral",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "4f51145d26a567ff",
@@ -132,6 +138,7 @@
     {
       "id": "frame.mai.portrait.observant",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "031e8b8298e0ed34",
@@ -153,6 +160,7 @@
     {
       "id": "frame.mai.portrait.ohhoai",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "2d68e6a0ca97d3fc",
@@ -174,6 +182,7 @@
     {
       "id": "frame.mai.portrait.scream-of-fury",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "857178b283540032",
@@ -195,6 +204,7 @@
     {
       "id": "frame.mai.portrait.shy-smile",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "3a100e64f24fc23c",
@@ -216,6 +226,7 @@
     {
       "id": "frame.mai.portrait.smile",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "c7ddf1f90b9de836",
@@ -237,6 +248,7 @@
     {
       "id": "frame.mai.portrait.yandere-smile",
       "operatorId": "mai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "413b105771766e7f",
@@ -258,6 +270,7 @@
     {
       "id": "frame.nei.background.lab",
       "operatorId": "nei",
+      "kind": "background",
       "version": "1",
       "source": "authored",
       "sceneSignature": "bfd22b31225811a4",
@@ -279,6 +292,7 @@
     {
       "id": "frame.nei.chibi.stand",
       "operatorId": "nei",
+      "kind": "chibi",
       "version": "1",
       "source": "authored",
       "sceneSignature": "6bc4997dcd2883c7",
@@ -300,6 +314,7 @@
     {
       "id": "frame.nei.portrait.neutral",
       "operatorId": "nei",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "5ea501786c27e3f8",
@@ -321,6 +336,7 @@
     {
       "id": "frame.nei.portrait.observant",
       "operatorId": "nei",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "dfdfda31990ace74",
@@ -342,6 +358,7 @@
     {
       "id": "frame.nei.portrait.thinking",
       "operatorId": "nei",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "117953317acd4b7a",
@@ -363,6 +380,7 @@
     {
       "id": "frame.rei.background.security",
       "operatorId": "rei",
+      "kind": "background",
       "version": "1",
       "source": "authored",
       "sceneSignature": "b09f05ae80259fea",
@@ -384,6 +402,7 @@
     {
       "id": "frame.rei.chibi.stand",
       "operatorId": "rei",
+      "kind": "chibi",
       "version": "1",
       "source": "authored",
       "sceneSignature": "b930093cf5506536",
@@ -405,6 +424,7 @@
     {
       "id": "frame.rei.portrait.alert",
       "operatorId": "rei",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "4f3343a35b83ac4a",
@@ -426,6 +446,7 @@
     {
       "id": "frame.rei.portrait.calm",
       "operatorId": "rei",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "fd47fd08c0349652",
@@ -447,6 +468,7 @@
     {
       "id": "frame.rei.portrait.neutral",
       "operatorId": "rei",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "c4267dab0ceec3b7",
@@ -468,6 +490,7 @@
     {
       "id": "frame.tai.background.control-room",
       "operatorId": "tai",
+      "kind": "background",
       "version": "1",
       "source": "authored",
       "sceneSignature": "0a8713ef27cc4c89",
@@ -489,6 +512,7 @@
     {
       "id": "frame.tai.chibi.stand",
       "operatorId": "tai",
+      "kind": "chibi",
       "version": "1",
       "source": "authored",
       "sceneSignature": "ab46a46ef3ab12ca",
@@ -510,6 +534,7 @@
     {
       "id": "frame.tai.portrait.focused",
       "operatorId": "tai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "19b681b7eabd46a4",
@@ -531,6 +556,7 @@
     {
       "id": "frame.tai.portrait.happy-emote",
       "operatorId": "tai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "4599c8e275c75a4c",
@@ -552,6 +578,7 @@
     {
       "id": "frame.tai.portrait.neutral",
       "operatorId": "tai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "531d6a016a09e6dd",
@@ -573,6 +600,7 @@
     {
       "id": "frame.tai.portrait.sarcastic",
       "operatorId": "tai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "a0407e7fb132b966",
@@ -594,6 +622,7 @@
     {
       "id": "frame.tai.portrait.smile",
       "operatorId": "tai",
+      "kind": "portrait",
       "version": "1",
       "source": "authored",
       "sceneSignature": "fb42e4cd1e1da806",

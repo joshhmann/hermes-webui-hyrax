@@ -966,3 +966,83 @@ main.main > .main-view[id^="main"][id$="Promises"] { display: none; flex-directi
   text-align: center;
   box-shadow: 0 2px 8px #000;
 }
+
+/* ── Essence stage layers (vnStage.js) ── */
+.gestalt-vn-stage { position: absolute; inset: 0; overflow: hidden; }
+.gestalt-vn-stage-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: .8;
+}
+.gestalt-vn-stage-frame-wrap {
+  position: absolute; inset: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none;
+}
+.gestalt-vn-stage-frame {
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  max-height: 86%; max-width: 62%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,.5));
+  opacity: 1; transition: opacity .3s ease;
+}
+.gestalt-vn-stage-frame.xfade-in { opacity: 1; }
+.gestalt-vn-stage-frame.xfade-out { opacity: 0; }
+.gestalt-vn-stage-overlay { position: absolute; inset: 0; pointer-events: none; }
+.gestalt-vn-stage-overlay.vignette-positive { box-shadow: inset 0 0 120px rgba(110,203,245,.18); }
+.gestalt-vn-stage-overlay.vignette-neutral { box-shadow: inset 0 0 120px rgba(0,0,0,.35); }
+.gestalt-vn-stage-overlay.vignette-negative { box-shadow: inset 0 0 120px rgba(240,128,128,.22); }
+.gestalt-vn-stage-stale-badge {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  padding: 2px 8px; border-radius: 4px;
+  background: rgba(9,13,19,.85); border: 1px solid var(--line, #30363d);
+  color: var(--muted, #8b949e); font-size: 10px;
+}
+.gestalt-vn-stage-placeholder {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--muted, #8b949e); font-size: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gestalt-vn-stage-frame { transition: none; }
+}
+@media (max-width: 720px) {
+  .gestalt-vn-stage-frame { max-width: 88%; max-height: 78%; }
+}
+
+/* ── Sidebar confirm dialog (vnSidebar.js) ── */
+.gestalt-vn-confirm {
+  position: absolute; inset: auto 12px 12px 12px; z-index: 6;
+  background: #161b22; border: 1px solid var(--hq-gold, #f5c542);
+  border-radius: 10px; padding: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.6);
+}
+.gestalt-vn-confirm-message { margin: 0 0 10px; font-size: 13px; color: #e6edf3; }
+.gestalt-vn-confirm-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.gestalt-vn-confirm-ok,
+.gestalt-vn-confirm-cancel {
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;
+  border: 1px solid var(--line, #30363d); background: transparent; color: #c9d1d9;
+}
+.gestalt-vn-confirm-ok { background: #1f6feb; border-color: #2f81f7; color: #fff; }
+.gestalt-vn-confirm-cancel:hover { border-color: #8b949e; color: #fff; }
+.vn2-sidebar { position: relative; }
+
+/* ── Tech drawer header/backdrop ── */
+.vn2-drawer-backdrop {
+  position: absolute; inset: 0; z-index: 29;
+  background: rgba(0,0,0,.35);
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease;
+}
+.vn2-drawer-backdrop--visible {
+  opacity: 1; pointer-events: auto;
+}
+.vn2-drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.vn2-drawer-close {
+  background: transparent; border: 1px solid var(--line, #30363d);
+  color: var(--muted, #8b949e); border-radius: 6px;
+  width: 26px; height: 26px; cursor: pointer; font-size: 12px;
+}
+.vn2-drawer-close:hover { color: #fff; border-color: #8b949e; }

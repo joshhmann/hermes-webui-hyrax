@@ -64,6 +64,7 @@ def frame_from_manifest_asset(asset: dict) -> dict | None:
     return {
         "id": f"frame.{logical_id}",
         "operatorId": profile,
+        "kind": kind,
         "version": "1",
         "source": "authored",
         "sceneSignature": compute_scene_signature(profile, state),

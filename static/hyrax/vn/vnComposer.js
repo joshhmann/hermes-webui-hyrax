@@ -209,9 +209,11 @@
 
   // ── Send / cancel / edit / regenerate ──
 
-  function send() {
+  function send(textOverride) {
     if (_disposed || !_textarea) return Promise.resolve(false);
-    var text = _textarea.value.trim();
+    // Sidebar hermes-intent actions pass their message; the button path
+    // reads the textarea. One shared send path (SPEC §3 duplicate-send rule).
+    var text = (typeof textOverride === 'string' ? textOverride : _textarea.value).trim();
     if (!text && !_staged.length) return Promise.resolve(false);
     if (_busy()) {
       _toast('Still responding — cancel or wait for the reply to finish.');

@@ -457,6 +457,18 @@
 
     // 3. Sidebar with full action context (INTERACTABLES_SPEC).
     try {
+      // Initial scene: intents fire on *changes* — without an explicit
+      // scene-entry intent the stage sits on its placeholder forever (QA:
+      // empty frame, "loading scene…" stuck).
+      if (vn.stage && typeof vn.stage.applyIntent === 'function') {
+        vn.stage.applyIntent({
+          operatorId: operatorId,
+          location: OPERATOR_ROOM[operatorId],
+          trigger: 'scene-entry',
+        });
+      }
+    } catch (_) {}
+    try {
       if (vn.sidebar && typeof vn.sidebar.init === 'function') {
         var ctx = {
           operatorId: operatorId,
@@ -473,6 +485,32 @@
               var ta = _regions.composer && _regions.composer.querySelector('textarea');
               if (ta && ta.focus) ta.focus();
             } catch (_) {}
+          },
+          // Client-action surface used by vnActions (INTERACTABLES_SPEC).
+          openTechDrawer: function() {
+            if (ns.techDrawer && typeof ns.techDrawer.toggle === 'function') {
+              ns.techDrawer.toggle();
+            }
+          },
+          showSessionPicker: function() {
+            // Minimal honest implementation: the tech drawer owns session
+            // details + links (standard chat / workspace) in v1.
+            if (ns.techDrawer && typeof ns.techDrawer.open === 'function') {
+              ns.techDrawer.open();
+            }
+          },
+          showModelInfo: function() {
+            if (ns.techDrawer && typeof ns.techDrawer.open === 'function') {
+              ns.techDrawer.open();
+            }
+          },
+          backToHq: function() {
+            _backToHq();
+          },
+          enterRoom: function(roomId) {
+            if (vn.stage && typeof vn.stage.applyIntent === 'function') {
+              vn.stage.applyIntent({ operatorId: operatorId, location: roomId, trigger: 'navigation' });
+            }
           },
         };
         if (typeof _regions.sidebar.initExperience === 'function') {

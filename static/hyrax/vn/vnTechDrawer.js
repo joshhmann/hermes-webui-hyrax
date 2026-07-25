@@ -35,6 +35,8 @@
   var _unsubs = [];
   var _sessionUnsub = null;
   var _disposed = true;
+  var _backdrop = null;
+  var _escHandler = null;
 
   function _el(tag, className, text) {
     var e = document.createElement(tag);
@@ -132,7 +134,33 @@
     _toggleButton = opts.toggleButton || null;
     _container.classList.add('vn2-drawer');
 
-    _container.appendChild(_el('div', 'vn2-drawer-title', 'Technical'));
+    // Header row: title + a real close affordance. The drawer overlays the
+    // sidebar and the topbar toggle, so without this there is no way to
+    // dismiss it (QA: "opens a sidebar that can't be closed").
+    var header = _el('div', 'vn2-drawer-header');
+    header.appendChild(_el('div', 'vn2-drawer-title', 'Technical'));
+    var closeBtn = _el('button', 'vn2-drawer-close', '✕');
+    closeBtn.setAttribute('type', 'button');
+    closeBtn.setAttribute('aria-label', 'Close technical drawer');
+    closeBtn.addEventListener('click', close);
+    header.appendChild(closeBtn);
+    _container.appendChild(header);
+
+    // Backdrop: click-outside dismisses (sibling behind the drawer panel).
+    _backdrop = _el('div', 'vn2-drawer-backdrop');
+    _backdrop.addEventListener('click', close);
+    if (_container.parentNode) {
+      _container.parentNode.insertBefore(_backdrop, _container);
+    }
+
+    // Escape closes the drawer first (before the shell's Escape→HQ handler).
+    _escHandler = function(event) {
+      if (event && event.key === 'Escape' && _open) {
+        event.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener('keydown', _escHandler, true);
 
     var sessionRow = _el('div', 'vn2-drawer-row');
     sessionRow.appendChild(_el('span', 'vn2-drawer-label', 'Session'));
@@ -199,6 +227,7 @@
     if (_disposed || !_container) return;
     _open = true;
     _container.classList.add('vn2-drawer--open');
+    if (_backdrop) _backdrop.classList.add('vn2-drawer-backdrop--visible');
     if (_toggleButton) _toggleButton.setAttribute('aria-expanded', 'true');
     _renderAll();
   }
@@ -207,6 +236,7 @@
     if (!_container) return;
     _open = false;
     _container.classList.remove('vn2-drawer--open');
+    if (_backdrop) _backdrop.classList.remove('vn2-drawer-backdrop--visible');
     if (_toggleButton) _toggleButton.setAttribute('aria-expanded', 'false');
   }
 
@@ -226,6 +256,14 @@
     if (_sessionUnsub) {
       try { _sessionUnsub(); } catch (_) {}
       _sessionUnsub = null;
+    }
+    if (_escHandler) {
+      try { document.removeEventListener('keydown', _escHandler, true); } catch (_) {}
+      _escHandler = null;
+    }
+    if (_backdrop) {
+      try { _backdrop.remove(); } catch (_) {}
+      _backdrop = null;
     }
     if (_container) {
       try { _container.replaceChildren(); } catch (_) {}
