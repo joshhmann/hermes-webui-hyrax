@@ -707,8 +707,23 @@ def main():
 
                 sid1 = click_card_and_get_sid()
                 page.wait_for_selector("#msg", state="visible", timeout=15000)
-                page.wait_for_timeout(800)
                 chat_ok = not on_hq(page)
+                # The card's loadSession() is fire-and-forget: loading a
+                # sister-profile session into the standard chat runs a
+                # 409 → profile-switch → re-load chain (several localhost
+                # round trips plus a session-list re-render) before
+                # S.session is assigned. Wait on the loaded invariant
+                # itself instead of a fixed settle delay — under host
+                # contention a fixed delay samples the chain mid-flight
+                # (sid=None with profile already switched) and reports a
+                # spurious regression.
+                try:
+                    page.wait_for_function(
+                        "(sid) => typeof S !== 'undefined' && S.session"
+                        " && S.session.session_id === sid",
+                        arg=sid1, timeout=15000)
+                except Exception:
+                    pass  # recorded below with the actual loaded state
                 loaded = page.evaluate("""() => ({
                     sid: (typeof S !== 'undefined' && S.session)
                          ? S.session.session_id : null,

@@ -441,10 +441,10 @@ class TestFramesRegistryGet:
             f for f in handler.json_body()["frames"]
             if f["assets"]["imageUrl"].startswith("/api/hyrax/essence/frames/file/")
         ]
-        # 20 hand-dropped pose sprites + 532 VNCCS emotion sprites
-        # (133 SFW emotions × 4 operators − 3 Rei emotions held for
-        # regeneration, then registered after clean-face regen)
-        assert len(sprites) == 552
+        # 20 hand-dropped pose sprites + 2660 VNCCS emotion sprites
+        # (133 SFW emotions × 4 operators × 5 pose variants 0001-0005:
+        # standing/sitting/thinking/clasped/confident)
+        assert len(sprites) == 2680
         for frame in sprites:
             display = frame["assets"].get("display")
             assert display is not None, frame["id"]
