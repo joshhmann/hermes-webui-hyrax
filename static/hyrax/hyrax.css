@@ -1178,8 +1178,8 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 
 /* Emotion jolt (vnStage.js _maybeJolt): small physical reaction on the
    sprite when the expression FAMILY changes — positive bounces, intense
-   shakes, wry tilts, focused leans in, neutral settles. ~300–450ms, no
-   persistence. Reduced-motion runs never get the class (JS guard) and
+   shakes, wry tilts, focused leans in, neutral settles, sad sags. ~300–500ms,
+   no persistence. Reduced-motion runs never get the class (JS guard) and
    these animations only exist under no-preference anyway. */
 @media (prefers-reduced-motion: no-preference) {
   .gestalt-vn-jolt-positive { animation: gestalt-vn-jolt-bounce .45s ease-out; }
@@ -1193,6 +1193,10 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
     transform-origin: 50% 100%;
   }
   .gestalt-vn-jolt-neutral { animation: gestalt-vn-jolt-settle .3s ease-out; }
+  .gestalt-vn-jolt-sad {
+    animation: gestalt-vn-jolt-sag .5s ease-out;
+    transform-origin: 50% 100%;
+  }
   @keyframes gestalt-vn-jolt-bounce {
     0% { transform: translateY(0); }
     35% { transform: translateY(-10px); }
@@ -1218,6 +1222,11 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
   @keyframes gestalt-vn-jolt-settle {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(3px); }
+  }
+  @keyframes gestalt-vn-jolt-sag {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    45% { transform: translateY(7px) rotate(-1.2deg); }
+    75% { transform: translateY(2px); }
   }
 }
 

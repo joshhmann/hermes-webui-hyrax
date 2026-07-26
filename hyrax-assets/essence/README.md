@@ -53,6 +53,10 @@ Field rules:
 
 - Stage asks for a frame by **scene signature**: operator · location · wardrobe ·
   expression-family · pose-family · timeOfDayBand (when set) · framing · ≤3 props.
+- Expression families are curated in `expression-families.json` (v2):
+  `neutral` / `positive` / `wry` / `focused` / `intense` / `sad`. Unknown
+  expression names fall back to `neutral`, so register sprites with a name
+  the table (or the canonical enum) actually knows.
 - Ranking: exact > same-location > expression-family > operator-default >
   generic portrait. Non-exact needs ≥0.6 confidence.
 - Ties break by continuity scoring (prior link > wardrobe > **pose match** >

@@ -1,12 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "source": "AHEKOT/ComfyUI_VNCCS emotions-config/emotions.json",
+  "notes": "v2 (2026-07-26) curation: the sad cluster (aching-heart, bittersweet, crying, depressed, despair, downtrodden, emotional-vulnerability, exhausted-sigh, nostalgic-sadness, sad, silent-scream-anguish, silent-tears, sobbing) was misfiled under \"neutral\", which made the VN default/resting face resolve to crying frames. Those moved to the new sixth family \"sad\", together with clear mislabels crying-emote, sad-emote, disappointed, and traumatized (all were \"positive\"). \"neutral\" now holds only true calm/flat baselines: blank-stare, expressionless, deadpan, deadpan-face, tired-face, neutral-emote, indifferent, x-mouth, circle-eyes, bored, exhausted.",
   "families": [
     "neutral",
     "positive",
     "wry",
     "focused",
-    "intense"
+    "intense",
+    "sad"
   ],
   "emotions": {
     "angry": {
@@ -319,7 +321,7 @@
     },
     "traumatized": {
       "category": "Surprise \ud83d\ude32",
-      "family": "positive",
+      "family": "sad",
       "canonical": null,
       "description": "traumatized, empty_eyes, trembling, open_mouth, despair, hollow_eyes, tears, crying, shaded_face, sweat",
       "sfw": true
@@ -382,91 +384,91 @@
     },
     "sad": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sad, frown, downcast_eyes, depressed, closed_mouth",
       "sfw": true
     },
     "crying": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "crying, tears, frown, sobbing, crying_with_eyes_open, open_mouth, trembling",
       "sfw": true
     },
     "depressed": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "depressed, closed_mouth, bags_under_eyes",
       "sfw": true
     },
     "despair": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "despair, crying, tears, open_mouth, grimace, clenched_teeth",
       "sfw": true
     },
     "sobbing": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sobbing, streaming_tears, crying, tears, closed_eyes, sad, trembling, open_mouth",
       "sfw": true
     },
     "nostalgic-sadness": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sad_smile, tears, downcast_eyes, sad, wistful, closed_mouth",
       "sfw": true
     },
     "bittersweet": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sad_smile, tears, sad, closed_eyes, wistful, closed_mouth",
       "sfw": true
     },
     "emotional-vulnerability": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "tearing_up, trembling, sad, crying, tears, open_mouth, vulnerable",
       "sfw": true
     },
     "silent-tears": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "tears, closed_mouth, sad, crying, streaming_tears, no_mouth, expressionless",
       "sfw": true
     },
     "aching-heart": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sad, frown, furrowed_brow, crying, tears, despair, closed_eyes",
       "sfw": true
     },
     "silent-scream-anguish": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "screaming, tears, open_mouth, expressionless, sad, despair, mouth_open",
       "sfw": true
     },
     "downtrodden": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sad, frown, heavy_eyelids, depressed",
       "sfw": true
     },
     "exhausted-sigh": {
       "category": "Emotional \ud83d\ude22",
-      "family": "neutral",
+      "family": "sad",
       "canonical": null,
       "description": "sigh, exhausted, closed_eyes, open_mouth, tired, heavy_eyelids",
       "sfw": true
@@ -669,14 +671,14 @@
     },
     "deadpan-face": {
       "category": "Focus/Thought \ud83e\udd14",
-      "family": "focused",
+      "family": "neutral",
       "canonical": null,
       "description": "expressionless, closed_mouth",
       "sfw": true
     },
     "bored": {
       "category": "Focus/Thought \ud83e\udd14",
-      "family": "focused",
+      "family": "neutral",
       "canonical": null,
       "description": "heavy_eyelids, closed_eyes, expressionless",
       "sfw": true
@@ -872,7 +874,7 @@
     },
     "indifferent": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "expressionless, closed_mouth, deadpan",
       "sfw": true
@@ -886,21 +888,21 @@
     },
     "neutral-emote": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "expressionless, closed_mouth, deadpan, neutral",
       "sfw": true
     },
     "x-mouth": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "closed_mouth, expressionless, silent, no_mouth",
       "sfw": true
     },
     "sad-emote": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "sad",
       "canonical": null,
       "description": "sad, frown, closed_mouth, tears, crying",
       "sfw": true
@@ -914,7 +916,7 @@
     },
     "disappointed": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "sad",
       "canonical": null,
       "description": "frown, sad, closed_mouth, disappointed",
       "sfw": true
@@ -977,7 +979,7 @@
     },
     "blank-stare": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "wide-eyed, expressionless, open_mouth",
       "sfw": true
@@ -991,21 +993,21 @@
     },
     "expressionless": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "expressionless, closed_eyes, closed_mouth",
       "sfw": true
     },
     "tired-face": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "heavy_eyelids, expressionless, closed_mouth",
       "sfw": true
     },
     "circle-eyes": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "expressionless, blank_eyes, closed_mouth",
       "sfw": true
@@ -1068,7 +1070,7 @@
     },
     "exhausted": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "exhausted, expressionless, closed_eyes",
       "sfw": true
@@ -1082,14 +1084,14 @@
     },
     "deadpan": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "neutral",
       "canonical": null,
       "description": "closed_eyes, expressionless, deadpan, closed_mouth",
       "sfw": true
     },
     "crying-emote": {
       "category": "Emotes \ud83e\udd2a",
-      "family": "positive",
+      "family": "sad",
       "canonical": null,
       "description": "crying, tears, closed_eyes, sad, frown",
       "sfw": true

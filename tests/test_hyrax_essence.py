@@ -16,6 +16,7 @@ import hashlib
 import io
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -190,6 +191,86 @@ class TestExpressionEnum:
             current, issues = normalize_expression("tai", raw)
             assert current == "neutral"
             assert issues == []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: expression family curation (expression-families.json v2)
+# ══════════════════════════════════════════════════════════════════════════
+
+_FAMILY_TABLE_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "hyrax-assets" / "essence" / "expression-families.json"
+)
+
+# The sad cluster that was misfiled under 'neutral' (plus clear 'positive'
+# mislabels) — the bug that made the default/resting face render as crying.
+_SAD_CLUSTER = {
+    "aching-heart", "bittersweet", "crying", "depressed", "despair",
+    "downtrodden", "emotional-vulnerability", "exhausted-sigh",
+    "nostalgic-sadness", "sad", "silent-scream-anguish", "silent-tears",
+    "sobbing", "crying-emote", "sad-emote", "disappointed", "traumatized",
+}
+
+# True calm/flat baselines — the only emotions allowed in 'neutral'.
+_NEUTRAL_CLUSTER = {
+    "blank-stare", "expressionless", "deadpan", "deadpan-face",
+    "tired-face", "neutral-emote", "indifferent", "x-mouth",
+    "circle-eyes", "bored", "exhausted",
+}
+
+
+class TestExpressionFamilyCuration:
+    """The curated family table and its server-side mirror map."""
+
+    def _table(self):
+        return json.loads(_FAMILY_TABLE_PATH.read_text())
+
+    def test_sad_family_declared(self):
+        table = self._table()
+        assert table["version"] >= 2
+        assert "sad" in table["families"]
+
+    def test_sad_cluster_in_sad_family(self):
+        table = self._table()
+        for name in _SAD_CLUSTER:
+            assert table["emotions"][name]["family"] == "sad", name
+
+    def test_neutral_family_contains_no_sad_emotions(self):
+        table = self._table()
+        neutral = {
+            name for name, entry in table["emotions"].items()
+            if entry["family"] == "neutral"
+        }
+        assert not (neutral & _SAD_CLUSTER)
+        assert neutral == _NEUTRAL_CLUSTER
+
+    def test_mislabels_removed_from_positive(self):
+        table = self._table()
+        for name in ("blank-stare", "expressionless", "crying-emote"):
+            assert table["emotions"][name]["family"] != "positive", name
+
+    def test_every_emotion_family_is_declared(self):
+        table = self._table()
+        declared = set(table["families"])
+        for name, entry in table["emotions"].items():
+            assert entry["family"] in declared, name
+
+    def test_server_map_mirrors_curation(self):
+        from api.hyrax_essence import _EXPRESSION_FAMILY
+        for name in _SAD_CLUSTER:
+            assert _EXPRESSION_FAMILY[name] == "sad", name
+        for name in _NEUTRAL_CLUSTER:
+            assert _EXPRESSION_FAMILY[name] == "neutral", name
+
+    def test_neutral_scene_signature_excludes_sad_frames(self):
+        """A neutral scene must never signature-match a sad-cluster frame."""
+        from api.hyrax_essence import compute_scene_signature
+        neutral_sig = compute_scene_signature(
+            "tai", {"expression": "neutral", "camera": "close"})
+        for name in _SAD_CLUSTER:
+            sad_sig = compute_scene_signature(
+                "tai", {"expression": name, "camera": "close"})
+            assert sad_sig != neutral_sig, name
 
 
 # ══════════════════════════════════════════════════════════════════════════

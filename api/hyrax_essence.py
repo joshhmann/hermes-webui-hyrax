@@ -135,6 +135,11 @@ def normalize_expression(operator: str, raw) -> tuple[str, list[str]]:
 # The registry and the browser MUST produce identical signatures for
 # identical scenes or the exact-match tier is dead — keep these maps and the
 # field order in lockstep with the client.
+# Family assignments mirror the client (essenceFrames.js) and the curated
+# table (hyrax-assets/essence/expression-families.json v2): the neutral and
+# sad clusters keep the generated emotion sprites out of the 'neutral'
+# fallback bucket — before this, every unmapped emotion resolved to 'neutral'
+# and the resting face could select a crying frame.
 _EXPRESSION_FAMILY = {
     "neutral": "neutral", "calm": "neutral",
     "smile": "positive", "happy-emote": "positive", "laughing": "positive",
@@ -143,6 +148,20 @@ _EXPRESSION_FAMILY = {
     "focused": "focused", "alert": "focused", "observant": "focused",
     "thinking": "focused",
     "scream-of-fury": "intense", "yandere-smile": "intense",
+    # Curated neutral cluster (calm/flat baselines).
+    "blank-stare": "neutral", "expressionless": "neutral",
+    "deadpan": "neutral", "deadpan-face": "neutral",
+    "tired-face": "neutral", "neutral-emote": "neutral",
+    "indifferent": "neutral", "x-mouth": "neutral",
+    "circle-eyes": "neutral", "bored": "neutral", "exhausted": "neutral",
+    # Curated sad cluster.
+    "sad": "sad", "crying": "sad", "depressed": "sad", "despair": "sad",
+    "sobbing": "sad", "nostalgic-sadness": "sad", "bittersweet": "sad",
+    "emotional-vulnerability": "sad", "silent-tears": "sad",
+    "aching-heart": "sad", "silent-scream-anguish": "sad",
+    "downtrodden": "sad", "exhausted-sigh": "sad",
+    "crying-emote": "sad", "sad-emote": "sad", "disappointed": "sad",
+    "traumatized": "sad",
 }
 _POSE_FAMILY = {
     "standing": "standing", "idle": "standing", "sitting": "sitting",

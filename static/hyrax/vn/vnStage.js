@@ -84,14 +84,15 @@
   var _desktopMqHandler = null;
 
   // Canonical expression families (hyrax-assets/essence/expression-families
-  // .json): neutral / positive / wry / focused / intense — each maps to a
-  // jolt keyframe class in hyrax.css.
+  // .json v2): neutral / positive / wry / focused / intense / sad — each maps
+  // to a jolt keyframe class in hyrax.css.
   var JOLT_CLASSES = [
     'gestalt-vn-jolt-neutral',
     'gestalt-vn-jolt-positive',
     'gestalt-vn-jolt-wry',
     'gestalt-vn-jolt-focused',
     'gestalt-vn-jolt-intense',
+    'gestalt-vn-jolt-sad',
   ];
 
   function _el(tag, className, text) {
@@ -151,7 +152,8 @@
 
   // Emotion jolt: a small physical reaction on the sprite when the
   // expression FAMILY changes (positive = bounce, intense = shake, wry =
-  // tilt, focused = lean, neutral = settle). Class swap on the frame wrap;
+  // tilt, focused = lean, neutral = settle, sad = sag). Class swap on the
+  // frame wrap;
   // the animations themselves live in hyrax.css behind
   // @media (prefers-reduced-motion: no-preference) — and the class is never
   // applied under reduce, so reduced-motion runs carry no jolt markup.

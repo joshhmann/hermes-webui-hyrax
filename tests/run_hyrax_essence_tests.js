@@ -388,6 +388,58 @@ async function main() {
   assert(sel.noOp === true && sel.match === 'exact', 'same signature as current → no-op');
   frames._reset('tai');
 
+  // 3b. Expression-family curation (expression-families.json v2): the sad
+  // cluster was misfiled under 'neutral', so a fresh (neutral) resting face
+  // could resolve to a crying frame.
+  console.log('\n── Expression family curation ──');
+  assert(frames.expressionFamily('crying') === 'sad', 'crying → sad family');
+  assert(frames.expressionFamily('sobbing') === 'sad', 'sobbing → sad family');
+  assert(frames.expressionFamily('crying-emote') === 'sad', 'crying-emote → sad family');
+  assert(frames.expressionFamily('traumatized') === 'sad', 'traumatized → sad family');
+  assert(frames.expressionFamily('blank-stare') === 'neutral', 'blank-stare → neutral family');
+  assert(frames.expressionFamily('expressionless') === 'neutral', 'expressionless → neutral family');
+  assert(frames.expressionFamily('deadpan') === 'neutral', 'deadpan → neutral family');
+  assert(frames.expressionFamily('tired-face') === 'neutral', 'tired-face → neutral family');
+  assert(frames.expressionFamily('flibberty-gibbet') === 'neutral',
+    'unknown name falls back to neutral');
+  assert(frames.computeSceneSignature(Object.assign({}, coarse, { expression: 'crying' })) !==
+    frames.computeSceneSignature(Object.assign({}, coarse, { expression: 'neutral' })),
+    'sad and neutral scenes produce different signatures');
+
+  // Fresh-state default: a neutral scene must resolve to a true-neutral
+  // frame (or the operator default) — never a sad frame.
+  const neutralIntent = { operatorId: 'tai', expressionIntent: 'neutral', framing: 'medium' };
+  const fCrying = mkFrame('f-crying', 'sig-crying', { expression: 'crying', camera: 'close' });
+  const fBlank = mkFrame('f-blank', 'sig-blank', { expression: 'blank-stare', camera: 'close' });
+  const fGrin = mkFrame('f-grin', 'sig-grin', { expression: 'grin', camera: 'close' });
+
+  await loadFixture([fCrying, fBlank]);
+  sel = frames.selectFrame(neutralIntent, {});
+  assert(sel.match === 'expression-family' && sel.frame && sel.frame.id === 'f-blank',
+    'neutral scene selects the true-neutral frame, not the crying frame');
+
+  await loadFixture([fGrin, fBlank]);
+  sel = frames.selectFrame(neutralIntent, {});
+  assert(sel.frame && sel.frame.id === 'f-blank',
+    'unmapped emotions stay out of the neutral family pool');
+
+  await loadFixture([fCrying]);
+  sel = frames.selectFrame(neutralIntent, {});
+  assert(!sel.frame || sel.frame.id !== 'f-crying',
+    'a crying frame never wins a neutral scene');
+
+  // Stale-bake guard: a crying frame whose baked signature predates the v2
+  // curation (family baked as 'neutral') must not exact-match either.
+  const staleCrying = mkFrame('f-stale-crying',
+    frames.computeSceneSignature({ operatorId: 'tai', expression: 'neutral', framing: 'close' }),
+    { expression: 'crying', camera: 'close' });
+  await loadFixture([staleCrying]);
+  sel = frames.selectFrame(
+    { operatorId: 'tai', expressionIntent: 'neutral', framing: 'close' }, {});
+  assert(!sel.frame || sel.frame.id !== 'f-stale-crying',
+    'stale baked signature cannot exact-match a neutral scene');
+  frames._reset('tai');
+
   // 4. Essence state assembly + confidence (spec §1, §2)
   console.log('\n── Essence state ──');
   essenceFixtures.mai = {

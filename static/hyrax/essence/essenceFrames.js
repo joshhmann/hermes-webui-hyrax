@@ -18,7 +18,11 @@
   var OPERATORS = ['tai', 'rei', 'nei', 'mai'];
 
   // §6 sister enums (canonical enum lives server-side; mirrored here for
-  // family mapping only — never used to invent expressions).
+  // family mapping only — never used to invent expressions). The neutral and
+  // sad clusters mirror the curated table (hyrax-assets/essence/
+  // expression-families.json v2) so the generated emotion sprites land in
+  // their true families — before this, every unmapped emotion fell back to
+  // 'neutral' and the resting face could resolve to a crying frame.
   var EXPRESSION_FAMILY = {
     'neutral': 'neutral',
     'calm': 'neutral',
@@ -35,6 +39,36 @@
     'thinking': 'focused',
     'scream-of-fury': 'intense',
     'yandere-smile': 'intense',
+    // Curated neutral cluster (calm/flat baselines).
+    'blank-stare': 'neutral',
+    'expressionless': 'neutral',
+    'deadpan': 'neutral',
+    'deadpan-face': 'neutral',
+    'tired-face': 'neutral',
+    'neutral-emote': 'neutral',
+    'indifferent': 'neutral',
+    'x-mouth': 'neutral',
+    'circle-eyes': 'neutral',
+    'bored': 'neutral',
+    'exhausted': 'neutral',
+    // Curated sad cluster.
+    'sad': 'sad',
+    'crying': 'sad',
+    'depressed': 'sad',
+    'despair': 'sad',
+    'sobbing': 'sad',
+    'nostalgic-sadness': 'sad',
+    'bittersweet': 'sad',
+    'emotional-vulnerability': 'sad',
+    'silent-tears': 'sad',
+    'aching-heart': 'sad',
+    'silent-scream-anguish': 'sad',
+    'downtrodden': 'sad',
+    'exhausted-sigh': 'sad',
+    'crying-emote': 'sad',
+    'sad-emote': 'sad',
+    'disappointed': 'sad',
+    'traumatized': 'sad',
   };
 
   var POSE_FAMILY = {
@@ -108,6 +142,25 @@
 
   function poseFamily(pose) {
     return POSE_FAMILY[_norm(pose)] || 'standing';
+  }
+
+  // Live signature for a registry frame. The registry's baked sceneSignature
+  // can predate family-map curation (e.g. the v2 sad-family split): trusting
+  // it would let a stale bake exact-match the wrong scene (a crying frame
+  // baked with family 'neutral' matching a neutral scene). The live value is
+  // authoritative; it equals the baked one whenever the map is unchanged.
+  function _frameSignature(frame) {
+    var st = frame.state || {};
+    return computeSceneSignature({
+      operatorId: frame.operatorId,
+      location: st.location,
+      wardrobe: st.wardrobe,
+      expression: st.expression,
+      pose: st.pose,
+      timeOfDay: st.timeOfDay,
+      framing: st.camera,
+      props: st.props,
+    });
   }
 
   function timeOfDayBand(input) {
@@ -311,10 +364,11 @@
       if (_approved(frames[i])) approved.push(frames[i]);
     }
 
-    // Tier 1 — exact signature match.
+    // Tier 1 — exact signature match (live frame signatures, see
+    // _frameSignature: baked ones can predate family-map curation).
     var tier = [];
     for (i = 0; i < approved.length; i++) {
-      if (approved[i].sceneSignature === signature) tier.push(approved[i]);
+      if (_frameSignature(approved[i]) === signature) tier.push(approved[i]);
     }
     var frame = _preferContinuity(tier, coarse, current);
     if (frame) {
@@ -338,12 +392,18 @@
       }
     }
 
-    // Tier 3 — same expression family.
+    // Tier 3 — same expression family. Only frames whose expression is KNOWN
+    // to the family map may join the pool: unmapped names fall back to
+    // 'neutral' in expressionFamily(), which would otherwise flood every
+    // neutral scene with the full uncurated emotion suite (QA: the resting
+    // face resolved to a crying frame).
     var family = expressionFamily(coarse.expression);
     tier = [];
     for (i = 0; i < approved.length; i++) {
       var est = approved[i].state || {};
-      if (expressionFamily(est.expression) === family) tier.push(approved[i]);
+      var estExpr = _norm(est.expression);
+      if (!EXPRESSION_FAMILY[estExpr]) continue;
+      if (expressionFamily(estExpr) === family) tier.push(approved[i]);
     }
     frame = _preferContinuity(tier, coarse, current);
     if (frame) {
