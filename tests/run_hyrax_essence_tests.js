@@ -929,6 +929,52 @@ async function main() {
     'failed frame never wins a tier again');
   stage.dispose();
 
+  // Thumbnails: the stage prefers assets.thumbnailUrl over imageUrl, and a
+  // thumb that errors retries the full-resolution original once instead of
+  // failing the frame; an original that also errors still fails closed.
+  console.log('\n── Stage: thumbnailUrl preferred, original as fallback ──');
+  const thumbContainer = makeEl('div');
+  frames._reset('tai');
+  registryError = false;
+  const fxThumb = mkFrame('fx-thumb', 'sig-thumb',
+    { location: 'ops', expression: 'focused', pose: 'working' });
+  fxThumb.assets.thumbnailUrl = '/img/thumbs/fx-thumb.webp';
+  registryFixture = { frames: [fxThumb] };
+  stage.init(thumbContainer, { operatorId: 'tai' });
+  await sleep(20);
+  const thumbRoot = thumbContainer._children[0];
+  applied = await stage.applyIntent({
+    operatorId: 'tai', expressionIntent: 'focused', poseIntent: 'working',
+    location: 'ops', framing: 'medium',
+  });
+  assert(applied.applied === true && applied.frame.id === 'fx-thumb',
+    'thumb-carrying frame applied');
+  const thumbImgs = byClass(thumbRoot, 'gestalt-vn-stage-frame');
+  const thumbImg = thumbImgs.filter(function (img) {
+    return img.src === '/img/thumbs/fx-thumb.webp';
+  })[0];
+  assert(!!thumbImg, 'stage src is the thumbnailUrl, not the imageUrl');
+  thumbImg._fire('error');
+  assert(thumbImg.src === '/img/fx-thumb.png',
+    'thumb load error retries with the full-resolution imageUrl');
+  assert(stage.getState().currentFrame && stage.getState().currentFrame.id === 'fx-thumb',
+    'frame survives the thumb miss');
+  thumbImg._fire('error');
+  // The init replay left a previous frame on the front buffer, so the
+  // double failure reverts to it — what matters is the broken frame leaves
+  // the stage and every future selection.
+  const afterDoubleFail = stage.getState().currentFrame;
+  assert(!afterDoubleFail || afterDoubleFail.id !== 'fx-thumb',
+    'original error after thumb error fails closed');
+  const selThumbFail = frames.selectFrame({
+    operatorId: 'tai', expressionIntent: 'focused', poseIntent: 'working',
+    location: 'ops', framing: 'medium',
+  }, {});
+  assert(!selThumbFail.frame || selThumbFail.frame.id !== 'fx-thumb',
+    'double-failed frame never wins a tier again');
+  stage.dispose();
+  frames._reset('tai');
+
   // First-frame failure (no previous frame): the loading placeholder comes
   // back instead of a blank stage, and failed generic ids are skipped.
   const reiContainer = makeEl('div');

@@ -281,7 +281,13 @@ The HQ panel is the fork's home surface, not just another panel:
   `__hqUnmount`) calls `refreshPresence()` only when `<main>` has
   `showing-hq` AND `document.visibilityState === 'visible'`. Refresh updates
   `data-room`/`data-slot`, activity classes, approval dots, the war-room
-  strip, and the time-of-day tint.
+  strip, and the time-of-day tint. The same fetch (initial render + every
+  refresh) feeds fresh `derivedState` presentation intents
+  (`poseIntent`/`sceneIntent` from essenced, Phase B) into
+  `GestaltVN.essence.state` — `feedEssencePresentation()` maps them to
+  `presentation.pose`/`presentation.location`, so the VN intent pipeline
+  picks up derived pose/scene changes through this polling path with no
+  new polling.
 - **Embodiment** — `chibi-active-<type>` classes drive CSS-only animations
   (tool-working bob, conversing speech dots, pulsing approval dot, resting
   "zZ"), all wrapped in `@media (prefers-reduced-motion: no-preference)`.

@@ -537,6 +537,62 @@ class TestFramesRegistryGet:
             crop = frame["assets"]["crop"]
             assert crop["w"] > 0 and crop["h"] > 0
 
+    def test_thumbnail_url_passes_through_when_valid(self, frames_drop_dir):
+        """A frames/file thumbs/ thumbnailUrl survives validation."""
+        _, registry = frames_drop_dir
+        self._registry_with_frame(registry, {
+            "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
+            "thumbnailUrl": "/api/hyrax/essence/frames/file/thumbs/mai-sprite_pose_0001.webp",
+        })
+        handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+        assert handler.status == 200
+        assets = handler.json_body()["frames"][0]["assets"]
+        assert assets["thumbnailUrl"] == \
+            "/api/hyrax/essence/frames/file/thumbs/mai-sprite_pose_0001.webp"
+
+    def test_thumbnail_url_malformed_dropped_not_fatal(self, frames_drop_dir):
+        """Fail closed, same bar as imageUrl: a malformed thumbnailUrl is
+        stripped from the payload (never passed to clients); the frame and
+        its imageUrl survive."""
+        _, registry = frames_drop_dir
+        for bad_url in (
+            "https://evil.example/thumbs/x.webp",
+            "/api/hyrax/essence/frames/file/thumbs/../../x.webp",
+            "/api/hyrax/essence/frames/file/",       # no filename
+            "thumbs/x.webp",                          # not an absolute path
+            "/etc/passwd",
+        ):
+            self._registry_with_frame(registry, {
+                "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
+                "thumbnailUrl": bad_url,
+            })
+            handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+            assert handler.status == 200
+            body = handler.json_body()
+            assert body["meta"]["total"] == 1
+            assets = body["frames"][0]["assets"]
+            assert "thumbnailUrl" not in assets, bad_url
+            assert assets["imageUrl"].endswith("/mai-sprite_pose_0001.png")
+
+    def test_real_registry_sprites_carry_thumbnails(self):
+        """The shipped registry's sprite frames all reference a thumbnail
+        that exists on disk under the frames dir (fail closed on drift)."""
+        import api.hyrax_essence as essence
+        handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+        assert handler.status == 200
+        sprites = [
+            f for f in handler.json_body()["frames"]
+            if f["assets"]["imageUrl"].startswith("/api/hyrax/essence/frames/file/")
+        ]
+        assert len(sprites) == 2680
+        for frame in sprites:
+            thumb = frame["assets"].get("thumbnailUrl")
+            assert thumb is not None, frame["id"]
+            prefix = "/api/hyrax/essence/frames/file/thumbs/"
+            assert thumb.startswith(prefix) and thumb.endswith(".webp"), thumb
+            target = essence.ESSENCE_FRAMES_DIR / "thumbs" / thumb[len(prefix):]
+            assert target.is_file() and target.stat().st_size > 0, thumb
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Test: POST /api/hyrax/essence/frames/register
@@ -1527,6 +1583,59 @@ class TestFrameFileServing:
         from types import SimpleNamespace
         assert he.handle_essence_get(handler, SimpleNamespace(path="/api/hyrax/essence/frames/file/test-frame.png", query="")) is True
         assert handler.status == 200
+
+    def _setup_thumbs(self, tmp_path, monkeypatch):
+        import api.hyrax_essence as he
+        drop = tmp_path / "frames"
+        thumbs = drop / "thumbs"
+        thumbs.mkdir(parents=True)
+        (drop / "test-frame.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+        (thumbs / "test-frame.webp").write_bytes(b"RIFF" + b"\x00" * 16 + b"WEBP")
+        monkeypatch.setattr(he, "ESSENCE_FRAMES_DIR", drop)
+        registry = {"version": 1, "frames": [
+            {"id": "frame.test.a", "assets": {
+                "imageUrl": "/api/hyrax/essence/frames/file/test-frame.png",
+                "thumbnailUrl": "/api/hyrax/essence/frames/file/thumbs/test-frame.webp",
+            }},
+        ]}
+        monkeypatch.setattr(he, "_load_registry_raw", lambda: registry)
+        return he
+
+    def test_registered_thumbnail_serves_webp(self, tmp_path, monkeypatch):
+        """A thumb referenced by some frame's thumbnailUrl is servable."""
+        he = self._setup_thumbs(tmp_path, monkeypatch)
+        handler = _Handler(path="/x")
+        assert he._serve_frame_file(handler, "thumbs/test-frame.webp") is True
+        assert handler.status == 200
+        assert ("Content-Type", "image/webp") in handler.sent_headers
+        assert handler.wfile.getvalue().startswith(b"RIFF")
+
+    def test_dispatch_routes_thumbs_subpath(self, tmp_path, monkeypatch):
+        he = self._setup_thumbs(tmp_path, monkeypatch)
+        from types import SimpleNamespace
+        path = "/api/hyrax/essence/frames/file/thumbs/test-frame.webp"
+        handler = _Handler(path=path)
+        assert he.handle_essence_get(handler, SimpleNamespace(path=path, query="")) is True
+        assert handler.status == 200
+
+    def test_unregistered_thumbnail_404(self, tmp_path, monkeypatch):
+        """A thumb no frame references is not servable — the registry stays
+        the allowlist inside thumbs/ too."""
+        he = self._setup_thumbs(tmp_path, monkeypatch)
+        handler = _Handler(path="/x")
+        assert he._serve_frame_file(handler, "thumbs/other.webp") is True
+        assert handler.status == 404
+
+    def test_thumbnail_subpath_traversal_404(self, tmp_path, monkeypatch):
+        he = self._setup_thumbs(tmp_path, monkeypatch)
+        from types import SimpleNamespace
+        for bad in ("thumbs/../../x", "thumbs/../frames/test-frame.png", "thumbs/",
+                    "thumbs//test-frame.webp", "assets/test-frame.png",
+                    "thumbs/nope.txt", "thumbs/x.png.exe"):
+            path = "/api/hyrax/essence/frames/file/" + bad
+            handler = _Handler(path=path)
+            assert he.handle_essence_get(handler, SimpleNamespace(path=path, query="")) is True
+            assert handler.status == 404, bad
 
     def test_register_stores_servable_url(self, tmp_path, monkeypatch):
         import api.hyrax_essence as he

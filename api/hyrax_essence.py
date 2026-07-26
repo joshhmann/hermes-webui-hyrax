@@ -98,6 +98,12 @@ _FRAME_IMAGE_NAME_RE = _re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{0,126}\.(png|jpg|jpeg|webp)$", _re.IGNORECASE
 )
 _FRAME_SOURCES = frozenset({"generated", "authored", "cached", "fallback"})
+# Servable frames/file asset URL form (bare name or thumbs/ subpath) — used
+# to fail closed on malformed thumbnailUrl values in the registry reader.
+_FRAME_FILE_URL_RE = _re.compile(
+    r"^/api/hyrax/essence/frames/file/(?:thumbs/)?[A-Za-z0-9._-]+\.(?:png|jpg|jpeg|webp)$",
+    _re.IGNORECASE,
+)
 _FRAME_STATE_KEYS = frozenset({
     "expression", "pose", "action", "wardrobe", "location", "lighting",
     "timeOfDay", "props", "camera",
@@ -589,8 +595,13 @@ def _sanitize_registry_frame(raw) -> dict | None:
         frame["assets"]["size"] = size
     for optional in ("thumbnailUrl", "maskUrl", "depthUrl"):
         value = assets.get(optional)
-        if isinstance(value, str) and value:
-            frame["assets"][optional] = value[:MAX_IMAGE_URL_LENGTH]
+        if not isinstance(value, str) or not value:
+            continue
+        if optional == "thumbnailUrl" and not _FRAME_FILE_URL_RE.match(value):
+            # Fail closed, same bar as imageUrl: a malformed thumb URL is
+            # dropped from the payload, never passed to clients.
+            continue
+        frame["assets"][optional] = value[:MAX_IMAGE_URL_LENGTH]
     # Sprite calibration (scripts/calibrate_frame_crops.py): content bbox +
     # ready display params for the VN stage. Fail closed per field — unknown
     # types are dropped, never fatal.
@@ -1207,8 +1218,11 @@ def _serve_presence(handler) -> bool:
 
 
 # ── GET /api/hyrax/essence/frames/file/<filename> ─────────────────────────────
+# <filename> is a bare basename or thumbs/<name> (compressed WebP variants
+# built by scripts/build_frame_thumbnails.py); both are registry-allowlisted.
 
 _FRAME_FILENAME_RE = _re.compile(r"^[A-Za-z0-9._-]+\.(?:png|jpg|jpeg|webp)$")
+_FRAME_THUMBS_SUBDIR = "thumbs/"
 _FRAME_CONTENT_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -1219,11 +1233,30 @@ MAX_FRAME_FILE_BYTES = 8 * 1024 * 1024
 _FRAME_CHUNK = 64 * 1024
 
 
+def _frame_file_path_ok(filename: str) -> bool:
+    """True for a bare frame filename or one inside the thumbs/ subdir.
+
+    Thumbnails live in frames/thumbs/<name>.webp; everything else with a
+    path separator (including ``thumbs/../../x`` traversal) is rejected
+    here, before any filesystem touch.
+    """
+    name = filename
+    if name.startswith(_FRAME_THUMBS_SUBDIR):
+        name = name[len(_FRAME_THUMBS_SUBDIR):]
+    elif "/" in name:
+        return False
+    if not name or "/" in name:
+        return False
+    return bool(_FRAME_FILENAME_RE.match(name))
+
+
 def _frame_file_registered(filename: str) -> bool:
     """True only when a registered frame references this exact filename.
 
     The registry is the allowlist: an arbitrary file dropped into the frames
-    directory is NOT servable until registered.
+    directory is NOT servable until registered. Thumbnails are gated the same
+    way — a thumbs/ file is served only when some frame's thumbnailUrl
+    references it.
     """
     registry = _load_registry_raw()
     if registry is None:
@@ -1236,16 +1269,21 @@ def _frame_file_registered(filename: str) -> bool:
         assets = entry.get("assets")
         if not isinstance(assets, dict):
             continue
-        url = assets.get("imageUrl")
-        if isinstance(url, str) and (url.endswith(suffix_new) or url == suffix_old or url.endswith("/" + suffix_old)):
-            return True
+        for key in ("imageUrl", "thumbnailUrl"):
+            url = assets.get(key)
+            if isinstance(url, str) and (url.endswith(suffix_new) or url == suffix_old or url.endswith("/" + suffix_old)):
+                return True
     return False
 
 
 def _serve_frame_file(handler, filename: str) -> bool:
     """Stream a registered frame image with the same hardening as the VN
-    asset allowlist (symlink rejection, dev/ino identity check, size cap)."""
-    if not _FRAME_FILENAME_RE.match(filename):
+    asset allowlist (symlink rejection, dev/ino identity check, size cap).
+
+    ``filename`` is a bare basename or a thumbs/<name> subpath — validated
+    by _frame_file_path_ok before any path is built, and gated on registry
+    membership by _frame_file_registered."""
+    if not _frame_file_path_ok(filename):
         _j(handler, {"error": "not found"}, status=404)
         return True
     if not _frame_file_registered(filename):
@@ -1337,7 +1375,7 @@ def handle_essence_get(handler, parsed) -> bool:
 
     if path.startswith(_FRAME_FILE_PREFIX):
         filename = path[len(_FRAME_FILE_PREFIX):]
-        if filename and "/" not in filename:
+        if _frame_file_path_ok(filename):
             return _serve_frame_file(handler, filename)
         _j(handler, {"error": "not found"}, status=404)
         return True

@@ -526,3 +526,124 @@ mirroring plugin lock conventions) is acceptable but version-sensitive —
 every such coupling is pinned by a test, never by assumption. If a feature
 truly needs a Hermes core change, it goes upstream as a PR or the design
 changes — it does not ship as a local patch.
+
+---
+
+## 18. Phase C+ — Discord delivery lane (2026-07-26)
+
+Proactive outreach (§13) delivers over two lanes behind one policy gate:
+
+- **WebUI session** (base): operator-initiated message, marked as such.
+- **Discord DM** (Phase C+): via the operator's own profile Discord gateway
+  to the user's Discord ID. DM-first; shared-server posting is a later,
+  separately-gated step requiring an OPSEC rule per operator (the sisters'
+  SOUL.md files discuss infra and each other openly — dagoth-ur's §The
+  Sixth House keeps its secrets is the template).
+
+One want = one event regardless of lanes: quiet hours, daily caps, and
+cooldowns apply per operator across both. The §13 trigger chain is
+unchanged; routing happens after the policy gate.
+
+Prerequisites before the Discord lane ships: audit each sister's Discord
+gateway viability (dagoth's is live; rei's logs show 403 Missing Access —
+scope repair needed; tai/nei/mai unverified), and pin the user's Discord ID
+in each operator's outreach config (same allowlist entry as dagoth's admin
+list).
+
+---
+
+## 19. Phase C — Proactive outreach: spec & plan (2026-07-26)
+
+Per-user decisions baked in: Discord delivery is a first-class lane (§18);
+outreach is **enable/disable per profile**; sisters' Discord gateways are
+already viable (user messaging them daily — no gateway audit needed).
+
+### 19.1 Pipeline (single chokepoint, fully journaled)
+
+```
+ticker (essenced, 30s)
+  → want evaluation (§12 templates + accumulators)
+  → policy gate (19.3)                          ── deny → journal, stop
+  → compose: system note {derived state, firing want, constraints}
+  → turn on operator's own session (her model writes the message)
+  → deliver: WebUI session + Discord DM (per-lane enabled flags)
+  → journal the full trigger chain (want, gate verdicts, turn id, lanes)
+```
+
+### 19.2 Wants (deterministic core)
+
+Three templates (§12), evaluated on the ticker from derived state + kanban +
+session activity:
+
+| Want | Fires when | Reward on satisfaction |
+|---|---|---|
+| social | no user interaction > S_h hours (default 6h) AND sociability×weight clears shyness bar | moodlet "caught up" (+warmth 4h) |
+| purpose | claimed task completed recently (moodlet still warm) OR blocked task aging > B_h hours | share win / ask for help |
+| stimulation | same activity type > N hours straight (default 8h) | propose something different |
+
+Accumulators per operator per want: build on matching conditions, decay
+when conditions clear, fire once per cooldown window.
+
+### 19.3 Policy gate (all must pass; every verdict journaled)
+
+1. `outreach.enabled[operator]` — per-profile master switch (default: off
+   until user enables each operator deliberately).
+2. Lane flags: `outreach.lanes.webui` / `outreach.lanes.discord` per
+   operator (at least one required).
+3. Quiet hours (default 23:00–08:00 local, per-operator override).
+4. Daily cap (default 2 proactive messages/operator/day).
+5. Cooldown since last proactive message (default 3h) AND since last
+   ignored proactive message (default 6h — no double-texting).
+6. Shyness bar per operator (social wants only): tai 0.5, rei 0.75,
+   nei 0.6, mai 0.35.
+7. No active user session with that operator in the last 30 min (don't
+   interrupt a live conversation).
+
+Config lives in essenced `rules.json` under `outreach:` (one control plane;
+a per-profile file is the future operator-self-ownership hook, not v1).
+
+### 19.4 Message generation
+
+essenced opens a turn on the operator's own session with a system note
+containing: current derived state (mood/condition/activity), the firing
+want + accumulator values, constraints ("one message, in your voice, no
+infra talk, no tool use"). The profile's model writes the content —
+essenced never writes message text. Provenance: the turn is marked
+`operator-initiated` with the want id.
+
+Mechanism (to verify in build): prefer the WebUI session turn path (tools
+available, session continuity with VN/standard chat); Discord delivery via
+the operator's own gateway outbound messaging (the same path the user
+already uses daily). If the WebUI turn path can't send outbound Discord,
+the daemon composes a Discord DM through the profile gateway's messaging
+tool in the SAME turn context (still operator-voiced, still journaled).
+
+### 19.5 Delivery & provenance
+
+- WebUI: message lands in the operator's session, visible in VN + standard
+  chat, flagged operator-initiated in metadata.
+- Discord: DM to the user's Discord ID (from the same allowlist dagoth
+  uses). No server channels (§18).
+- Failure of one lane never blocks the other; both outcomes journaled.
+
+### 19.6 Phases
+
+- **C1** — wants engine + policy gate + journal, **dry-run mode** (logs
+  what WOULD fire, sends nothing). Acceptance: seeded social-want scenario
+  produces a correct fire/deny journal chain; caps/quiet-hours verified.
+- **C2** — WebUI lane live (one operator, enabled flag on). Acceptance:
+  one real in-character operator-initiated message in the VN session with
+  full journal chain.
+- **C3** — Discord lane live (same pilot operator). Acceptance: DM
+  received, journaled, one-want-one-event across lanes.
+- **C4** — enable remaining operators one by one after pilot proves out.
+
+### 19.7 Hard rules
+
+- essenced never authors message content (the operator's model does).
+- No firing without the full gate passing; every evaluation (fire OR deny)
+  is journaled with reasons.
+- Per-profile enable/disable is honored live (no daemon restart).
+- Quiet hours/caps are config, not code.
+- Nothing fires while the daemon is in dry-run (C1) — enforced by a single
+  `outreach.dry_run` boolean, default true.
