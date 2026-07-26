@@ -27,7 +27,21 @@ _logger = _logging.getLogger(__name__)
 # ── DB paths ──
 # Derived from HERMES_HOME (default ~/.hermes) — never hardcode a
 # machine-specific absolute path in a tracked file.
-KANBAN_DB = Path(os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes")) / "kanban.db"
+def _fleet_kanban_db() -> Path:
+    """kanban.db is a FLEET-level store at the fleet root.
+
+    api/config's init_profile_state() rewrites HERMES_HOME to the active
+    profile home (.../profiles/<name>) before this module is imported, so a
+    naive HERMES_HOME/kanban.db resolves to a nonexistent per-profile path
+    and every kanban read fails closed to zeros (silent in production).
+    """
+    home = Path(os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes"))
+    if home.parent.name == "profiles":
+        home = home.parent.parent
+    return home / "kanban.db"
+
+
+KANBAN_DB = _fleet_kanban_db()
 
 # ── Asset serving ─────────────────────────────────────────────────────────
 ASSET_BASE = Path(__file__).resolve().parent.parent / "hyrax-assets"
