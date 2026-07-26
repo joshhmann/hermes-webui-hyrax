@@ -663,7 +663,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0001.png",
         "sha256": "24c3f4182c203973bea5006285827214417bc59abce8304c52cee27658c6e3fd",
-        "size": 6930784
+        "size": 6930784,
+        "crop": {
+          "x": 93,
+          "y": 187,
+          "w": 1419,
+          "h": 3520
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.4984,
+          "objectPositionY": 0.0693
+        }
       },
       "quality": {
         "approved": true,
@@ -686,7 +701,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0002.png",
         "sha256": "cba64368a8a80f0c641bc27e48e3b967fc3ab379475aec9c93554e24294c715d",
-        "size": 6258166
+        "size": 6258166,
+        "crop": {
+          "x": 0,
+          "y": 823,
+          "w": 1610,
+          "h": 1780
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.8,
+          "focusX": 0.5,
+          "objectPositionY": 0.29
+        }
       },
       "quality": {
         "approved": true,
@@ -709,7 +739,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0003.png",
         "sha256": "2b092cd2462566b37c34575d3065b64380232c4e6fc159f4544165946c42d0bc",
-        "size": 6688898
+        "size": 6688898,
+        "crop": {
+          "x": 174,
+          "y": 484,
+          "w": 1341,
+          "h": 3331
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0417,
+          "focusX": 0.5245,
+          "objectPositionY": 0.2233
+        }
       },
       "quality": {
         "approved": true,
@@ -732,7 +777,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0004.png",
         "sha256": "1b67c547099bf7e7af49fd95412f6c6ae9e8dbc0bd45dc11bd4bd1b9348294bb",
-        "size": 6644768
+        "size": 6644768,
+        "crop": {
+          "x": 195,
+          "y": 494,
+          "w": 1271,
+          "h": 3346
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.037,
+          "focusX": 0.5158,
+          "objectPositionY": 0.2294
+        }
       },
       "quality": {
         "approved": true,
@@ -755,7 +815,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/tai-sprite_pose_0005.png",
         "sha256": "a49a608ae95fcbd2b99cfe4612eee356c08afb80d74ea79ad49f7fa92bf8e25e",
-        "size": 6987005
+        "size": 6987005,
+        "crop": {
+          "x": 123,
+          "y": 379,
+          "w": 1347,
+          "h": 3424
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0134,
+          "focusX": 0.4947,
+          "objectPositionY": 0.1723
+        }
       },
       "quality": {
         "approved": true,
@@ -778,7 +853,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0001.png",
         "sha256": "79f06409fa656d934f82bdb6ae888d1f30ec569ff00ce95d743c414c4f892f35",
-        "size": 6339602
+        "size": 6339602,
+        "crop": {
+          "x": 3,
+          "y": 205,
+          "w": 1507,
+          "h": 3415
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0161,
+          "focusX": 0.4699,
+          "objectPositionY": 0.0783
+        }
       },
       "quality": {
         "approved": true,
@@ -801,7 +891,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0002.png",
         "sha256": "04bbdccdfd3b09a2a63d528d0b0f06f0cbc7bafac769b453935b926d769947b3",
-        "size": 5633096
+        "size": 5633096,
+        "crop": {
+          "x": 102,
+          "y": 674,
+          "w": 1470,
+          "h": 1585
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.8,
+          "focusX": 0.5199,
+          "objectPositionY": 0.2353
+        }
       },
       "quality": {
         "approved": true,
@@ -824,7 +929,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0003.png",
         "sha256": "43954f83fcd97ab64aa7cce7efa3b21b0ef9a62080d4fa52ba33dee8cba9b0c7",
-        "size": 6341683
+        "size": 6341683,
+        "crop": {
+          "x": 156,
+          "y": 118,
+          "w": 1362,
+          "h": 3645
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.5199,
+          "objectPositionY": 0.0315
+        }
       },
       "quality": {
         "approved": true,
@@ -847,7 +967,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0004.png",
         "sha256": "db6bc64c9b4272b386a60c710e3dfdd56e446823dc7c8f22d7dc89bb45e8e406",
-        "size": 6244411
+        "size": 6244411,
+        "crop": {
+          "x": 135,
+          "y": 139,
+          "w": 1221,
+          "h": 3568
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.463,
+          "objectPositionY": 0.043
+        }
       },
       "quality": {
         "approved": true,
@@ -870,7 +1005,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/rei-sprite_pose_0005.png",
         "sha256": "dcc2a640daf47fb58e32a3910f750cafd42e65825c66852d46cb199eb2897487",
-        "size": 6432461
+        "size": 6432461,
+        "crop": {
+          "x": 97,
+          "y": 85,
+          "w": 1417,
+          "h": 3706
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.5003,
+          "objectPositionY": 0.0135
+        }
       },
       "quality": {
         "approved": true,
@@ -893,7 +1043,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0001.png",
         "sha256": "d8ad1e78d57c7e68e9f83baa0d71d15f0d04cff9e37474f23358ed07d6a8db1d",
-        "size": 5613281
+        "size": 5613281,
+        "crop": {
+          "x": 87,
+          "y": 111,
+          "w": 1266,
+          "h": 3197
+        },
+        "sourceSize": {
+          "w": 1440,
+          "h": 3434
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.5,
+          "objectPositionY": 0.0349
+        }
       },
       "quality": {
         "approved": true,
@@ -916,7 +1081,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0002.png",
         "sha256": "628df69266d1e91e310c2c80c520f415821a6a91ec42183a1686c3eb1a2410ac",
-        "size": 6353483
+        "size": 6353483,
+        "crop": {
+          "x": 16,
+          "y": 592,
+          "w": 1424,
+          "h": 2842
+        },
+        "sourceSize": {
+          "w": 1440,
+          "h": 3434
+        },
+        "display": {
+          "scale": 1.092,
+          "focusX": 0.5056,
+          "objectPositionY": 0.3038
+        }
       },
       "quality": {
         "approved": true,
@@ -939,7 +1119,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0003.png",
         "sha256": "b1f17225cac22b6ae460c63373426f3d99e258a6f09705c1afd84573efb9a3ea",
-        "size": 5504694
+        "size": 5504694,
+        "crop": {
+          "x": 4,
+          "y": 166,
+          "w": 1434,
+          "h": 3268
+        },
+        "sourceSize": {
+          "w": 1440,
+          "h": 3434
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.5007,
+          "objectPositionY": 0.0685
+        }
       },
       "quality": {
         "approved": true,
@@ -962,7 +1157,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0004.png",
         "sha256": "febfbed174b9f547a8a3218654f4d123d63470ba3e6b444a7eb79b2766cae4f1",
-        "size": 5369915
+        "size": 5369915,
+        "crop": {
+          "x": 254,
+          "y": 173,
+          "w": 958,
+          "h": 3106
+        },
+        "sourceSize": {
+          "w": 1440,
+          "h": 3434
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.509,
+          "objectPositionY": 0.0728
+        }
       },
       "quality": {
         "approved": true,
@@ -985,7 +1195,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/nei-sprite_pose_0005.png",
         "sha256": "0f5023f2dbc529b9b00da70691a5faa4546adcffea97d87697b316676f25cabb",
-        "size": 5814753
+        "size": 5814753,
+        "crop": {
+          "x": 62,
+          "y": 133,
+          "w": 1244,
+          "h": 3301
+        },
+        "sourceSize": {
+          "w": 1440,
+          "h": 3434
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.475,
+          "objectPositionY": 0.0483
+        }
       },
       "quality": {
         "approved": true,
@@ -1008,7 +1233,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
         "sha256": "55758e0434d6f03d5bc31111a035d90a84d145552f48da6190b81e0362e12387",
-        "size": 6713519
+        "size": 6713519,
+        "crop": {
+          "x": 103,
+          "y": 115,
+          "w": 1407,
+          "h": 3599
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.5009,
+          "objectPositionY": 0.0299
+        }
       },
       "quality": {
         "approved": true,
@@ -1031,7 +1271,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0002.png",
         "sha256": "866513431245a614088a7e2d8bffd13c28932b957e242d7b0412dd0d8058c2b4",
-        "size": 6007445
+        "size": 6007445,
+        "crop": {
+          "x": 73,
+          "y": 627,
+          "w": 1537,
+          "h": 1658
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.8,
+          "focusX": 0.5227,
+          "objectPositionY": 0.218
+        }
       },
       "quality": {
         "approved": true,
@@ -1054,7 +1309,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0003.png",
         "sha256": "df01374270b8a9d3afbc1ba60fae5d69f1b8890d512fe06600ea750f6e6a5870",
-        "size": 6690411
+        "size": 6690411,
+        "crop": {
+          "x": 146,
+          "y": 119,
+          "w": 1364,
+          "h": 3628
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.5143,
+          "objectPositionY": 0.0321
+        }
       },
       "quality": {
         "approved": true,
@@ -1077,7 +1347,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0004.png",
         "sha256": "b0c2d910538404f0861a11c7cd00f60c7cab567a8348b60eebc439ce96aae8a4",
-        "size": 6653887
+        "size": 6653887,
+        "crop": {
+          "x": 140,
+          "y": 135,
+          "w": 1225,
+          "h": 3595
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.4674,
+          "objectPositionY": 0.0408
+        }
       },
       "quality": {
         "approved": true,
@@ -1100,7 +1385,22 @@
       "assets": {
         "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0005.png",
         "sha256": "8b33d5ded65e621778c08fae728dcad1071a49d92f363bac1385fddf9fd587e7",
-        "size": 6857033
+        "size": 6857033,
+        "crop": {
+          "x": 94,
+          "y": 86,
+          "w": 1378,
+          "h": 3675
+        },
+        "sourceSize": {
+          "w": 1610,
+          "h": 3840
+        },
+        "display": {
+          "scale": 1.0,
+          "focusX": 0.4863,
+          "objectPositionY": 0.014
+        }
       },
       "quality": {
         "approved": true,
