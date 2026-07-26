@@ -249,7 +249,53 @@ if (typeof MAIN_VIEW_PANELS !== 'undefined') {
 
 ---
 
-## 6. Summary of Key Selectors
+## 6. Living HQ (hq.js / bootstrap.js behavior layer)
+
+The HQ panel is the fork's home surface, not just another panel:
+
+- **HQ-first landing** — `bootstrap.js` runs `maybeLandOnHq()` after the app
+  settles (window `load`, or a deferred `setTimeout`). If the URL carries no
+  explicit intent (`?session=`, `/session/<id>`, `?panel=`, `?q=`, `#session=`)
+  and `localStorage['hyrax-home'] !== 'chat'`, it calls `switchPanel('hq')`.
+  `?panel=hq` opens HQ regardless of the stored pref. Explicit intents are
+  never hijacked. A `.hq-home-toggle` text button in the HQ header flips the
+  pref between `hq` and `chat`.
+- **War-room strip** — a full-width `button.hq-warroom` under the HQ header
+  sums kanban `running`/`blocked` across the sisters (from
+  `GET /api/hyrax/presence`) and renders one text chip per sister with
+  non-zero counts or a current task. When presence carries the sister's
+  `currentTask`, the chip shows the task title truncated to 28 chars
+  ("Tai · Refactor gateway retry backo…", full title + counts in the chip
+  `title` tooltip); otherwise it shows bare counts ("Mai 0 run · 2 blk").
+  Zero totals read "War room — all clear". Clicking it calls
+  `switchPanel('kanban')` (no per-assignee filtering).
+- **Activity-driven placement** — chibis are positioned by a `data-room`
+  attribute (CSS attribute selectors per room id) instead of per-sister
+  `left/top` rules. The pure `roomFor(sister, presence)` helper implements
+  `ACTIVITY_ROOM`: conversing→common, waiting-approval→director,
+  resting→coffee, idle→common, tool-working/background-working/offline/
+  unavailable→the sister's own room (label→id lookup from `HQ_SISTERS.room`).
+  Co-located sisters get `data-slot` 0–3 offsets so they don't overlap.
+  `left/top/margin` transitions animate room changes.
+- **Presence refresh** — a 30s `setInterval` (armed on mount, cleared in
+  `__hqUnmount`) calls `refreshPresence()` only when `<main>` has
+  `showing-hq` AND `document.visibilityState === 'visible'`. Refresh updates
+  `data-room`/`data-slot`, activity classes, approval dots, the war-room
+  strip, and the time-of-day tint.
+- **Embodiment** — `chibi-active-<type>` classes drive CSS-only animations
+  (tool-working bob, conversing speech dots, pulsing approval dot, resting
+  "zZ"), all wrapped in `@media (prefers-reduced-motion: no-preference)`.
+  The `.iso-floor` gets `hq-time-dawn/day/dusk/night` from the local hour on
+  each render/refresh; CSS applies a subtle `::after` tint.
+- **Two conversation affordances** — chibi click on the map dispatches
+  `hyrax:open-conversation` (VN stage, unchanged); operator sidebar card
+  click opens STANDARD chat: `POST /api/hyrax/vn/conversations`
+  `{profile_id, fresh:false}` → `loadSession(session_id)` →
+  `switchPanel('chat')`. Cards disable while the request is in flight.
+
+---
+
+## 7. Summary of Key Selectors
 
 | Purpose | Selector | File (line) |
 |---------|----------|-------------|

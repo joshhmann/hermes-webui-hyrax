@@ -492,6 +492,28 @@ def _validate_frame_state_strict(raw):
     return state, None
 
 
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_positive_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _sanitize_sprite_crop(raw) -> dict | None:
+    """Validate assets.crop {x, y, w, h} (content bbox, source pixels)."""
+    if not isinstance(raw, dict):
+        return None
+    x, y, w, h = raw.get("x"), raw.get("y"), raw.get("w"), raw.get("h")
+    if (
+        isinstance(x, int) and not isinstance(x, bool) and x >= 0
+        and isinstance(y, int) and not isinstance(y, bool) and y >= 0
+        and _is_positive_int(w) and _is_positive_int(h)
+    ):
+        return {"x": x, "y": y, "w": w, "h": h}
+    return None
+
+
 def _sanitize_registry_frame(raw) -> dict | None:
     """Validate one registry frame for the GET reader. None → drop entry."""
     if not isinstance(raw, dict):
@@ -550,6 +572,34 @@ def _sanitize_registry_frame(raw) -> dict | None:
         value = assets.get(optional)
         if isinstance(value, str) and value:
             frame["assets"][optional] = value[:MAX_IMAGE_URL_LENGTH]
+    # Sprite calibration (scripts/calibrate_frame_crops.py): content bbox +
+    # ready display params for the VN stage. Fail closed per field — unknown
+    # types are dropped, never fatal.
+    crop = _sanitize_sprite_crop(assets.get("crop"))
+    if crop is not None:
+        frame["assets"]["crop"] = crop
+    source_size = assets.get("sourceSize")
+    if (
+        isinstance(source_size, dict)
+        and _is_positive_int(source_size.get("w"))
+        and _is_positive_int(source_size.get("h"))
+    ):
+        frame["assets"]["sourceSize"] = {"w": source_size["w"], "h": source_size["h"]}
+    display = assets.get("display")
+    if isinstance(display, dict):
+        scale = display.get("scale")
+        focus_x = display.get("focusX")
+        obj_pos_y = display.get("objectPositionY")
+        if (
+            _is_number(scale) and 1.0 <= scale <= 4.0
+            and _is_number(focus_x) and 0.0 <= focus_x <= 1.0
+            and _is_number(obj_pos_y) and 0.0 <= obj_pos_y <= 1.0
+        ):
+            frame["assets"]["display"] = {
+                "scale": scale,
+                "focusX": focus_x,
+                "objectPositionY": obj_pos_y,
+            }
     registered_at = raw.get("registeredAt")
     if isinstance(registered_at, str) and registered_at:
         frame["registeredAt"] = registered_at[:64]
@@ -753,6 +803,21 @@ _PRESENCE_KANBAN_SQL = (
     "FROM tasks WHERE assignee IS NOT NULL AND assignee != '' GROUP BY assignee"
 )
 
+# Most relevant current task per assignee: a running task (active claim or
+# in-flight run first, then most recent activity), else the most recently
+# filed ready work order — freshly filed work must not be invisible while it
+# waits for a worker claim. Ranking happens in Python so the SQL stays a
+# plain read over the hermes kanban tasks schema; any missing table/column
+# makes _query fail closed to [] (→ currentTask null, never 500).
+_PRESENCE_CURRENT_TASK_SQL = (
+    "SELECT assignee AS name, id AS task_id, title, status, "
+    "claim_lock, current_run_id, "
+    "COALESCE(last_heartbeat_at, started_at, created_at) AS activity_ts "
+    "FROM tasks "
+    "WHERE assignee IS NOT NULL AND assignee != '' "
+    "AND status IN ('running', 'ready')"
+)
+
 _ACTIVITY_INTERRUPTIBILITY = {
     "idle": "free",
     "conversing": "soft-busy",
@@ -780,6 +845,45 @@ def _presence_kanban_counts() -> dict:
             "blocked": _bounded_count(row.get("blocked_count")),
         }
     return counts
+
+
+def _presence_current_tasks() -> dict:
+    """Most relevant current kanban task per assignee → {id, title}.
+
+    Deterministic ranking tiers: a running task with an active claim lock
+    or in-flight run outranks a plain running task, which outranks a ready
+    (filed, not yet claimed) work order; ties break on most recent activity
+    (heartbeat, else start, else creation), then on task id. Ready tasks
+    are included so work an operator just filed is visible before any
+    worker claims it. Fail closed: any missing table/column makes _query
+    return [] → empty dict → currentTask null on every item. Never raises.
+    """
+    best: dict = {}
+    for row in _query(_KANBAN_DB, _PRESENCE_CURRENT_TASK_SQL):
+        name = row.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        title = _bounded_str(row.get("title"), MAX_ESSENCE_STRING)
+        task_id = row.get("task_id")
+        if title is None or task_id is None:
+            continue
+        if row.get("claim_lock") or row.get("current_run_id") is not None:
+            tier = 2
+        elif row.get("status") == "running":
+            tier = 1
+        else:
+            tier = 0
+        try:
+            activity_ts = float(row.get("activity_ts") or 0)
+        except (TypeError, ValueError):
+            activity_ts = 0.0
+        task_id = str(task_id)[:64]
+        rank = (tier, activity_ts, task_id)
+        key = name.strip().lower()
+        current = best.get(key)
+        if current is None or rank > current[0]:
+            best[key] = (rank, {"id": task_id, "title": title})
+    return {key: task for key, (_, task) in best.items()}
 
 
 def _pending_approval_count(session_id: str) -> int:
@@ -866,7 +970,8 @@ def _presence_expression(session) -> dict:
     return {"current": NEUTRAL_EXPRESSION, "intensity": 0.0}
 
 
-def _presence_item(profile: str, sessions: list, kanban: dict) -> dict:
+def _presence_item(profile: str, sessions: list, kanban: dict,
+                   current_tasks: dict | None = None) -> dict:
     meta = _VN_PROFILES[profile]
     candidate = _select_newest_vn_session(sessions, profile)
     sid = ""
@@ -921,6 +1026,7 @@ def _presence_item(profile: str, sessions: list, kanban: dict) -> dict:
         "expression": expression,
         "pendingApprovals": pending,
         "kanban": dict(kanban.get(profile) or {"running": 0, "blocked": 0}),
+        "currentTask": (current_tasks or {}).get(profile),
     }
     if essence_updated_at is not None:
         item["essenceStateUpdatedAt"] = essence_updated_at
@@ -936,6 +1042,7 @@ def _presence_fallback_item(profile: str) -> dict:
         "expression": {"current": NEUTRAL_EXPRESSION, "intensity": 0.0},
         "pendingApprovals": 0,
         "kanban": {"running": 0, "blocked": 0},
+        "currentTask": None,
     }
 
 
@@ -946,10 +1053,11 @@ def _serve_presence(handler) -> bool:
     except Exception:
         sessions = []
     kanban = _presence_kanban_counts()
+    current_tasks = _presence_current_tasks()
     items = []
     for profile in _VN_PROFILES:
         try:
-            items.append(_presence_item(profile, sessions, kanban))
+            items.append(_presence_item(profile, sessions, kanban, current_tasks))
         except Exception:
             _logger.warning("presence aggregation failed for one sister", exc_info=True)
             items.append(_presence_fallback_item(profile))

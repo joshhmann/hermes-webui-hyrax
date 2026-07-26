@@ -372,6 +372,83 @@ class TestFramesRegistryGet:
         assert body["meta"]["dropped"] == 3
         assert body["frames"][0]["id"] == "frame.mai.portrait.smile"
 
+    def _registry_with_frame(self, registry, assets):
+        registry.write_text(json.dumps({
+            "version": 1,
+            "frames": [
+                {"id": "frame.mai.sprite.neutral.0001", "operatorId": "mai",
+                 "source": "authored", "sceneSignature": "abc123",
+                 "state": {"expression": "neutral"},
+                 "assets": assets,
+                 "quality": {"approved": True}},
+            ],
+        }))
+
+    def test_sprite_calibration_passes_through(self, frames_drop_dir):
+        """assets.crop/sourceSize/display survive validation for the stage."""
+        _, registry = frames_drop_dir
+        self._registry_with_frame(registry, {
+            "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
+            "crop": {"x": 103, "y": 115, "w": 1407, "h": 3599},
+            "sourceSize": {"w": 1610, "h": 3840},
+            "display": {"scale": 1.25, "focusX": 0.5009, "objectPositionY": 0.0299},
+        })
+        handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+        assert handler.status == 200
+        assets = handler.json_body()["frames"][0]["assets"]
+        assert assets["crop"] == {"x": 103, "y": 115, "w": 1407, "h": 3599}
+        assert assets["sourceSize"] == {"w": 1610, "h": 3840}
+        assert assets["display"] == {
+            "scale": 1.25, "focusX": 0.5009, "objectPositionY": 0.0299}
+
+    def test_sprite_calibration_bad_types_dropped_not_fatal(self, frames_drop_dir):
+        """Fail closed: malformed calibration fields are stripped, the frame
+        itself survives (stage falls back to CSS defaults), never a 500."""
+        _, registry = frames_drop_dir
+        self._registry_with_frame(registry, {
+            "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
+            "crop": {"x": -5, "y": "115", "w": 1407, "h": 3599},
+            "sourceSize": {"w": 1610},
+            "display": {"scale": "1.25", "focusX": 0.5, "objectPositionY": 0.03},
+        })
+        handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+        assert handler.status == 200
+        body = handler.json_body()
+        assert body["meta"]["total"] == 1
+        assets = body["frames"][0]["assets"]
+        assert "crop" not in assets
+        assert "sourceSize" not in assets
+        assert "display" not in assets
+
+    def test_sprite_calibration_out_of_range_dropped(self, frames_drop_dir):
+        _, registry = frames_drop_dir
+        self._registry_with_frame(registry, {
+            "imageUrl": "/api/hyrax/essence/frames/file/mai-sprite_pose_0001.png",
+            "display": {"scale": 0.5, "focusX": 0.5, "objectPositionY": 1.4},
+        })
+        handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+        assert handler.status == 200
+        assets = handler.json_body()["frames"][0]["assets"]
+        assert "display" not in assets
+
+    def test_real_registry_sprites_carry_calibration(self):
+        """The shipped registry's sprite frames all have valid display data."""
+        handled, handler = _call_essence_get("/api/hyrax/essence/frames")
+        assert handler.status == 200
+        sprites = [
+            f for f in handler.json_body()["frames"]
+            if f["assets"]["imageUrl"].startswith("/api/hyrax/essence/frames/file/")
+        ]
+        assert len(sprites) == 20
+        for frame in sprites:
+            display = frame["assets"].get("display")
+            assert display is not None, frame["id"]
+            assert 1.0 <= display["scale"] <= 4.0
+            assert 0.0 <= display["focusX"] <= 1.0
+            assert 0.0 <= display["objectPositionY"] <= 1.0
+            crop = frame["assets"]["crop"]
+            assert crop["w"] > 0 and crop["h"] > 0
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Test: POST /api/hyrax/essence/frames/register
@@ -518,7 +595,7 @@ class TestPresence:
     """Per-sister presence aggregation: activity, expression, kanban, approvals."""
 
     def _patch(self, monkeypatch, sessions, full_sessions=None, kanban_rows=None,
-               pending_counts=None):
+               pending_counts=None, task_rows=None):
         import api.hyrax_essence as essence
 
         monkeypatch.setattr(essence, "_all_sessions", lambda: sessions)
@@ -528,7 +605,13 @@ class TestPresence:
                 return full_sessions[sid]
             raise KeyError(sid)
         monkeypatch.setattr(essence, "_get_session", _fake_get)
-        monkeypatch.setattr(essence, "_query", lambda db, sql, params=(): kanban_rows or [])
+
+        def _fake_query(db, sql, params=()):
+            # The current-task SELECT is distinguishable by its columns.
+            if "current_run_id" in sql:
+                return task_rows or []
+            return kanban_rows or []
+        monkeypatch.setattr(essence, "_query", _fake_query)
         pending_counts = pending_counts or {}
         monkeypatch.setattr(
             essence, "_pending_approval_count", lambda sid: pending_counts.get(sid, 0)
@@ -625,6 +708,82 @@ class TestPresence:
         assert items["tai"]["kanban"] == {"running": 2, "blocked": 1}
         assert items["rei"]["kanban"] == {"running": 0, "blocked": 3}
         assert items["nei"]["kanban"] == {"running": 0, "blocked": 0}
+
+    def test_current_task_null_when_no_running_tasks(self, monkeypatch):
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        for item in handler.json_body()["items"]:
+            assert item["currentTask"] is None
+
+    def test_current_task_prefers_active_claim(self, monkeypatch):
+        # Tai has two running tasks; the one with an active claim lock wins
+        # even though the other has more recent activity.
+        self._patch(monkeypatch, [], task_rows=[
+            {"name": "tai", "task_id": "t-older", "title": "Unclaimed but newer",
+             "claim_lock": None, "current_run_id": None, "activity_ts": 200.0},
+            {"name": "tai", "task_id": "t-claimed", "title": "Claimed work",
+             "claim_lock": "worker-1", "current_run_id": None, "activity_ts": 100.0},
+            {"name": "REI", "task_id": 42, "title": "Rei task",
+             "claim_lock": None, "current_run_id": 7, "activity_ts": 50.0},
+        ])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        items = self._items_by_operator(handler)
+        assert items["tai"]["currentTask"] == {"id": "t-claimed", "title": "Claimed work"}
+        # Assignee matching is case-insensitive; non-string ids are stringified.
+        assert items["rei"]["currentTask"] == {"id": "42", "title": "Rei task"}
+        assert items["nei"]["currentTask"] is None
+        assert items["mai"]["currentTask"] is None
+
+    def test_current_task_picks_most_recent_unclaimed(self, monkeypatch):
+        self._patch(monkeypatch, [], task_rows=[
+            {"name": "mai", "task_id": "t-1", "title": "Older",
+             "claim_lock": None, "current_run_id": None, "activity_ts": 10.0},
+            {"name": "mai", "task_id": "t-2", "title": "Newer",
+             "claim_lock": "", "current_run_id": None, "activity_ts": 20.0},
+        ])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["mai"]
+        assert item["currentTask"] == {"id": "t-2", "title": "Newer"}
+
+    def test_current_task_includes_filed_ready_work(self, monkeypatch):
+        # A freshly filed (ready, unclaimed) work order is visible even
+        # though no worker has claimed it — no invisible work.
+        self._patch(monkeypatch, [], task_rows=[
+            {"name": "nei", "task_id": "t-ready", "title": "Filed work order",
+             "status": "ready", "claim_lock": None, "current_run_id": None,
+             "activity_ts": 300.0},
+        ])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        items = self._items_by_operator(handler)
+        assert items["nei"]["currentTask"] == {
+            "id": "t-ready", "title": "Filed work order"}
+        assert items["nei"]["kanban"] == {"running": 0, "blocked": 0}
+
+    def test_current_task_running_outranks_newer_ready(self, monkeypatch):
+        self._patch(monkeypatch, [], task_rows=[
+            {"name": "rei", "task_id": "t-run", "title": "In progress",
+             "status": "running", "claim_lock": None, "current_run_id": None,
+             "activity_ts": 100.0},
+            {"name": "rei", "task_id": "t-ready", "title": "Just filed",
+             "status": "ready", "claim_lock": None, "current_run_id": None,
+             "activity_ts": 200.0},
+        ])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["rei"]
+        assert item["currentTask"] == {"id": "t-run", "title": "In progress"}
+
+    def test_current_task_skips_malformed_rows(self, monkeypatch):
+        self._patch(monkeypatch, [], task_rows=[
+            {"name": "tai", "task_id": None, "title": "No id",
+             "claim_lock": None, "current_run_id": None, "activity_ts": 1.0},
+            {"name": "tai", "task_id": "t-9", "title": "   ",
+             "claim_lock": None, "current_run_id": None, "activity_ts": 2.0},
+            {"name": "", "task_id": "t-10", "title": "No assignee",
+             "claim_lock": None, "current_run_id": None, "activity_ts": 3.0},
+        ])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        for item in handler.json_body()["items"]:
+            assert item["currentTask"] is None
 
     def test_essence_state_updated_at_included(self, monkeypatch, profile_home):
         ts = "2026-07-18T02:09:18.575470+00:00"

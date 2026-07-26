@@ -112,6 +112,20 @@ function mockImport(url) {
 // Tracks whether window.__mockImport (malicious override) was called
 var attackerImportCalled = false;
 
+// Track interval timers (hq.js arms a 30s visibility-gated presence
+// refresh). Mocks keep the Node event loop free and let tests inspect
+// arm/clear behavior.
+const intervalCalls = [];
+const clearedIntervals = [];
+function mockSetInterval(fn, ms) {
+  const id = intervalCalls.length + 1;
+  intervalCalls.push({ id: id, ms: ms });
+  return id;
+}
+function mockClearInterval(id) {
+  clearedIntervals.push(id);
+}
+
 // Main content element (simulates #mainHq)
 const mainHqEl = makeEl('div');
 mainHqEl.id = 'mainHq';
@@ -180,7 +194,17 @@ function runTests() {
   assert(!hqSrc.includes('origSwitchPanel'), 'hq.js must NOT wrap switchPanel');
   assert(!hqSrc.includes('window.switchPanel ='), 'hq.js must NOT reassign switchPanel');
   assert(!hqSrc.includes('MAIN_VIEW_PANELS'), 'hq.js must NOT touch MAIN_VIEW_PANELS');
-  assert(!hqSrc.includes('setInterval'), 'hq.js must NOT use polling (setInterval)');
+  // Living HQ: one setInterval is allowed — the 30s presence refresh —
+  // and it must be visibility-gated and cleared on unmount.
+  var intervalRefs = (hqSrc.match(/setInterval/g) || []).length;
+  assert(intervalRefs <= 1,
+    'hq.js uses at most one setInterval (the visibility-gated presence refresh), got ' + intervalRefs);
+  assert(hqSrc.includes('visibilityState'),
+    'presence refresh must be gated on document.visibilityState');
+  assert(hqSrc.includes('showing-hq'),
+    'presence refresh must be gated on HQ panel visibility (showing-hq)');
+  assert(hqSrc.includes('clearInterval'),
+    'presence refresh interval must be cleared on unmount');
   assert(!hqSrc.includes('MutationObserver'), 'hq.js must NOT use MutationObserver');
   assert(!hqSrc.includes('CT112'), 'hq.js must NOT reference CT112');
   assert(!hqSrc.includes('iframe'), 'hq.js must NOT use iframe');
@@ -212,14 +236,14 @@ function runTests() {
   const evalFn = new Function(
     '_dynamicImport',
     'window', 'document', 'CustomEvent', 'console',
-    'setTimeout', 'clearTimeout',
+    'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
     evalBody
   );
 
   evalFn(
     mockImport,    // _dynamicImport = our mock
     globalThis, fakeDoc, FakeCustomEvent, console,
-    setTimeout, clearTimeout
+    setTimeout, clearTimeout, mockSetInterval, mockClearInterval
   );
 
   // 4. __hqMount accessible
@@ -231,9 +255,16 @@ function runTests() {
   // 5. First mount renders 2D (sync, no import)
   console.log('\n── First mount (2D, no import) ──');
   var importBefore = importCalls.length;
+  var intervalsBefore = intervalCalls.length;
   globalThis.__hqMount('hq');
   assert(importCalls.length === importBefore, 'first mount does NOT trigger import');
   assert(mainHqEl._children && mainHqEl._children.length > 0, 'mount renders content');
+
+  // 5b. Mount arms the visibility-gated presence refresh (30s)
+  console.log('\n── Presence refresh timer ──');
+  assert(intervalCalls.length === intervalsBefore + 1, 'mount arms one interval timer');
+  assert(intervalCalls[intervalCalls.length - 1].ms === 30000,
+    'presence refresh interval is 30s (got ' + intervalCalls[intervalCalls.length - 1].ms + ')');
 
   // 6. Second mount refreshes presence, no re-import
   console.log('\n── Second mount (refresh, no import) ──');
@@ -242,7 +273,10 @@ function runTests() {
 
   // 7. Unmount
   console.log('\n── Unmount ──');
+  var clearedBefore = clearedIntervals.length;
   globalThis.__hqUnmount('hq');
+  assert(clearedIntervals.length === clearedBefore + 1,
+    'unmount clears the presence refresh interval');
 
   // 8. Idempotent unmount
   console.log('\n── Idempotent unmount ──');
@@ -280,13 +314,13 @@ runTests().then(function() {
   var attackerEvalFn = new Function(
     '_dynamicImport',
     'window', 'document', 'CustomEvent', 'console',
-    'setTimeout', 'clearTimeout',
+    'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
     attackerBody
   );
   attackerEvalFn(
     mockImport,    // _dynamicImport = our mock (should be used, NOT __mockImport)
     globalThis, fakeDoc, FakeCustomEvent, console,
-    setTimeout, clearTimeout
+    setTimeout, clearTimeout, mockSetInterval, mockClearInterval
   );
 
   return globalThis.__hqLaunch3d().then(function() {
@@ -317,9 +351,10 @@ runTests().then(function() {
     var body = iifeBody.replace(/\bimport\s*\(MODULE_URL\)/g, '_dynamicImport(MODULE_URL)');
     var fn = new Function(
       '_dynamicImport', 'window', 'document', 'CustomEvent', 'console',
-      'setTimeout', 'clearTimeout', body
+      'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', body
     );
-    fn(mockFn, globalThis, fakeDoc, FakeCustomEvent, console, setTimeout, clearTimeout);
+    fn(mockFn, globalThis, fakeDoc, FakeCustomEvent, console,
+      setTimeout, clearTimeout, mockSetInterval, mockClearInterval);
   }
 
   // 11: __hqMount renders 2D immediately (no async import)

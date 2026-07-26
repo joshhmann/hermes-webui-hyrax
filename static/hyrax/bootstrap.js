@@ -64,6 +64,53 @@
     injectPanelDivs();
     injectHqSidebarView();
     injectCss();
+    scheduleHomePanel();
+  }
+
+  // ── HQ-first landing ──
+  // After the app settles (window load, or a deferred check when load
+  // already fired), land on HQ when the URL carries no explicit intent
+  // and the user hasn't chosen chat as home. Explicit intents — ?session=,
+  // /session/<id>, ?panel=, ?q=, #session= — are never hijacked, except
+  // ?panel=hq which always opens HQ regardless of the stored pref.
+  function hasExplicitIntent(search, path, hash) {
+    if (/[?&](session|panel|q)=/.test(search)) return true;
+    if (path.indexOf('/session/') !== -1) return true;
+    if (hash.indexOf('session=') !== -1) return true;
+    return false;
+  }
+
+  function homePref() {
+    try {
+      return window.localStorage ? window.localStorage.getItem('hyrax-home') : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function maybeLandOnHq() {
+    try {
+      var loc = window.location || {};
+      var search = typeof loc.search === 'string' ? loc.search : '';
+      var path = typeof loc.pathname === 'string' ? loc.pathname : '';
+      var hash = typeof loc.hash === 'string' ? loc.hash : '';
+      var wantsHq = /[?&]panel=hq([&#]|$)/.test(search);
+      if (!wantsHq) {
+        if (hasExplicitIntent(search, path, hash)) return;
+        if (homePref() === 'chat') return;
+      }
+      if (typeof switchPanel === 'function') switchPanel('hq');
+    } catch (_) {}
+  }
+
+  function scheduleHomePanel() {
+    var settle = function() { setTimeout(maybeLandOnHq, 0); };
+    if (typeof window.addEventListener === 'function'
+        && document.readyState !== 'complete') {
+      window.addEventListener('load', settle, { once: true });
+    } else {
+      settle();
+    }
   }
 
   // ── 3b. Inject the HQ sidebar panel-view (Operators list) ──

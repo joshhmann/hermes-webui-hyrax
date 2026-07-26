@@ -110,7 +110,7 @@
   border: 0;
   cursor: pointer;
   filter: drop-shadow(0 14px 10px #000);
-  transition: transform .2s;
+  transition: left .6s ease, top .6s ease, margin .6s ease, transform .2s;
 }
 .chibi:hover,
 .chibi:focus-visible {
@@ -139,10 +139,141 @@
   filter: grayscale(.8);
   pointer-events: none;
 }
-.chibi-tai { left: 48%; top: 48%; color: var(--hq-tai); }
-.chibi-rei { left: 28%; top: 23%; color: var(--hq-rei); }
-.chibi-nei { left: 67%; top: 39%; color: var(--hq-nei); }
-.chibi-mai { left: 35%; top: 69%; color: var(--hq-mai); }
+
+/* Activity-driven placement: hq.js sets data-room (+ data-slot so
+   co-located sisters don't overlap); moving = changing data-room.
+   Positions approximate each room's center on the iso floor. */
+.chibi[data-room="security"]  { left: 14%; top: 12%; }
+.chibi[data-room="common"]    { left: 36%; top: 12%; }
+.chibi[data-room="coffee"]    { left: 56%; top: 12%; }
+.chibi[data-room="corridor"]  { left: 38%; top: 28%; }
+.chibi[data-room="director"]  { left: 14%; top: 44%; }
+.chibi[data-room="ops"]       { left: 38%; top: 46%; }
+.chibi[data-room="lab"]       { left: 58%; top: 44%; }
+.chibi[data-room="logistics"] { left: 22%; top: 66%; }
+.chibi[data-room="entrance"]  { left: 56%; top: 78%; }
+/* Per-room slot grid: chibis are 96px wide / ~112px tall (82px img + 3
+   text lines), so the step must exceed that footprint or co-located
+   sisters cover each other and the lower one eats the upper one's clicks. */
+.chibi[data-slot="1"] { margin-left: 104px; }
+.chibi[data-slot="2"] { margin-top: 118px; }
+.chibi[data-slot="3"] { margin-left: 104px; margin-top: 118px; }
+
+.chibi-tai { color: var(--hq-tai); }
+.chibi-rei { color: var(--hq-rei); }
+.chibi-nei { color: var(--hq-nei); }
+.chibi-mai { color: var(--hq-mai); }
+
+/* ── Time-of-day floor tint (class set by hq.js on each presence tick) ── */
+.iso-floor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  transition: background-color 1s ease;
+}
+.iso-floor.hq-time-dawn::after  { background: rgba(245, 197, 66, .06); }
+.iso-floor.hq-time-day::after   { background: rgba(110, 203, 245, .03); }
+.iso-floor.hq-time-dusk::after  { background: rgba(220, 130, 60, .08); }
+.iso-floor.hq-time-night::after { background: rgba(8, 10, 40, .28); }
+
+/* ── Activity embodiment (motion only when the user allows it) ── */
+@media (prefers-reduced-motion: no-preference) {
+  .chibi-active-tool-working img { animation: hq-bob 1.8s ease-in-out infinite; }
+  .chibi-active-conversing::after {
+    content: '…';
+    position: absolute;
+    top: -14px;
+    right: 0;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e6edf3;
+    color: #0d1117;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    animation: hq-dots 1.2s ease-in-out infinite;
+  }
+  .chibi-active-waiting-approval .chibi-approval-dot { animation: hq-pulse 1.2s ease-in-out infinite; }
+  .chibi-active-resting::before {
+    content: 'zZ';
+    position: absolute;
+    top: -10px;
+    left: 8px;
+    color: var(--muted, #8b949e);
+    font-size: 13px;
+    font-style: italic;
+    text-shadow: 0 2px 5px #000;
+    animation: hq-zzz 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes hq-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@keyframes hq-dots {
+  0%, 100% { opacity: .4; }
+  50%      { opacity: 1; }
+}
+@keyframes hq-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.25); }
+}
+@keyframes hq-zzz {
+  0%   { transform: translateY(0); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: translateY(-14px); opacity: 0; }
+}
+
+/* ── War-room strip (kanban totals → native kanban panel) ── */
+.hq-warroom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--panel, #161b22);
+  border: 1px solid var(--line, #30363d);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: #c9d1d9;
+  font-size: 12px;
+}
+.hq-warroom:hover { border-color: #8b949e; }
+.hq-warroom:focus-visible { outline: 2px solid var(--hq-gold, #f5c542); }
+.hq-warroom-summary { font-weight: 600; }
+.hq-warroom-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--line, #30363d);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted, #8b949e);
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hq-warroom-chip[data-blocked="true"] {
+  color: var(--hq-gold, #f5c542);
+  border-color: var(--hq-gold, #f5c542);
+}
+
+/* ── Home preference toggle (HQ-first landing) ── */
+.hq-home-toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--hq-tai, #6ecbf5);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.hq-home-toggle:hover { color: #fff; }
 
 /* ── VN Stage ── */
 .vn-stage {
@@ -1024,6 +1155,71 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 @media (max-width: 720px) {
   .gestalt-vn-stage-frame { object-position: center 22%; }
 }
+/* Desktop sprite framing: the essence sprites are tall full-body portraits
+   (~0.42 aspect). Full-bleed object-fit:cover on a wide stage scales them
+   to the stage WIDTH, zooming to a face-only crop. Constrain the frame
+   column to a 4/5 portrait box (centered via the `translate` property so
+   the pointer-parallax inline `transform` keeps composing) — cover then
+   shows the top ~52% of the sprite: top of head through upper body, legs
+   cut, the VN half-cut norm. Anchored top so the head is never cropped.
+   Mobile keeps the full-bleed behavior above. */
+@media (min-width: 721px) {
+  .gestalt-vn-stage-frame-wrap {
+    left: 50%;
+    right: auto;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 4 / 5;
+    max-width: 100%;
+    translate: -50% 0;
+  }
+  .gestalt-vn-stage-frame { object-position: center top; }
+}
+
+/* Emotion jolt (vnStage.js _maybeJolt): small physical reaction on the
+   sprite when the expression FAMILY changes — positive bounces, intense
+   shakes, wry tilts, focused leans in, neutral settles. ~300–450ms, no
+   persistence. Reduced-motion runs never get the class (JS guard) and
+   these animations only exist under no-preference anyway. */
+@media (prefers-reduced-motion: no-preference) {
+  .gestalt-vn-jolt-positive { animation: gestalt-vn-jolt-bounce .45s ease-out; }
+  .gestalt-vn-jolt-intense { animation: gestalt-vn-jolt-shake .4s ease-out; }
+  .gestalt-vn-jolt-wry {
+    animation: gestalt-vn-jolt-tilt .45s ease-out;
+    transform-origin: 50% 100%;
+  }
+  .gestalt-vn-jolt-focused {
+    animation: gestalt-vn-jolt-lean .35s ease-out;
+    transform-origin: 50% 100%;
+  }
+  .gestalt-vn-jolt-neutral { animation: gestalt-vn-jolt-settle .3s ease-out; }
+  @keyframes gestalt-vn-jolt-bounce {
+    0% { transform: translateY(0); }
+    35% { transform: translateY(-10px); }
+    70% { transform: translateY(2px); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes gestalt-vn-jolt-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+  }
+  @keyframes gestalt-vn-jolt-tilt {
+    0%, 100% { transform: rotate(0deg); }
+    40% { transform: rotate(-2.2deg); }
+    75% { transform: rotate(1deg); }
+  }
+  @keyframes gestalt-vn-jolt-lean {
+    0%, 100% { transform: scale(1); }
+    45% { transform: scale(1.025); }
+  }
+  @keyframes gestalt-vn-jolt-settle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(3px); }
+  }
+}
 
 /* ── Sidebar confirm dialog (vnSidebar.js) ── */
 .gestalt-vn-confirm {
@@ -1091,6 +1287,8 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 .hyrax-op-meta strong { font-size: 13px; color: #e6edf3; }
 .hyrax-op-meta span { font-size: 11px; color: var(--muted, #8b949e); }
 .hyrax-op-card.staged { opacity: .45; filter: grayscale(.8); pointer-events: none; }
+.hyrax-op-card .hyrax-op-hint { font-size: 10px; color: var(--hq-tai, #6ecbf5); }
+.hyrax-op-card:disabled { opacity: .6; cursor: default; }
 .hyrax-op-tai { border-left: 3px solid var(--hq-tai); }
 .hyrax-op-rei { border-left: 3px solid var(--hq-rei); }
 .hyrax-op-nei { border-left: 3px solid var(--hq-nei); }

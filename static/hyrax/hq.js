@@ -7,7 +7,11 @@
  * Mount/unmount lifecycle driven by bootstrap.js via window.__hqMount
  * and window.__hqUnmount, which are registered as HermesPanels hooks.
  *
- * No switchPanel wrapper, no direct panel-list mutation, no polling.
+ * Living HQ: chibi placement is activity-driven (data-room attribute),
+ * presence refreshes on a 30s visibility-gated interval, and a war-room
+ * strip summarizes kanban state across the sisters.
+ *
+ * No switchPanel wrapper, no direct panel-list mutation.
  */
 (function() {
   'use strict';
@@ -16,9 +20,13 @@
   var _modulePromise = null;     // cached import() promise for the 3D bundle
   var _unmount3d = null;         // cleanup function returned by 3D module
   var _mountGen = 0;             // epoch counter: increments on each mount
+  var _presenceTimer = null;     // 30s visibility-gated presence refresh
 
   // 3D module path (generated local ES module).
   var MODULE_URL = '/static/hyrax/3d/embodiment-bundle.js';
+
+  // Presence refresh cadence (ms). Gated on HQ visibility + page visibility.
+  var PRESENCE_INTERVAL_MS = 30000;
 
   // ── Rooms ──
   var HQ_ROOMS = [
@@ -41,6 +49,50 @@
     { id: 'mai', name: 'Mai',  room: 'Logistics Annex',   role: 'blocked triage' },
   ];
 
+  // Room label (HQ_SISTERS.room) → room id (HQ_ROOMS.id) lookup.
+  var ROOM_ID_BY_LABEL = {};
+  HQ_ROOMS.forEach(function(r) { ROOM_ID_BY_LABEL[r.label] = r.id; });
+
+  function ownRoomId(sister) {
+    return ROOM_ID_BY_LABEL[sister.room] || 'common';
+  }
+
+  // ── Activity-driven placement ──
+  // Maps presence activity.type → room id. `null` means the sister's own
+  // room (derived from HQ_SISTERS.room via ROOM_ID_BY_LABEL).
+  var ACTIVITY_ROOM = {
+    'conversing': 'common',
+    'tool-working': null,
+    'waiting-approval': 'director',
+    'background-working': null,
+    'resting': 'coffee',
+    'idle': 'common',
+    'offline': null,
+  };
+
+  // Pure placement helper — used by BOTH initial render and refresh.
+  function roomFor(sister, presence) {
+    var own = ownRoomId(sister);
+    if (!presence || presence.available === false) return own;
+    var type = presence.activity && presence.activity.type;
+    var mapped = ACTIVITY_ROOM[type];
+    return mapped || own;
+  }
+
+  // Assign each sister a room + a slot index within that room so
+  // co-located sisters don't overlap (CSS offsets per data-slot).
+  function assignSlots(presenceMap) {
+    var slots = {};
+    var counts = {};
+    HQ_SISTERS.forEach(function(s) {
+      var room = roomFor(s, presenceMap[s.id] || null);
+      var slot = counts[room] || 0;
+      counts[room] = slot + 1;
+      slots[s.id] = { room: room, slot: slot };
+    });
+    return slots;
+  }
+
   // ── Mount (called by HermesPanels mount hook) ──
   function __hqMount(id) {
     var content = document.getElementById('mainHq');
@@ -56,6 +108,7 @@
     // to an older generation and must not execute mount side effects.
     var gen = ++_mountGen;
     _mounted = true;
+    armPresenceTimer();
 
     // Always render the 2D isometric map first.
     // The 3D space is launched on demand from the VN conversation.
@@ -67,10 +120,30 @@
     if (!_mounted) return;
     _mountGen++; // increment generation — invalidate any pending mount work
     _mounted = false;
+    if (_presenceTimer) {
+      clearInterval(_presenceTimer);
+      _presenceTimer = null;
+    }
     if (typeof _unmount3d === 'function') {
       _unmount3d();
       _unmount3d = null;
     }
+  }
+
+  // ── Visibility-gated presence refresh ──
+  // The interval is cheap; the gate keeps it from hammering the presence
+  // endpoint while the HQ panel (or the whole tab) is hidden.
+  function armPresenceTimer() {
+    if (_presenceTimer) return;
+    _presenceTimer = setInterval(function() {
+      if (hqVisible()) refreshPresence();
+    }, PRESENCE_INTERVAL_MS);
+  }
+
+  function hqVisible() {
+    var main = document.querySelector('main');
+    if (!main || !main.classList || !main.classList.contains('showing-hq')) return false;
+    return document.visibilityState === 'visible';
   }
 
   // ── 2D fallback: isometric map with chibis ──
@@ -83,8 +156,20 @@
     head.className = 'page-head';
     head.innerHTML = '<p class="eyebrow">SPATIAL OVERVIEW</p>'
       + '<h1>Division Headquarters</h1>'
-      + '<p class="muted">Click a sister\'s chibi to open a conversation.</p>';
+      + '<p class="muted">Click a chibi for the VN stage; use a sidebar card for standard chat.</p>';
+    head.appendChild(createHomeToggle());
     page.appendChild(head);
+
+    // War-room strip (kanban totals across sisters → native kanban panel)
+    var warroom = document.createElement('button');
+    warroom.type = 'button';
+    warroom.className = 'hq-warroom';
+    warroom.title = 'Open kanban board';
+    warroom.setAttribute('aria-label', 'Open the kanban war room');
+    warroom.addEventListener('click', function() {
+      if (typeof switchPanel === 'function') switchPanel('kanban');
+    });
+    page.appendChild(warroom);
 
     // Map stage
     var stage = document.createElement('div');
@@ -101,18 +186,23 @@
       floor.appendChild(room);
     });
     stage.appendChild(floor);
+    applyTimeTint(floor);
 
     // Chibis — presence endpoint first (live activity/mood/approvals),
     // profiles endpoint as availability fallback.
     fetchPresence().then(function(presenceMap) {
+      var slots = assignSlots(presenceMap);
       HQ_SISTERS.forEach(function(s) {
-        stage.appendChild(createChibi(s, presenceMap[s.id] || null));
+        stage.appendChild(createChibi(s, presenceMap[s.id] || null, slots[s.id]));
       });
+      updateWarRoom(warroom, presenceMap);
       renderOperatorsPanel(presenceMap);
     }).catch(function() {
+      var slots = assignSlots({});
       HQ_SISTERS.forEach(function(s) {
-        stage.appendChild(createChibi(s, null));
+        stage.appendChild(createChibi(s, null, slots[s.id]));
       });
+      updateWarRoom(warroom, {});
       renderOperatorsPanel({});
     });
 
@@ -120,8 +210,113 @@
     container.replaceChildren(page);
   }
 
-  // ── Operators sidebar panel-view (get creative: the HQ sidebar shows
-  // the same presence data as quick-switch cards) ──
+  // ── Home preference toggle (HQ-first landing, see bootstrap.js) ──
+  function createHomeToggle() {
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'hq-home-toggle';
+
+    var read = function() {
+      try {
+        return window.localStorage ? window.localStorage.getItem('hyrax-home') : null;
+      } catch (_) {
+        return null;
+      }
+    };
+    var sync = function() {
+      toggle.textContent = read() === 'chat' ? 'Set HQ as home' : 'Set chat as home';
+    };
+    toggle.addEventListener('click', function() {
+      try {
+        if (window.localStorage) {
+          window.localStorage.setItem('hyrax-home', read() === 'chat' ? 'hq' : 'chat');
+        }
+      } catch (_) {}
+      sync();
+    });
+    sync();
+    return toggle;
+  }
+
+  // ── War-room strip ──
+  // Sums kanban running/blocked counts across the sisters. Text, never
+  // color-only (ARCH a11y). Always rendered — zero counts read "all clear".
+  // When presence carries a sister's currentTask, her chip shows the task
+  // title (truncated, full text in the tooltip) instead of bare counts —
+  // the "no invisible work" rule made visible.
+  var CHIP_TITLE_MAX = 28;
+
+  function truncateTitle(title) {
+    if (title.length <= CHIP_TITLE_MAX) return title;
+    return title.slice(0, CHIP_TITLE_MAX).replace(/\s+$/, '') + '…';
+  }
+
+  function kanbanTotals(presenceMap) {
+    var totals = { running: 0, blocked: 0, perSister: [] };
+    HQ_SISTERS.forEach(function(s) {
+      var p = presenceMap[s.id];
+      var k = p && p.kanban;
+      var run = k && typeof k.running === 'number' ? k.running : 0;
+      var blk = k && typeof k.blocked === 'number' ? k.blocked : 0;
+      totals.running += run;
+      totals.blocked += blk;
+      var task = p && p.currentTask;
+      var taskTitle = task && typeof task.title === 'string' ? task.title.trim() : '';
+      if (run > 0 || blk > 0 || taskTitle) {
+        totals.perSister.push({
+          name: s.name, running: run, blocked: blk, taskTitle: taskTitle,
+        });
+      }
+    });
+    return totals;
+  }
+
+  function updateWarRoom(strip, presenceMap) {
+    if (!strip) return;
+    var t = kanbanTotals(presenceMap || {});
+    strip.replaceChildren();
+
+    var summary = document.createElement('span');
+    summary.className = 'hq-warroom-summary';
+    summary.textContent = (t.running === 0 && t.blocked === 0)
+      ? 'War room — all clear'
+      : 'War room — ' + t.running + ' running · ' + t.blocked + ' blocked';
+    strip.appendChild(summary);
+
+    t.perSister.forEach(function(c) {
+      var chip = document.createElement('span');
+      chip.className = 'hq-warroom-chip';
+      if (c.blocked > 0) chip.setAttribute('data-blocked', 'true');
+      var counts = c.running + ' run · ' + c.blocked + ' blk';
+      if (c.taskTitle) {
+        chip.textContent = c.name + ' · ' + truncateTitle(c.taskTitle);
+        chip.title = c.name + ' — ' + c.taskTitle + ' (' + counts + ')';
+      } else {
+        chip.textContent = c.name + ' ' + counts;
+        chip.title = c.name + ' — ' + counts;
+      }
+      strip.appendChild(chip);
+    });
+  }
+
+  // ── Time-of-day tint on the iso floor ──
+  var TIME_CLASSES = ['hq-time-dawn', 'hq-time-day', 'hq-time-dusk', 'hq-time-night'];
+
+  function applyTimeTint(floor) {
+    floor = floor || document.querySelector('.iso-floor');
+    if (!floor || !floor.classList) return;
+    var h = new Date().getHours();
+    var cls = (h >= 5 && h < 8) ? 'hq-time-dawn'
+      : (h >= 8 && h < 17) ? 'hq-time-day'
+      : (h >= 17 && h < 20) ? 'hq-time-dusk'
+      : 'hq-time-night';
+    for (var i = 0; i < TIME_CLASSES.length; i++) floor.classList.remove(TIME_CLASSES[i]);
+    floor.classList.add(cls);
+  }
+
+  // ── Operators sidebar panel-view ──
+  // Card click opens STANDARD chat with the sister's session; chibi click
+  // on the map opens the VN. Both stay <button> for keyboard access.
   function renderOperatorsPanel(presenceMap) {
     var host = document.getElementById('hyraxHqOperators');
     if (!host) return;
@@ -130,7 +325,8 @@
       var presence = presenceMap[s.id] || null;
       var card = document.createElement('button');
       card.className = 'hyrax-op-card hyrax-op-' + s.id;
-      card.setAttribute('aria-label', 'Talk with ' + s.name);
+      card.setAttribute('aria-label', 'Open chat with ' + s.name);
+      card.title = 'Open chat with ' + s.name;
 
       var img = document.createElement('img');
       img.src = '/api/hyrax/assets/' + s.id + '.chibi.stand';
@@ -145,8 +341,12 @@
       var type = presence && presence.activity && presence.activity.type;
       var mood = presence && presence.expression && presence.expression.current;
       act.textContent = (ACTIVITY_LABELS[type] || 'idle') + (mood && mood !== 'neutral' ? ' · ' + mood : '');
+      var hint = document.createElement('span');
+      hint.className = 'hyrax-op-hint';
+      hint.textContent = 'open chat';
       meta.appendChild(nm);
       meta.appendChild(act);
+      meta.appendChild(hint);
 
       card.appendChild(img);
       card.appendChild(meta);
@@ -164,12 +364,52 @@
       }
 
       card.addEventListener('click', function() {
-        document.dispatchEvent(new CustomEvent('hyrax:open-conversation', {
-          detail: { sisterId: s.id, sisterName: s.name, role: s.role },
-          bubbles: true,
-        }));
+        openStandardChat(s, card);
       });
       host.appendChild(card);
+    });
+  }
+
+  // ── Operator card → standard chat ──
+  // Select-or-create the sister's VN session server-side, then hand the
+  // session id to the native chat surface. Card is disabled while the
+  // request is in flight to prevent double-clicks.
+  function openStandardChat(sister, card) {
+    if (card.disabled) return;
+    card.disabled = true;
+    card.classList.add('hq-op-loading');
+
+    var finish = function() {
+      card.disabled = false;
+      card.classList.remove('hq-op-loading');
+    };
+    var showError = function() {
+      finish();
+      var hint = card.querySelector('.hyrax-op-hint');
+      if (hint) hint.textContent = 'chat unavailable — try again';
+    };
+
+    var req;
+    try {
+      req = api('/api/hyrax/vn/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile_id: sister.id, fresh: false }),
+      });
+    } catch (_) {
+      showError();
+      return;
+    }
+    Promise.resolve(req).then(function(payload) {
+      var conv = (payload && payload.conversation) || payload || {};
+      var sid = typeof conv.session_id === 'string' ? conv.session_id
+        : (typeof conv.id === 'string' ? conv.id : '');
+      if (!sid) throw new Error('no session id');
+      if (typeof loadSession === 'function') loadSession(sid);
+      if (typeof switchPanel === 'function') switchPanel('chat');
+      finish();
+    }).catch(function() {
+      showError();
     });
   }
 
@@ -184,10 +424,27 @@
     'offline': 'offline',
   };
 
-  function createChibi(sister, presence) {
+  var ACTIVITY_TYPES = [
+    'idle', 'conversing', 'tool-working', 'waiting-approval',
+    'background-working', 'resting', 'offline',
+  ];
+
+  // Single source of truth for the chibi-active-<type> class — used by
+  // both initial render and refreshPresence.
+  function syncActivityClass(el, type) {
+    for (var i = 0; i < ACTIVITY_TYPES.length; i++) {
+      el.classList.remove('chibi-active-' + ACTIVITY_TYPES[i]);
+    }
+    if (type && type !== 'idle') el.classList.add('chibi-active-' + type);
+  }
+
+  function createChibi(sister, presence, placement) {
     var chibi = document.createElement('button');
     chibi.className = 'chibi chibi-' + sister.id;
-    chibi.setAttribute('aria-label', 'Talk with ' + sister.name);
+    chibi.setAttribute('aria-label', 'Open VN with ' + sister.name);
+    chibi.title = 'Open VN with ' + sister.name;
+    chibi.setAttribute('data-room', placement ? placement.room : ownRoomId(sister));
+    chibi.setAttribute('data-slot', placement ? String(placement.slot) : '0');
 
     var img = document.createElement('img');
     img.src = '/api/hyrax/assets/' + sister.id + '.chibi.stand';
@@ -207,7 +464,7 @@
     var type = presence && presence.activity && presence.activity.type;
     var mood = presence && presence.expression && presence.expression.current;
     activity.textContent = (ACTIVITY_LABELS[type] || 'idle') + (mood && mood !== 'neutral' ? ' · ' + mood : '');
-    if (type && type !== 'idle') chibi.classList.add('chibi-active-' + type);
+    syncActivityClass(chibi, type);
 
     chibi.appendChild(img);
     chibi.appendChild(name);
@@ -232,7 +489,7 @@
       chibi.setAttribute('aria-disabled', 'true');
     }
 
-    // Click → dispatch custom event that vn.js catches
+    // Click → dispatch custom event that vn.js catches (VN stage)
     chibi.addEventListener('click', function onClick() {
       var event = new CustomEvent('hyrax:open-conversation', {
         detail: { sisterId: sister.id, sisterName: sister.name, role: sister.role },
@@ -267,10 +524,18 @@
   function refreshPresence() {
     fetchPresence().then(function(map) {
       renderOperatorsPanel(map);
+      updateWarRoom(document.querySelector('#mainHq .hq-warroom'), map);
+      applyTimeTint();
+      var slots = assignSlots(map);
       HQ_SISTERS.forEach(function(s) {
         var chibiEl = document.querySelector('.chibi-' + s.id);
         if (!chibiEl) return;
         var presence = map[s.id] || null;
+
+        // Activity-driven placement (same pure helper as initial render).
+        chibiEl.setAttribute('data-room', slots[s.id].room);
+        chibiEl.setAttribute('data-slot', String(slots[s.id].slot));
+
         if (!presence || presence.available === false) {
           chibiEl.classList.add('staged');
           chibiEl.setAttribute('aria-disabled', 'true');
@@ -278,10 +543,11 @@
           chibiEl.classList.remove('staged');
           chibiEl.removeAttribute('aria-disabled');
         }
+        var type = presence && presence.activity && presence.activity.type;
+        var mood = presence && presence.expression && presence.expression.current;
+        syncActivityClass(chibiEl, type);
         var activityEl = chibiEl.querySelector('.chibi-activity');
         if (activityEl) {
-          var type = presence && presence.activity && presence.activity.type;
-          var mood = presence && presence.expression && presence.expression.current;
           activityEl.textContent = (ACTIVITY_LABELS[type] || 'idle') + (mood && mood !== 'neutral' ? ' · ' + mood : '');
         }
         var dot = chibiEl.querySelector('.chibi-approval-dot');
