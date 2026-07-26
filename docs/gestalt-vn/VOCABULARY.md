@@ -196,6 +196,11 @@ VN room manifests (4), owner `static/hyrax/vn/rooms/`:
   VN **background asset** locations (`control-room`, `security`, `lab`,
   `supply-hub`) — a different, asset-level namespace owned by
   `hyrax-assets/vn/ASSET_MANIFEST.json`; do not mix with room ids.
+- essenced `presentation.sceneIntent` (§8) uses **this** table — one room
+  namespace. Its `rules.json` `scene_by_activity` values are HQ room ids;
+  the config token `own` resolves to the operator's own room per §1
+  (tai→`ops`, rei→`security`, nei→`lab`, mai→`logistics`) before emission,
+  so emitted sceneIntent values are always room ids from this section.
 - Adding new terms: HQ room → `HQ_ROOMS` first; VN room → manifest file in
   `static/hyrax/vn/rooms/` + `OPERATOR_ROOM` entry; keep ids aligned.
 
@@ -210,12 +215,14 @@ is `{value, provenance, updatedAt}`.
 | `condition` | `energy`, `focus`, `stress`, `comfort`, `sociability` | 0..1 |
 | `activity` | `type`, `description`, `since`, `interruptibility` | type from §6; interruptibility `free`/`soft-busy`/`busy` |
 | `social` | `warmth`, `trust`, `familiarity`, `lastInteractionAt` | 0..1; timestamp |
-| `presentation` | `expression`, `poseIntent`, `sceneIntent`, `intensity` | expression from §4; poseIntent from §5; intensity 0..1 |
+| `presentation` | `expression`, `poseIntent`, `sceneIntent`, `intensity` | expression from §4; poseIntent from §5; sceneIntent from §7 (HQ room ids); intensity 0..1 |
 
 Provenance values (closed set, §1 invariant 2): `event-derived`, `decayed`,
-`model-interpreted`, `user-set`, `unknown`.
-(The §3 example block also shows `"derived"` on `presentation.*` — shorthand
-for the recomputed presentation layer; the closed set above is normative.)
+`derived`, `model-interpreted`, `user-set`, `unknown`.
+`derived` marks values recomputed deterministically from other state —
+`mood.primary`, `mood.intensity`, and all of `presentation.*` as emitted by
+essenced's `state.py`. It is a first-class member of the closed set, not
+shorthand.
 
 Adding new terms: new trait → §3 of ESSENCE_ACTIVE_RUNTIME.md first with
 range + default + decay rule; new provenance value → this table and the
