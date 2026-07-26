@@ -15,6 +15,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -702,6 +704,11 @@ class TestPresence:
         monkeypatch.setattr(
             essence, "_pending_approval_count", lambda sid: pending_counts.get(sid, 0)
         )
+        # Hermetic: never read real on-disk essenced derived_state.json here.
+        monkeypatch.setattr(
+            essence, "_presence_derived_state",
+            lambda profile: (dict(essence._DERIVED_STATE_UNAVAILABLE), None),
+        )
 
     def _items_by_operator(self, handler):
         return {item["operatorId"]: item for item in handler.json_body()["items"]}
@@ -897,6 +904,164 @@ class TestPresence:
         _, handler = _call_essence_get("/api/hyrax/presence")
         for item in handler.json_body()["items"]:
             assert item["available"] is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: presence merge of essenced derived_state.json (schema v2)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
+                           expression="smile", intensity=0.7,
+                           activity_type="idle"):
+    def leaf(value):
+        return {"value": value, "provenance": "derived",
+                "updatedAt": "2026-07-26T00:00:00+00:00"}
+    return {
+        "version": 2,
+        "operatorId": "tai",
+        "mood": {"primary": leaf(mood), "valence": leaf(0.4)},
+        "condition": {"energy": leaf(energy), "focus": leaf(focus),
+                      "stress": leaf(stress)},
+        "activity": {"type": leaf(activity_type)},
+        "presentation": {"expression": leaf(expression),
+                         "intensity": leaf(intensity)},
+    }
+
+
+class TestPresenceDerivedState:
+    """essenced derived_state.json merge into GET /api/hyrax/presence.
+
+    Fresh (<120s, mtime) state contributes expression + the derivedState
+    block; activity/pendingApprovals/kanban always stay live. Missing,
+    stale, or corrupt files fall back to the live-sources-only behavior.
+    """
+
+    def _patch(self, monkeypatch, sessions, full_sessions=None,
+               kanban_rows=None, pending_counts=None):
+        import api.hyrax_essence as essence
+
+        monkeypatch.setattr(essence, "_all_sessions", lambda: sessions)
+        full_sessions = full_sessions or {}
+
+        def _fake_get(sid, **kw):
+            if sid in full_sessions:
+                return full_sessions[sid]
+            raise KeyError(sid)
+        monkeypatch.setattr(essence, "_get_session", _fake_get)
+        monkeypatch.setattr(
+            essence, "_query", lambda db, sql, params=(): kanban_rows or [])
+        pending_counts = pending_counts or {}
+        monkeypatch.setattr(
+            essence, "_pending_approval_count",
+            lambda sid: pending_counts.get(sid, 0),
+        )
+
+    def _write_derived(self, home, payload, age_seconds: float = 0.0):
+        path = home / "essence" / "derived_state.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(payload, str):
+            path.write_text(payload)
+        else:
+            path.write_text(json.dumps(payload))
+        if age_seconds:
+            old = time.time() - age_seconds
+            os.utime(path, (old, old))
+        return path
+
+    def _items_by_operator(self, handler):
+        return {item["operatorId"]: item for item in handler.json_body()["items"]}
+
+    def _streaming_tai(self):
+        compact = [{
+            "session_id": "vn_tai_1", "profile": "tai", "project_id": "hyrax-vn",
+            "archived": False, "active_stream_id": "stream_1",
+            "created_at": 1.0, "updated_at": 2.0,
+        }]
+        full = _make_mock_session("vn_tai_1", messages=[
+            {"role": "user", "content": "tell me a joke"},
+            {"role": "assistant", "content": "Haha, good one!"},
+        ])
+        return compact, {"vn_tai_1": full}
+
+    def test_fresh_merge_replaces_expression_and_carries_block(
+            self, monkeypatch, profile_home):
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload())
+        compact, full = self._streaming_tai()
+        self._patch(monkeypatch, compact, full,
+                    kanban_rows=[{"name": "tai", "running_count": 1,
+                                  "blocked_count": 0}])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        assert handler.status == 200
+        item = self._items_by_operator(handler)["tai"]
+        # Derived state block merged.
+        assert item["derivedState"] == {
+            "fresh": True, "mood": "happy", "energy": 0.62, "focus": 0.81,
+            "stress": 0.12, "staleness_days": 0,
+        }
+        # Expression comes from derived presentation.expression, NOT the
+        # session-derived "laughing".
+        assert item["expression"] == {"current": "smile", "intensity": 0.7}
+        # Live fields stay live.
+        assert item["activity"]["type"] == "conversing"
+        assert item["kanban"] == {"running": 1, "blocked": 0}
+
+    def test_stale_derived_state_falls_back(self, monkeypatch, profile_home):
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(), age_seconds=90000)
+        compact, full = self._streaming_tai()
+        self._patch(monkeypatch, compact, full)
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["fresh"] is False
+        assert item["derivedState"]["staleness_days"] > 0
+        # Values are visible but stale; expression stays session-derived.
+        assert item["derivedState"]["mood"] == "happy"
+        assert item["expression"]["current"] == "laughing"
+
+    def test_corrupt_derived_state_falls_back(self, monkeypatch, profile_home):
+        home = profile_home("tai", None)
+        self._write_derived(home, "{not json")
+        compact, full = self._streaming_tai()
+        self._patch(monkeypatch, compact, full)
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        assert handler.status == 200
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"] == {
+            "fresh": False, "mood": None, "energy": None, "focus": None,
+            "stress": None, "staleness_days": None,
+        }
+        assert item["expression"]["current"] == "laughing"
+
+    def test_missing_derived_state_falls_back(self, monkeypatch, profile_home):
+        profile_home("tai", None)  # home exists, no derived_state.json
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["fresh"] is False
+        assert item["derivedState"]["mood"] is None
+        assert item["expression"]["current"] == "neutral"
+
+    def test_live_activity_wins_over_derived(self, monkeypatch, profile_home):
+        # Conflict: derived state says idle, but live sources see a pending
+        # approval — live presence activity always wins.
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(activity_type="idle"))
+        compact = [{
+            "session_id": "vn_tai_1", "profile": "tai", "project_id": "hyrax-vn",
+            "archived": False, "active_stream_id": "stream_1",
+            "created_at": 1.0, "updated_at": 2.0,
+        }]
+        full = _make_mock_session("vn_tai_1")
+        self._patch(monkeypatch, compact, {"vn_tai_1": full},
+                    pending_counts={"vn_tai_1": 2})
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["activity"]["type"] == "waiting-approval"
+        assert item["pendingApprovals"] == 2
+        # Expression still merges (fresh derived state).
+        assert item["expression"] == {"current": "smile", "intensity": 0.7}
+        assert item["derivedState"]["fresh"] is True
 
 
 # ══════════════════════════════════════════════════════════════════════════

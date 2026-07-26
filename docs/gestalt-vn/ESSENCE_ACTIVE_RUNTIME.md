@@ -497,3 +497,17 @@ Consequences for the spec:
 - `essence_state_adjuster.py` and `essence_auto_router.py` are prior
   incarnations of parts of this design; Phase A must audit them and either
   reuse or explicitly supersede (no two writers to essence state).
+
+---
+
+## 17. Upstream compatibility rule (2026-07-26)
+
+Hermes-agent (`/usr/local/lib/hermes-agent`) stays stock and updatable — the
+same discipline as the WebUI fork. All Hyrax work integrates through
+extension points: plugins (sister-essence), standalone packages (essenced),
+profile config (data, not code), and external services (gateway, daemons).
+No patches to hermes_cli core. Read-only reuse (importing kanban_db queries,
+mirroring plugin lock conventions) is acceptable but version-sensitive —
+every such coupling is pinned by a test, never by assumption. If a feature
+truly needs a Hermes core change, it goes upstream as a PR or the design
+changes — it does not ship as a local patch.

@@ -844,6 +844,86 @@ _ACTIVITY_INTERRUPTIBILITY = {
     "waiting-approval": "busy",
 }
 
+# essenced (Essence active runtime) publishes a per-sister
+# essence/derived_state.json (schema v2). Presence merges it only while it is
+# fresher than this many seconds; anything older/missing/corrupt falls back
+# to exactly the live-sources-only behavior.
+DERIVED_STATE_FRESH_SECONDS = 120.0
+
+_DERIVED_STATE_UNAVAILABLE = {
+    "fresh": False,
+    "mood": None,
+    "energy": None,
+    "focus": None,
+    "stress": None,
+    "staleness_days": None,
+}
+
+
+def _derived_leaf(state: dict, *parts: str):
+    """Dotted-path leaf value out of a schema-v2 derived_state. None on miss."""
+    node = state
+    for part in parts:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(part)
+    if not isinstance(node, dict):
+        return None
+    return node.get("value")
+
+
+def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
+    """Read essenced's derived_state.json for one sister (read-only, bounded).
+
+    Returns (block, expression):
+      - block: the compact derivedState payload for the presence item. When
+        the file is missing/stale/corrupt this is _DERIVED_STATE_UNAVAILABLE
+        (fresh: false, all nulls) — never an exception, never a 500.
+      - expression: {"current", "intensity"} to REPLACE the session-derived
+        expression, or None. Only non-None when the file is fresh: essenced's
+        presentation.expression is the runtime-owned mood→expression mapping,
+        but only while it reflects recent activity. Presence's own activity /
+        pendingApprovals / kanban are always kept — they are live and richer
+        (the sessions watcher cannot see pending approvals or tool outcomes).
+
+    Freshness is file mtime (same signal essenced --check-staleness uses).
+    """
+    try:
+        path = _profile_home(profile) / "essence" / "derived_state.json"
+        st = os.lstat(path)
+        if not os.path.isfile(path) or os.path.islink(path):
+            return dict(_DERIVED_STATE_UNAVAILABLE), None
+        state = _read_json_bounded(path, MAX_STATE_FILE_BYTES)
+        if state is None or state.get("version") != 2:
+            return dict(_DERIVED_STATE_UNAVAILABLE), None
+        age = max(0.0, _now_utc().timestamp() - st.st_mtime)
+        fresh = age < DERIVED_STATE_FRESH_SECONDS
+        block = {
+            "fresh": fresh,
+            "mood": _bounded_str(_derived_leaf(state, "mood", "primary")),
+            "energy": _bounded_score(_derived_leaf(state, "condition", "energy"), 0.0, 1.0),
+            "focus": _bounded_score(_derived_leaf(state, "condition", "focus"), 0.0, 1.0),
+            "stress": _bounded_score(_derived_leaf(state, "condition", "stress"), 0.0, 1.0),
+            # Fresh state is by definition <120s old → staleness_days 0.
+            "staleness_days": 0 if fresh else round(age / 86400.0, 2),
+        }
+        expression = None
+        if fresh:
+            current, _issues = normalize_expression(
+                profile, _derived_leaf(state, "presentation", "expression")
+            )
+            intensity = _bounded_score(
+                _derived_leaf(state, "presentation", "intensity"), 0.0, 1.0
+            )
+            expression = {
+                "current": current,
+                "intensity": intensity if intensity is not None else 0.5,
+            }
+        return block, expression
+    except Exception:
+        _logger.warning("derived_state read failed for one sister", exc_info=True)
+        return dict(_DERIVED_STATE_UNAVAILABLE), None
+
 
 def _bounded_count(value) -> int:
     try:
@@ -1024,6 +1104,14 @@ def _presence_item(profile: str, sessions: list, kanban: dict,
         else {"current": NEUTRAL_EXPRESSION, "intensity": 0.0}
     )
 
+    # essenced derived state (fresh <120s): expression + the compact
+    # derivedState block come from it; activity/pendingApprovals/kanban stay
+    # live (presence's sources are richer — derived activity cannot see
+    # pending approvals or tool outcomes).
+    derived_block, derived_expression = _presence_derived_state(profile)
+    if derived_expression is not None:
+        expression = derived_expression
+
     # essenceStateUpdatedAt — read-only, cheap, fail closed to omitted
     essence_updated_at = None
     try:
@@ -1046,6 +1134,7 @@ def _presence_item(profile: str, sessions: list, kanban: dict,
         "pendingApprovals": pending,
         "kanban": dict(kanban.get(profile) or {"running": 0, "blocked": 0}),
         "currentTask": (current_tasks or {}).get(profile),
+        "derivedState": derived_block,
     }
     if essence_updated_at is not None:
         item["essenceStateUpdatedAt"] = essence_updated_at
@@ -1062,6 +1151,7 @@ def _presence_fallback_item(profile: str) -> dict:
         "pendingApprovals": 0,
         "kanban": {"running": 0, "blocked": 0},
         "currentTask": None,
+        "derivedState": dict(_DERIVED_STATE_UNAVAILABLE),
     }
 
 
