@@ -3,3 +3,6 @@
 
 # Reviewed SFW Hyrax VN/HQ image package — keep binary artwork out of Git objects.
 hyrax-assets/vn/**/*.png filter=lfs diff=lfs merge=lfs -text
+
+# VNCCS emotion sprite suite — large binary artwork via Git LFS
+hyrax-assets/essence/frames/*-emotion-*.png filter=lfs diff=lfs merge=lfs -text

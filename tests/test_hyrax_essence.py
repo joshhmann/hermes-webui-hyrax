@@ -327,7 +327,9 @@ class TestFramesRegistryGet:
         for frame in body["frames"]:
             assert id_re.match(frame["id"]), frame["id"]
             assert frame["operatorId"] in ("tai", "rei", "nei", "mai")
-            assert frame["source"] == "authored"
+            # authored (VN manifest + dropped sprites) and generated (VNCCS
+            # emotion sprite suite) are both legitimate shipped sources
+            assert frame["source"] in ("authored", "generated")
             # Approved unless intentionally demoted (e.g. superseded neutrals)
             if not frame["quality"]["approved"]:
                 assert any("superseded" in i for i in frame["quality"].get("issues", [])), frame["id"]
@@ -439,7 +441,10 @@ class TestFramesRegistryGet:
             f for f in handler.json_body()["frames"]
             if f["assets"]["imageUrl"].startswith("/api/hyrax/essence/frames/file/")
         ]
-        assert len(sprites) == 20
+        # 20 hand-dropped pose sprites + 532 VNCCS emotion sprites
+        # (133 SFW emotions × 4 operators − 3 Rei emotions held for
+        # regeneration, then registered after clean-face regen)
+        assert len(sprites) == 552
         for frame in sprites:
             display = frame["assets"].get("display")
             assert display is not None, frame["id"]
