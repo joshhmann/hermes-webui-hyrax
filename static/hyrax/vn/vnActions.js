@@ -195,6 +195,86 @@
 
   // ── Static registry: Operator section (spec §3) ─────────────────────────
 
+  // Current on-stage pose: the stage's applied frame is authoritative; the
+  // essence presentation override is the fallback; standing is the default.
+  function _currentPose(ctx) {
+    try {
+      if (vn.stage && typeof vn.stage.getState === 'function') {
+        var st = vn.stage.getState();
+        var pose = st && st.currentFrame && st.currentFrame.state &&
+          st.currentFrame.state.pose;
+        if (typeof pose === 'string' && pose) return pose;
+      }
+    } catch (e) { /* stage absent — fall through */ }
+    try {
+      if (essence.state && ctx && ctx.operatorId) {
+        var state = essence.state.get(ctx.operatorId);
+        var pPose = state && state.presentation && state.presentation.pose;
+        if (typeof pPose === 'string' && pPose) return pPose;
+      }
+    } catch (e) { /* state absent — fall through */ }
+    return 'standing';
+  }
+
+  // Pose action availability: disabled-with-reason when already in the
+  // target pose family, or when the registry (once loaded) has no approved
+  // frame for it. Unknown registry → optimistic enable; selection's
+  // fallback ladder keeps the stage never-blank.
+  function _poseAvailability(targetPose) {
+    return function (ctx) {
+      var current = _currentPose(ctx);
+      var sameFamily = essence.frames &&
+        typeof essence.frames.poseFamily === 'function'
+        ? essence.frames.poseFamily(current) === essence.frames.poseFamily(targetPose)
+        : current === targetPose;
+      if (sameFamily) {
+        return { visible: true, enabled: false,
+          reasonDisabled: 'Already ' +
+            (targetPose === 'sitting' ? 'sitting' : 'standing') };
+      }
+      var has = essence.frames &&
+        typeof essence.frames.hasPoseFrame === 'function' && ctx
+        ? essence.frames.hasPoseFrame(ctx.operatorId, targetPose) : null;
+      if (has === false) {
+        return { visible: true, enabled: false,
+          reasonDisabled: 'No ' + targetPose + ' frames registered' };
+      }
+      return { visible: true, enabled: true };
+    };
+  }
+
+  // Pose change end-to-end: pin the presentation pose (and the on-stage
+  // expression) in essence state, then drive an explicit beat through
+  // essenceIntents → vnStage.applyIntent → pose-aware reselection. The
+  // expression pin keeps pose and expression independent: the pose swap
+  // reuses the current expression, later beats reuse the chosen pose.
+  function _runPose(ctx, targetPose) {
+    var patch = { pose: targetPose };
+    try {
+      if (vn.stage && typeof vn.stage.getState === 'function') {
+        var st = vn.stage.getState();
+        var expr = st && st.currentFrame && st.currentFrame.state &&
+          st.currentFrame.state.expression;
+        if (typeof expr === 'string' && expr) patch.expression = expr;
+      }
+    } catch (e) { /* stage absent */ }
+    if (essence.state &&
+        typeof essence.state.setPresentation === 'function' &&
+        ctx && ctx.operatorId) {
+      try { essence.state.setPresentation(ctx.operatorId, patch); } catch (e) {}
+    }
+    if (essence.intents && typeof essence.intents.requestBeat === 'function') {
+      var intent = null;
+      try { intent = essence.intents.requestBeat(null); } catch (e) {}
+      if (intent) return intent;
+    }
+    // Standalone fallback (no intents layer wired): direct stage beat.
+    return _stageIntent(ctx, {
+      poseIntent: targetPose,
+      expressionIntent: patch.expression,
+    });
+  }
+
   register({
     id: 'op.talk',
     label: 'Talk',
@@ -267,6 +347,28 @@
       }
       _stageIntent(ctx, { framing: 'close', gazeIntent: 'user' });
     },
+  });
+
+  register({
+    id: 'op.sit-together',
+    label: 'Sit together',
+    category: 'operator',
+    icon: 'seat',
+    action: { kind: 'client', fn: 'pose', pose: 'sitting' },
+    presentationHints: { preferredPose: 'sitting' },
+    when: _poseAvailability('sitting'),
+    run: function (ctx) { return _runPose(ctx, 'sitting'); },
+  });
+
+  register({
+    id: 'op.stand-up',
+    label: 'Stand up',
+    category: 'operator',
+    icon: 'stand',
+    action: { kind: 'client', fn: 'pose', pose: 'standing' },
+    presentationHints: { preferredPose: 'standing' },
+    when: _poseAvailability('standing'),
+    run: function (ctx) { return _runPose(ctx, 'standing'); },
   });
 
   register({
@@ -567,6 +669,30 @@
     return { ok: true, errors: [], manifest: m };
   }
 
+  // Room background resolution (manifest-owned): the first validated
+  // backgroundFrameId through the existing asset allowlist. Anything else →
+  // null; the caller keeps the current background (never blank).
+  function _backgroundUrl(manifest) {
+    var ids = manifest && manifest.backgroundFrameIds;
+    if (!Array.isArray(ids) || !ids.length) return null;
+    var id = ids[0];
+    if (typeof id !== 'string' || !id) return null;
+    return '/api/hyrax/assets/' + id;
+  }
+
+  // Canonical room-scene application: location intent (pose/expression
+  // untouched — independent dimensions) + background-layer swap per the
+  // room's registered background frames.
+  function applyRoomScene(manifest, ctx) {
+    if (!manifest) return;
+    _stageIntent(ctx || { operatorId: manifest.operatorId },
+      { location: manifest.roomId });
+    var url = _backgroundUrl(manifest);
+    if (url && vn.stage && typeof vn.stage.setBackground === 'function') {
+      try { vn.stage.setBackground(url); } catch (e) { /* keep current bg */ }
+    }
+  }
+
   // World-state mutation (manifest-local, v1) with optimistic revert.
   function _mutateAmbient(manifest, key, value) {
     var prev = manifest.ambientState ? manifest.ambientState[key] : undefined;
@@ -580,8 +706,17 @@
 
   // Deterministic room interactables, generated from validated manifest ids
   // (code-owned templates; ids come from the manifest, never from a model).
+  // Navigation actions (enter/return) register first — the sidebar shows the
+  // first ≤5 per section, and room navigation outranks object verbs by
+  // frequency of use.
   function registerRoomActions(manifest) {
-    manifest.interactables.forEach(function (id) {
+    var ordered = manifest.interactables.slice().sort(function (a, b) {
+      var nav = { 'room.enter': 0, 'room.hq': 1 };
+      var ra = nav[a] != null ? nav[a] : 2;
+      var rb = nav[b] != null ? nav[b] : 2;
+      return ra - rb;
+    });
+    ordered.forEach(function (id) {
       if (id === 'room.enter') {
         register({
           id: 'room.enter',
@@ -589,13 +724,18 @@
           category: 'environment',
           icon: 'door',
           action: { kind: 'navigation', target: 'vn' },
-          when: function () { return { visible: true, enabled: true }; },
+          when: function () {
+            var has = _backgroundUrl(manifest) != null;
+            return { visible: true, enabled: has,
+              reasonDisabled: has ? undefined
+                : 'No background registered for this room' };
+          },
           run: function (ctx) {
             if (ctx && typeof ctx.enterRoom === 'function') {
               ctx.enterRoom(manifest.roomId);
               return;
             }
-            _stageIntent(ctx, { location: manifest.roomId });
+            applyRoomScene(manifest, ctx);
           },
         });
         return;
@@ -763,6 +903,8 @@
     validate: validateManifest,
     register: registerRoom,
     load: loadRoom,
+    backgroundUrl: _backgroundUrl,
+    applyScene: applyRoomScene,
     get: function (roomId) { return _rooms[roomId] || null; },
     list: function () {
       var out = [];

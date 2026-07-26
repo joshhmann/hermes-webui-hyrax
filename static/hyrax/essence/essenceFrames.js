@@ -386,6 +386,26 @@
       'no frame available; degrade to text-first', signature, false);
   }
 
+  // Availability probe for sidebar actions: does this operator have any
+  // approved portrait frame in the given pose family? Returns null while the
+  // registry has not loaded (callers stay optimistic — the selection ladder
+  // guarantees a never-blank fallback). A loaded-but-empty registry (fetch
+  // failed closed) answers false: better to disable with a reason than to
+  // promise a pose that cannot render.
+  function hasPoseFrame(operatorId, pose) {
+    var entry = _registry[operatorId];
+    if (!entry || !entry.loaded) return null;
+    var family = poseFamily(pose);
+    var frames = entry.frames || [];
+    for (var i = 0; i < frames.length; i++) {
+      var frame = frames[i];
+      if (frame.kind && frame.kind !== 'portrait') continue;
+      if (!_approved(frame)) continue;
+      if (poseFamily((frame.state || {}).pose) === family) return true;
+    }
+    return false;
+  }
+
   // POST frames/register — available for tooling; unused by the UI in v1.
   function registerDrop(frame) {
     return _api('/api/hyrax/essence/frames/register', {
@@ -405,6 +425,7 @@
   essence.frames = {
     load: load,
     selectFrame: selectFrame,
+    hasPoseFrame: hasPoseFrame,
     noteApplied: noteApplied,
     computeSceneSignature: computeSceneSignature,
     expressionFamily: expressionFamily,

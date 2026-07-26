@@ -189,7 +189,11 @@
       emotionalTone: mood.primary || table.tone,
       expressionIntent: normalized.expression,
       actionIntent: activity.description || null,
-      poseIntent: _poseForActivity(activity.type),
+      // Explicit presentation pose (user action / server) wins over the
+      // activity-derived pose, so a chosen pose survives expression beats —
+      // pose and expression stay independent dimensions.
+      poseIntent: (state.presentation && state.presentation.pose) ||
+        _poseForActivity(activity.type),
       gazeIntent: _gazeForActivity(activity.type),
       intensity: Math.round(intensity * 100) / 100,
       location: (state.presentation && state.presentation.location) || null,

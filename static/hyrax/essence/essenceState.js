@@ -362,6 +362,29 @@
       });
   }
 
+  // Local presentation override (client-owned, e.g. sidebar pose actions).
+  // Only non-empty string fields patch through; every other key is ignored.
+  // Emits like any other mutation so intents/sidebar re-evaluate against the
+  // new presentation; server refreshes merge OVER it only when the payload
+  // carries the same keys (the override is sticky otherwise).
+  function setPresentation(operatorId, patch) {
+    if (!operatorId || !patch || typeof patch !== 'object') return null;
+    var state = _cache[operatorId] || _defaultState(operatorId);
+    var presentation = {};
+    var key;
+    for (key in state.presentation) presentation[key] = state.presentation[key];
+    for (key in patch) {
+      if (typeof patch[key] === 'string' && patch[key]) {
+        presentation[key] = patch[key];
+      }
+    }
+    state.presentation = presentation;
+    state.updatedAt = _nowIso();
+    _cache[operatorId] = state;
+    _emit(state);
+    return state;
+  }
+
   function subscribe(fn) {
     if (typeof fn !== 'function') return function () {};
     _subscribers.push(fn);
@@ -382,6 +405,7 @@
   essence.state = {
     get: get,
     refresh: refresh,
+    setPresentation: setPresentation,
     subscribe: subscribe,
     handleEvent: handleEvent,
     dispose: dispose,

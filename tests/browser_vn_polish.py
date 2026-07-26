@@ -249,6 +249,10 @@ def main():
             return 2
 
         # ── Item 1: registry serves calibration for all sprite frames ──
+        # NOTE: the registry grew past the original 20 sprite frames (a
+        # follow-up workstream registered ~2.7k emotion frames, all carrying
+        # display+crop) — assert the invariant (every served frame is
+        # calibrated), not the historical count.
         sprite_frames = []
         for op in OPERATORS:
             payload = http_json("GET", f"/api/hyrax/essence/frames?operator={op}")
@@ -257,15 +261,16 @@ def main():
                 if f.get("assets", {}).get("imageUrl", "").startswith(
                     "/api/hyrax/essence/frames/file/")
             ]
-        ok = len(sprite_frames) == 20 and all(
+        ok = len(sprite_frames) >= 20 and all(
             isinstance(f["assets"].get("display"), dict)
             and 1.0 <= f["assets"]["display"].get("scale", 0) <= 4.0
             and isinstance(f["assets"].get("crop"), dict)
             for f in sprite_frames
         )
-        record("1.registry serves display+crop for 20 sprite frames", ok,
+        record("1.registry serves display+crop for all sprite frames (>=20)", ok,
                f"sprite frames with display: "
-               f"{sum(1 for f in sprite_frames if 'display' in f['assets'])}/20")
+               f"{sum(1 for f in sprite_frames if 'display' in f['assets'])}"
+               f"/{len(sprite_frames)}")
 
         with sync_playwright() as pw:
             browser = pw.chromium.launch(

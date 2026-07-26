@@ -645,6 +645,16 @@
             _backToHq();
           },
           enterRoom: function(roomId) {
+            // Canonical path: manifest-driven location intent + background
+            // swap (vn.rooms.applyScene). Bare location intent as fallback.
+            var manifest = vn.rooms && typeof vn.rooms.get === 'function'
+              ? vn.rooms.get(roomId) : null;
+            if (manifest && typeof vn.rooms.applyScene === 'function') {
+              vn.rooms.applyScene(manifest, {
+                operatorId: operatorId, roomManifest: manifest,
+              });
+              return;
+            }
             if (vn.stage && typeof vn.stage.applyIntent === 'function') {
               vn.stage.applyIntent({ operatorId: operatorId, location: roomId, trigger: 'navigation' });
             }
@@ -657,11 +667,21 @@
         // Room manifest → sidebar room section + stage location context.
         var roomId = OPERATOR_ROOM[operatorId];
         if (roomId && vn.rooms && typeof vn.rooms.load === 'function') {
-          vn.rooms.load(roomId).then(function(manifest) {
+          vn.rooms.load(roomId).then(function(result) {
+            // load() resolves the validation envelope {ok, errors, manifest}
+            // — the sidebar context needs the manifest itself (its roomId
+            // gates the room object actions and the staged location).
+            var manifest = result && result.manifest ? result.manifest : null;
             if (!manifest || !_mounted) return;
             try {
               if (vn.sidebar && typeof vn.sidebar.setRoom === 'function') {
                 vn.sidebar.setRoom(manifest);
+              }
+              // Opening the VN from an HQ room click lands in the operator's
+              // room: the manifest owns the stage background from here.
+              if (vn.stage && typeof vn.stage.setBackground === 'function' &&
+                  typeof vn.rooms.backgroundUrl === 'function') {
+                vn.stage.setBackground(vn.rooms.backgroundUrl(manifest));
               }
             } catch (_) {}
           }).catch(function() {});

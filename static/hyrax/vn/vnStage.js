@@ -254,11 +254,19 @@
     back.setAttribute('data-framing', camera);
     front.setAttribute('data-framing', camera);
     if (transition === 'crossfade') {
+      // Clear the stale counterpart class on BOTH buffers: without this a
+      // second crossfade leaves each img carrying xfade-in AND xfade-out,
+      // and the later xfade-out rule (opacity: 0) hides the sprite entirely
+      // (found via pose swaps: second transition → invisible stage).
       back.classList.add('xfade-in');
+      back.classList.remove('xfade-out');
       front.classList.add('xfade-out');
+      front.classList.remove('xfade-in');
     } else {
       back.classList.remove('xfade-in');
+      back.classList.remove('xfade-out');
       front.classList.remove('xfade-out');
+      front.classList.remove('xfade-in');
     }
     // Swap buffers; CSS animates opacity when xfade classes are present.
     _frameImgs = [back, front];
@@ -467,6 +475,24 @@
     else _root.classList.remove('text-first');
   }
 
+  // Room-scene background swap. Fail closed: only a non-empty string swaps,
+  // and a load error restores the previous background — the stage never
+  // shows a broken image behind the sprite.
+  function setBackground(url) {
+    if (!_bgImg || typeof url !== 'string' || !url) return false;
+    var prev = _bgImg.getAttribute('src') || '';
+    if (prev === url) return true;
+    if (typeof _bgImg.addEventListener === 'function') {
+      var onError = function () {
+        _bgImg.removeEventListener('error', onError);
+        if (prev) _bgImg.src = prev;
+      };
+      _bgImg.addEventListener('error', onError);
+    }
+    _bgImg.src = url;
+    return true;
+  }
+
   function getState() {
     return {
       operatorId: _operatorId,
@@ -474,6 +500,10 @@
       reducedMotion: _reducedMotion,
       textFirst: _textFirst,
       currentFrame: _currentFrame,
+      background: _bgImg
+        ? (typeof _bgImg.getAttribute === 'function'
+          ? _bgImg.getAttribute('src') : _bgImg.src)
+        : null,
       providerIds: _providerInstances.map(function (p) { return p.id; }),
     };
   }
@@ -517,6 +547,7 @@
     init: init,
     applyIntent: applyIntent,
     setTextFirst: setTextFirst,
+    setBackground: setBackground,
     getState: getState,
     dispose: dispose,
     CROSSFADE_MS: CROSSFADE_MS,

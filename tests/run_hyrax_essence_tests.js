@@ -709,7 +709,15 @@ async function main() {
   assert(!byActionId(sbRoot, 'op.offer-help'), 'offer-help hidden again after idle update');
 
   // Confirmation dialog for confirmation.required actions.
+  // (op.sit-together / op.stand-up pushed op.fresh-conversation into the
+  // operator section overflow — expand it first.)
   apiCalls.length = 0;
+  const opSection = byClass(sbRoot, 'gestalt-vn-sidebar-section').filter(function (s) {
+    return s._attrs['data-section'] === 'operator';
+  })[0];
+  const opMore = byClass(opSection, 'gestalt-vn-sidebar-more')[0];
+  assert(!!opMore, 'operator section overflow present (7 visible entries)');
+  opMore._fire('click');
   const freshBtn = byActionId(sbRoot, 'op.fresh-conversation');
   assert(!!freshBtn, 'op.fresh-conversation rendered');
   freshBtn._fire('click');
