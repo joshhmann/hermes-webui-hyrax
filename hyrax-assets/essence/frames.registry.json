@@ -26326,7 +26326,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "neutral",
-        "pose": "hands-on-hips",
+        "pose": "clasped",
         "camera": "close"
       },
       "assets": {
@@ -52563,7 +52563,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "neutral",
-        "pose": "hands-on-hips",
+        "pose": "clasped",
         "camera": "close"
       },
       "assets": {
@@ -78800,7 +78800,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "neutral",
-        "pose": "hands-on-hips",
+        "pose": "clasped",
         "camera": "close"
       },
       "assets": {
@@ -105081,7 +105081,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "neutral",
-        "pose": "hands-on-hips",
+        "pose": "clasped",
         "camera": "close"
       },
       "assets": {
