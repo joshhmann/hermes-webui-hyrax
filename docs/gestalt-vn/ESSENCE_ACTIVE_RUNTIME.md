@@ -380,7 +380,14 @@ the day — she acts on it, files the paperwork, and tells you about it.
 
 ### Phase A — `essenced` core (deterministic, no LLM) — target: 2-3 sessions
 
-Files (new, in a new top-level `essence/` package or `services/essenced/`):
+Placement (2026-07-25, confirmed): **Hermes-side, not the WebUI.** essenced
+lives under `~/.hermes/` (package + systemd user unit beside the governance
+layer it plugs into, or the governance dir's existing essence-* home after
+the reuse audit). The WebUI repo only gets the consumer slice (presence +
+VN intent reads of the new state shape). Decision rule: Hermes owns
+identity and state; the WebUI renders it.
+
+Files (new, Hermes-side unless noted):
 - `essenced.py` — asyncio daemon: config load, watcher loop (15 s), decay
   ticker (30 s), atomic state writer, journal writer.
 - `rules.json` — the §4 event→delta table + §5 decay params + §7 personality
