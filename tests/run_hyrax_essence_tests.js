@@ -835,8 +835,8 @@ async function main() {
   assert(badge.hidden === false && badge.textContent.indexOf('stale') !== -1,
     'stale-image indicator when staleness > 3 days');
   const overlay = byClass(staleRoot, 'gestalt-vn-stage-overlay')[0];
-  assert(overlay.className.indexOf('vignette-cold') !== -1,
-    'mood-tinted vignette follows valence (negative → cold)');
+  assert(overlay.className.indexOf('vignette-negative') !== -1,
+    'mood-tinted vignette follows valence (negative → vignette-negative)');
 
   // Text-first mode toggle (class only).
   stage.setTextFirst(true);

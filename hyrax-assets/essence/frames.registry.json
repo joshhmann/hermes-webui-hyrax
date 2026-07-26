@@ -173,7 +173,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "aching-heart",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -368,7 +368,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "amusement-disbelief",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -602,7 +602,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "angry-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -836,7 +836,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "angry-pout-2",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -992,7 +992,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "angry-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -1148,7 +1148,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "angry",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -1343,7 +1343,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "anime-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -1538,7 +1538,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "anime-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -1733,7 +1733,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "anime-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -1928,7 +1928,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "anime-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -2123,7 +2123,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "annoyed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -2318,7 +2318,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "awe-reverence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -2513,7 +2513,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "awkward-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -2708,7 +2708,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "awkward-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -2903,7 +2903,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "biting-lower-lip",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -3098,7 +3098,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "bittersweet",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -3293,7 +3293,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "blank-stare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -3488,7 +3488,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "boiling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -3683,7 +3683,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "bored",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -3917,7 +3917,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "cat-smile-nyan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -4073,7 +4073,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "cat-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -4268,7 +4268,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "cheeky-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -4463,7 +4463,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "cheering",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -4658,7 +4658,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "circle-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -4853,7 +4853,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "cold-anger",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -5048,7 +5048,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "concentration",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -5243,7 +5243,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "condescending-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -5438,7 +5438,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "confused-perplexity",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -5633,7 +5633,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "content-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -5867,7 +5867,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "crying-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -6023,7 +6023,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "crying",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -6218,7 +6218,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "cynical-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -6452,7 +6452,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "deadpan-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -6608,7 +6608,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "deadpan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -6803,7 +6803,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "deep-thought",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -6998,7 +6998,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "delighted-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -7193,7 +7193,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "depressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -7388,7 +7388,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "despair",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -7583,7 +7583,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "diamond-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -7778,7 +7778,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "disappointed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -7973,7 +7973,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "disdain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -8168,7 +8168,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "dizzy",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -8363,7 +8363,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "downtrodden",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -8558,7 +8558,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "doyagao",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -8753,7 +8753,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "emotional-vulnerability",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -8948,7 +8948,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "evil-cackle",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -9143,7 +9143,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "evil-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -9338,7 +9338,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "excited-anime",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -9572,7 +9572,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "exhausted-sigh",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -9728,7 +9728,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "exhausted",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -9923,7 +9923,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "explosive-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -10118,7 +10118,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "expressionless",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -10313,7 +10313,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "flirty-cat",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -10508,7 +10508,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "flirty-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -10703,7 +10703,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "focused-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -10937,7 +10937,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "frustrated-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -11093,7 +11093,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "frustrated",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -11288,7 +11288,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "furious-snarl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -11483,7 +11483,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "gentle-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -11678,7 +11678,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "glare-of-judgment",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -11873,7 +11873,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -12068,7 +12068,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "gritted-teeth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -12263,7 +12263,7 @@
       "sceneSignature": "4847cb07",
       "state": {
         "expression": "happy-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -12458,7 +12458,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "headache",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -12653,7 +12653,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "heart-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -12848,7 +12848,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "hopeful-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -13043,7 +13043,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "indifferent",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -13238,7 +13238,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "jaw-drop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -13433,7 +13433,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "knowing-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -13667,7 +13667,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "laughing-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -13823,7 +13823,7 @@
       "sceneSignature": "4847cb07",
       "state": {
         "expression": "laughing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -14018,7 +14018,7 @@
       "sceneSignature": "4847cb07",
       "state": {
         "expression": "light-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -14213,7 +14213,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "meditation",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -14408,7 +14408,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "mischievous-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -14603,7 +14603,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "mocking-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -14798,7 +14798,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "neutral-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -14993,7 +14993,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "nostalgic-sadness",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -15188,7 +15188,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "physical-pain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -15383,7 +15383,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "playful-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -15578,7 +15578,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "pout-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -15773,7 +15773,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "puzzled",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -15968,7 +15968,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "quirky-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -16163,7 +16163,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "radiant-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -16358,7 +16358,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -16592,7 +16592,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "sad-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -16748,7 +16748,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "sad",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -16943,7 +16943,7 @@
       "sceneSignature": "5bfe1772",
       "state": {
         "expression": "sarcastic",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -17138,7 +17138,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "scowl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -17333,7 +17333,7 @@
       "sceneSignature": "41d537a0",
       "state": {
         "expression": "scream-of-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -17528,7 +17528,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "scrunched-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -17723,7 +17723,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "seething",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -17918,7 +17918,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "shock-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -18152,7 +18152,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "shocked-silence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -18308,7 +18308,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "shocked",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -18503,7 +18503,7 @@
       "sceneSignature": "4847cb07",
       "state": {
         "expression": "shy-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -18698,7 +18698,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "side-eye",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -18893,7 +18893,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "silent-scream-anguish",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -19088,7 +19088,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "silent-tears",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -19283,7 +19283,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "skeptical",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -19478,7 +19478,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "sly-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -19712,7 +19712,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "smile-dimples",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -19868,7 +19868,7 @@
       "sceneSignature": "4847cb07",
       "state": {
         "expression": "smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -20063,7 +20063,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -20297,7 +20297,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "smug-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -20453,7 +20453,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "smug",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -20648,7 +20648,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "sobbing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -20843,7 +20843,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "startled-blink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -21038,7 +21038,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "sudden-realization",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -21233,7 +21233,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "sudden-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -21467,7 +21467,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "surprised-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -21623,7 +21623,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "surprised",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -21818,7 +21818,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "suspicious",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -22013,7 +22013,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "sweet-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -22208,7 +22208,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "tired-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -22403,7 +22403,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "tongue-out",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -22598,7 +22598,7 @@
       "sceneSignature": "d65a85f6",
       "state": {
         "expression": "traumatized",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -22793,7 +22793,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "trembling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -22988,7 +22988,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "troll-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -23183,7 +23183,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "tsundere-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -23378,7 +23378,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "turn-pale",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -23573,7 +23573,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "uncertain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -23768,7 +23768,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "unimpressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -23963,7 +23963,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "uwu",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -24158,7 +24158,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "veins-pop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -24353,7 +24353,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "victorious-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -24548,7 +24548,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "wincing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -24782,7 +24782,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "wink-tongue",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -24938,7 +24938,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "wink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -25133,7 +25133,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "winking-frown",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -25328,7 +25328,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "winking-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -25523,7 +25523,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "wry-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -25718,7 +25718,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "x-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -25913,7 +25913,7 @@
       "sceneSignature": "41d537a0",
       "state": {
         "expression": "yandere-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -26326,7 +26326,7 @@
       "sceneSignature": "21c28bb3",
       "state": {
         "expression": "neutral",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -26564,7 +26564,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "aching-heart",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -26759,7 +26759,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "amusement-disbelief",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -26993,7 +26993,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "angry-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -27227,7 +27227,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "angry-pout-2",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -27383,7 +27383,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "angry-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -27539,7 +27539,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "angry",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -27734,7 +27734,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "anime-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -27929,7 +27929,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "anime-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -28124,7 +28124,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "anime-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -28319,7 +28319,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "anime-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -28514,7 +28514,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "annoyed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -28709,7 +28709,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "awe-reverence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -28904,7 +28904,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "awkward-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -29099,7 +29099,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "awkward-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -29294,7 +29294,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "biting-lower-lip",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -29489,7 +29489,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "bittersweet",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -29684,7 +29684,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "blank-stare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -29879,7 +29879,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "boiling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -30074,7 +30074,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "bored",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -30308,7 +30308,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "cat-smile-nyan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -30464,7 +30464,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "cat-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -30659,7 +30659,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "cheeky-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -30854,7 +30854,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "cheering",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -31049,7 +31049,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "circle-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -31244,7 +31244,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "cold-anger",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -31439,7 +31439,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "concentration",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -31634,7 +31634,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "condescending-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -31829,7 +31829,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "confused-perplexity",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -32024,7 +32024,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "content-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -32258,7 +32258,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "crying-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -32414,7 +32414,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "crying",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -32609,7 +32609,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "cynical-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -32843,7 +32843,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "deadpan-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -32999,7 +32999,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "deadpan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -33194,7 +33194,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "deep-thought",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -33389,7 +33389,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "delighted-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -33584,7 +33584,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "depressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -33779,7 +33779,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "despair",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -33974,7 +33974,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "diamond-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -34169,7 +34169,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "disappointed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -34364,7 +34364,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "disdain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -34559,7 +34559,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "dizzy",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -34754,7 +34754,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "downtrodden",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -34949,7 +34949,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "doyagao",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -35144,7 +35144,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "emotional-vulnerability",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -35339,7 +35339,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "evil-cackle",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -35534,7 +35534,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "evil-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -35729,7 +35729,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "excited-anime",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -35963,7 +35963,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "exhausted-sigh",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -36119,7 +36119,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "exhausted",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -36314,7 +36314,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "explosive-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -36509,7 +36509,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "expressionless",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -36704,7 +36704,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "flirty-cat",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -36899,7 +36899,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "flirty-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -37094,7 +37094,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "focused-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -37328,7 +37328,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "frustrated-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -37484,7 +37484,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "frustrated",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -37679,7 +37679,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "furious-snarl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -37874,7 +37874,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "gentle-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -38069,7 +38069,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "glare-of-judgment",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -38264,7 +38264,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -38459,7 +38459,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "gritted-teeth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -38654,7 +38654,7 @@
       "sceneSignature": "91895a9a",
       "state": {
         "expression": "happy-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -38849,7 +38849,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "headache",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -39044,7 +39044,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "heart-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -39239,7 +39239,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "hopeful-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -39434,7 +39434,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "indifferent",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -39629,7 +39629,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "jaw-drop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -39824,7 +39824,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "knowing-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -40058,7 +40058,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "laughing-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -40214,7 +40214,7 @@
       "sceneSignature": "91895a9a",
       "state": {
         "expression": "laughing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -40409,7 +40409,7 @@
       "sceneSignature": "91895a9a",
       "state": {
         "expression": "light-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -40604,7 +40604,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "meditation",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -40799,7 +40799,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "mischievous-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -40994,7 +40994,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "mocking-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -41189,7 +41189,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "neutral-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -41384,7 +41384,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "nostalgic-sadness",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -41579,7 +41579,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "physical-pain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -41774,7 +41774,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "playful-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -41969,7 +41969,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "pout-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -42164,7 +42164,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "puzzled",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -42359,7 +42359,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "quirky-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -42554,7 +42554,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "radiant-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -42749,7 +42749,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -42983,7 +42983,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "sad-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -43139,7 +43139,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "sad",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -43334,7 +43334,7 @@
       "sceneSignature": "18230c15",
       "state": {
         "expression": "sarcastic",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -43529,7 +43529,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "scowl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -43724,7 +43724,7 @@
       "sceneSignature": "19b97f2b",
       "state": {
         "expression": "scream-of-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -43919,7 +43919,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "scrunched-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -44114,7 +44114,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "seething",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -44309,7 +44309,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "shock-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -44543,7 +44543,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "shocked-silence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -44699,7 +44699,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "shocked",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -44894,7 +44894,7 @@
       "sceneSignature": "91895a9a",
       "state": {
         "expression": "shy-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -45089,7 +45089,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "side-eye",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -45284,7 +45284,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "silent-scream-anguish",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -45479,7 +45479,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "silent-tears",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -45674,7 +45674,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "skeptical",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -45869,7 +45869,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "sly-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -46103,7 +46103,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "smile-dimples",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -46259,7 +46259,7 @@
       "sceneSignature": "91895a9a",
       "state": {
         "expression": "smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -46454,7 +46454,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -46688,7 +46688,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "smug-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -46844,7 +46844,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "smug",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -47039,7 +47039,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "sobbing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -47234,7 +47234,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "startled-blink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -47429,7 +47429,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "sudden-realization",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -47624,7 +47624,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "sudden-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -47858,7 +47858,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "surprised-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -48014,7 +48014,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "surprised",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -48209,7 +48209,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "suspicious",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -48404,7 +48404,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "sweet-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -48599,7 +48599,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "tired-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -48794,7 +48794,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "tongue-out",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -48989,7 +48989,7 @@
       "sceneSignature": "50637bbd",
       "state": {
         "expression": "traumatized",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -49184,7 +49184,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "trembling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -49379,7 +49379,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "troll-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -49574,7 +49574,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "tsundere-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -49769,7 +49769,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "turn-pale",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -49964,7 +49964,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "uncertain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -50159,7 +50159,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "unimpressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -50354,7 +50354,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "uwu",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -50549,7 +50549,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "veins-pop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -50744,7 +50744,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "victorious-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -50939,7 +50939,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "wincing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -51173,7 +51173,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "wink-tongue",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -51329,7 +51329,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "wink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -51524,7 +51524,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "winking-frown",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -51719,7 +51719,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "winking-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -51914,7 +51914,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "wry-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -52109,7 +52109,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "x-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -52304,7 +52304,7 @@
       "sceneSignature": "19b97f2b",
       "state": {
         "expression": "yandere-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -52563,7 +52563,7 @@
       "sceneSignature": "b7fa0338",
       "state": {
         "expression": "neutral",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -52801,7 +52801,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "aching-heart",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -52996,7 +52996,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "amusement-disbelief",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -53230,7 +53230,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "angry-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -53464,7 +53464,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "angry-pout-2",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -53620,7 +53620,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "angry-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -53776,7 +53776,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "angry",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -53971,7 +53971,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "anime-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -54166,7 +54166,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "anime-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -54361,7 +54361,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "anime-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -54556,7 +54556,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "anime-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -54751,7 +54751,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "annoyed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -54946,7 +54946,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "awe-reverence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -55141,7 +55141,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "awkward-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -55336,7 +55336,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "awkward-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -55531,7 +55531,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "biting-lower-lip",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -55726,7 +55726,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "bittersweet",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -55921,7 +55921,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "blank-stare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -56116,7 +56116,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "boiling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -56311,7 +56311,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "bored",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -56545,7 +56545,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "cat-smile-nyan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -56701,7 +56701,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "cat-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -56896,7 +56896,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "cheeky-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -57091,7 +57091,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "cheering",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -57286,7 +57286,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "circle-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -57481,7 +57481,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "cold-anger",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -57676,7 +57676,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "concentration",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -57871,7 +57871,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "condescending-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -58066,7 +58066,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "confused-perplexity",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -58261,7 +58261,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "content-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -58495,7 +58495,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "crying-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -58651,7 +58651,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "crying",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -58846,7 +58846,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "cynical-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -59080,7 +59080,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "deadpan-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -59236,7 +59236,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "deadpan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -59431,7 +59431,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "deep-thought",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -59626,7 +59626,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "delighted-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -59821,7 +59821,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "depressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -60016,7 +60016,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "despair",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -60211,7 +60211,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "diamond-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -60406,7 +60406,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "disappointed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -60601,7 +60601,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "disdain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -60796,7 +60796,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "dizzy",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -60991,7 +60991,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "downtrodden",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -61186,7 +61186,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "doyagao",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -61381,7 +61381,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "emotional-vulnerability",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -61576,7 +61576,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "evil-cackle",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -61771,7 +61771,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "evil-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -61966,7 +61966,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "excited-anime",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -62200,7 +62200,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "exhausted-sigh",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -62356,7 +62356,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "exhausted",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -62551,7 +62551,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "explosive-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -62746,7 +62746,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "expressionless",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -62941,7 +62941,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "flirty-cat",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -63136,7 +63136,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "flirty-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -63331,7 +63331,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "focused-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -63565,7 +63565,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "frustrated-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -63721,7 +63721,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "frustrated",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -63916,7 +63916,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "furious-snarl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -64111,7 +64111,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "gentle-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -64306,7 +64306,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "glare-of-judgment",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -64501,7 +64501,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -64696,7 +64696,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "gritted-teeth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -64891,7 +64891,7 @@
       "sceneSignature": "280b546e",
       "state": {
         "expression": "happy-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -65086,7 +65086,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "headache",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -65281,7 +65281,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "heart-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -65476,7 +65476,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "hopeful-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -65671,7 +65671,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "indifferent",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -65866,7 +65866,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "jaw-drop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -66061,7 +66061,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "knowing-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -66295,7 +66295,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "laughing-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -66451,7 +66451,7 @@
       "sceneSignature": "280b546e",
       "state": {
         "expression": "laughing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -66646,7 +66646,7 @@
       "sceneSignature": "280b546e",
       "state": {
         "expression": "light-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -66841,7 +66841,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "meditation",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -67036,7 +67036,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "mischievous-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -67231,7 +67231,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "mocking-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -67426,7 +67426,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "neutral-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -67621,7 +67621,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "nostalgic-sadness",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -67816,7 +67816,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "physical-pain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -68011,7 +68011,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "playful-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -68206,7 +68206,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "pout-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -68401,7 +68401,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "puzzled",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -68596,7 +68596,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "quirky-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -68791,7 +68791,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "radiant-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -68986,7 +68986,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -69220,7 +69220,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "sad-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -69376,7 +69376,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "sad",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -69571,7 +69571,7 @@
       "sceneSignature": "29dda4c9",
       "state": {
         "expression": "sarcastic",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -69766,7 +69766,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "scowl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -69961,7 +69961,7 @@
       "sceneSignature": "7f515e9f",
       "state": {
         "expression": "scream-of-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -70156,7 +70156,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "scrunched-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -70351,7 +70351,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "seething",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -70546,7 +70546,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "shock-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -70780,7 +70780,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "shocked-silence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -70936,7 +70936,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "shocked",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -71131,7 +71131,7 @@
       "sceneSignature": "280b546e",
       "state": {
         "expression": "shy-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -71326,7 +71326,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "side-eye",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -71521,7 +71521,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "silent-scream-anguish",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -71716,7 +71716,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "silent-tears",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -71911,7 +71911,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "skeptical",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -72106,7 +72106,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "sly-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -72340,7 +72340,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "smile-dimples",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -72496,7 +72496,7 @@
       "sceneSignature": "280b546e",
       "state": {
         "expression": "smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -72691,7 +72691,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -72925,7 +72925,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "smug-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -73081,7 +73081,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "smug",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -73276,7 +73276,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "sobbing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -73471,7 +73471,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "startled-blink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -73666,7 +73666,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "sudden-realization",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -73861,7 +73861,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "sudden-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -74095,7 +74095,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "surprised-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -74251,7 +74251,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "surprised",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -74446,7 +74446,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "suspicious",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -74641,7 +74641,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "sweet-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -74836,7 +74836,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "tired-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -75031,7 +75031,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "tongue-out",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -75226,7 +75226,7 @@
       "sceneSignature": "036d06a1",
       "state": {
         "expression": "traumatized",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -75421,7 +75421,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "trembling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -75616,7 +75616,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "troll-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -75811,7 +75811,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "tsundere-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -76006,7 +76006,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "turn-pale",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -76201,7 +76201,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "uncertain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -76396,7 +76396,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "unimpressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -76591,7 +76591,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "uwu",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -76786,7 +76786,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "veins-pop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -76981,7 +76981,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "victorious-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -77176,7 +77176,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "wincing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -77410,7 +77410,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "wink-tongue",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -77566,7 +77566,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "wink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -77761,7 +77761,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "winking-frown",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -77956,7 +77956,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "winking-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -78151,7 +78151,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "wry-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -78346,7 +78346,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "x-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -78541,7 +78541,7 @@
       "sceneSignature": "7f515e9f",
       "state": {
         "expression": "yandere-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -78800,7 +78800,7 @@
       "sceneSignature": "70bfb96c",
       "state": {
         "expression": "neutral",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -79038,7 +79038,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "aching-heart",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -79233,7 +79233,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "amusement-disbelief",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -79467,7 +79467,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "angry-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -79701,7 +79701,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "angry-pout-2",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -79857,7 +79857,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "angry-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -80013,7 +80013,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "angry",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -80208,7 +80208,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "anime-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -80403,7 +80403,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "anime-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -80598,7 +80598,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "anime-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -80793,7 +80793,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "anime-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -80988,7 +80988,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "annoyed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -81183,7 +81183,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "awe-reverence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -81378,7 +81378,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "awkward-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -81573,7 +81573,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "awkward-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -81768,7 +81768,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "biting-lower-lip",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -81963,7 +81963,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "bittersweet",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -82158,7 +82158,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "blank-stare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -82353,7 +82353,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "boiling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -82548,7 +82548,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "bored",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -82782,7 +82782,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "cat-smile-nyan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -82938,7 +82938,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "cat-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -83133,7 +83133,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "cheeky-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -83328,7 +83328,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "cheering",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -83523,7 +83523,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "circle-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -83718,7 +83718,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "cold-anger",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -83913,7 +83913,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "concentration",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -84108,7 +84108,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "condescending-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -84303,7 +84303,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "confused-perplexity",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -84498,7 +84498,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "content-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -84732,7 +84732,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "crying-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -84888,7 +84888,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "crying",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -85083,7 +85083,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "cynical-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -85317,7 +85317,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "deadpan-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -85473,7 +85473,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "deadpan",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -85668,7 +85668,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "deep-thought",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -85863,7 +85863,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "delighted-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -86058,7 +86058,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "depressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -86253,7 +86253,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "despair",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -86448,7 +86448,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "diamond-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -86643,7 +86643,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "disappointed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -86838,7 +86838,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "disdain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -87033,7 +87033,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "dizzy",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -87228,7 +87228,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "downtrodden",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -87423,7 +87423,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "doyagao",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -87618,7 +87618,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "emotional-vulnerability",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -87813,7 +87813,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "evil-cackle",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -88008,7 +88008,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "evil-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -88203,7 +88203,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "excited-anime",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -88437,7 +88437,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "exhausted-sigh",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -88593,7 +88593,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "exhausted",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -88788,7 +88788,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "explosive-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -88983,7 +88983,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "expressionless",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -89178,7 +89178,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "flirty-cat",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -89373,7 +89373,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "flirty-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -89568,7 +89568,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "focused-glare",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -89802,7 +89802,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "frustrated-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -89958,7 +89958,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "frustrated",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -90153,7 +90153,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "furious-snarl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -90348,7 +90348,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "gentle-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -90543,7 +90543,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "glare-of-judgment",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -90738,7 +90738,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -90933,7 +90933,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "gritted-teeth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -91128,7 +91128,7 @@
       "sceneSignature": "d8e05ff0",
       "state": {
         "expression": "happy-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -91323,7 +91323,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "headache",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -91518,7 +91518,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "heart-eyes",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -91713,7 +91713,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "hopeful-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -91908,7 +91908,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "indifferent",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -92103,7 +92103,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "jaw-drop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -92298,7 +92298,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "knowing-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -92532,7 +92532,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "laughing-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -92688,7 +92688,7 @@
       "sceneSignature": "d8e05ff0",
       "state": {
         "expression": "laughing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -92883,7 +92883,7 @@
       "sceneSignature": "d8e05ff0",
       "state": {
         "expression": "light-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -93078,7 +93078,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "meditation",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -93273,7 +93273,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "mischievous-grin",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -93468,7 +93468,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "mocking-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -93663,7 +93663,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "neutral-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -93858,7 +93858,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "nostalgic-sadness",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -94053,7 +94053,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "physical-pain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -94248,7 +94248,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "playful-pucker",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -94443,7 +94443,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "pout-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -94638,7 +94638,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "puzzled",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -94833,7 +94833,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "quirky-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -95028,7 +95028,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "radiant-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -95223,7 +95223,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -95457,7 +95457,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "sad-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -95613,7 +95613,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "sad",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -95808,7 +95808,7 @@
       "sceneSignature": "b1d6b103",
       "state": {
         "expression": "sarcastic",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -96003,7 +96003,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "scowl",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -96198,7 +96198,7 @@
       "sceneSignature": "e7ccb225",
       "state": {
         "expression": "scream-of-fury",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -96393,7 +96393,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "scrunched-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -96588,7 +96588,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "seething",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -96783,7 +96783,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "shock-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -97017,7 +97017,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "shocked-silence",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -97173,7 +97173,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "shocked",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -97368,7 +97368,7 @@
       "sceneSignature": "d8e05ff0",
       "state": {
         "expression": "shy-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -97563,7 +97563,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "side-eye",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -97758,7 +97758,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "silent-scream-anguish",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -97953,7 +97953,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "silent-tears",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -98148,7 +98148,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "skeptical",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -98343,7 +98343,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "sly-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -98577,7 +98577,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "smile-dimples",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -98733,7 +98733,7 @@
       "sceneSignature": "d8e05ff0",
       "state": {
         "expression": "smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -98928,7 +98928,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -99162,7 +99162,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "smug-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -99318,7 +99318,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "smug",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -99513,7 +99513,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "sobbing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -99708,7 +99708,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "startled-blink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -99903,7 +99903,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "sudden-realization",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -100098,7 +100098,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "sudden-shock",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -100332,7 +100332,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "surprised-emote",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -100488,7 +100488,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "surprised",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -100683,7 +100683,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "suspicious",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -100878,7 +100878,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "sweet-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -101073,7 +101073,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "tired-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -101268,7 +101268,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "tongue-out",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -101463,7 +101463,7 @@
       "sceneSignature": "20a71d97",
       "state": {
         "expression": "traumatized",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -101658,7 +101658,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "trembling-rage",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -101853,7 +101853,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "troll-face",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -102048,7 +102048,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "tsundere-pout",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -102243,7 +102243,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "turn-pale",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -102438,7 +102438,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "uncertain",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -102633,7 +102633,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "unimpressed",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -102828,7 +102828,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "uwu",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -103023,7 +103023,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "veins-pop",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -103218,7 +103218,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "victorious-smirk",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -103413,7 +103413,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "wincing",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -103647,7 +103647,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "wink-tongue",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -103803,7 +103803,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "wink",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -103998,7 +103998,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "winking-frown",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -104193,7 +104193,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "winking-surprise",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -104388,7 +104388,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "wry-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -104583,7 +104583,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "x-mouth",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -104778,7 +104778,7 @@
       "sceneSignature": "e7ccb225",
       "state": {
         "expression": "yandere-smile",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {
@@ -105081,7 +105081,7 @@
       "sceneSignature": "0ffe5e86",
       "state": {
         "expression": "neutral",
-        "pose": "clasped",
+        "pose": "casual",
         "camera": "close"
       },
       "assets": {

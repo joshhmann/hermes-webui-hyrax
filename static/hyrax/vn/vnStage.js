@@ -119,7 +119,7 @@
     var state = essence.state.get(_operatorId);
     var mood = (state && state.mood) || {};
     var valence = typeof mood.valence === 'number' ? mood.valence : 0;
-    var band = valence > 0.2 ? 'warm' : (valence < -0.2 ? 'cold' : 'neutral');
+    var band = valence > 0.2 ? 'positive' : (valence < -0.2 ? 'negative' : 'neutral');
     var intensity = typeof mood.intensity === 'number' ? mood.intensity : 0;
     _overlay.className = 'gestalt-vn-stage-overlay vignette-' + band;
     _overlay.style.opacity = String(Math.min(0.6, 0.2 + intensity * 0.4));
@@ -243,6 +243,12 @@
     if (!frame || !frame.assets || !frame.assets.imageUrl) return false;
     var front = _frameImgs[0];
     var back = _frameImgs[1];
+    // Prefer the compressed thumbnail (mobile payload is ~3% of the
+    // full-res PNG); the calibration/display data is resolution-independent
+    // (all percentages of the wrap), so framing is identical either way.
+    var thumb = frame.assets.thumbnailUrl;
+    var primarySrc = (typeof thumb === 'string' && thumb) ? thumb : frame.assets.imageUrl;
+    var retriedOriginal = false;
     // Fail closed on broken imagery: a frame whose image cannot load must
     // never take the stage. Without this guard a 404ing frame faded IN
     // empty while the good frame faded OUT and _currentFrame pointed at
@@ -263,6 +269,14 @@
         back.__vnLoadHandler = null;
       }
       var onError = function () {
+        // Thumb miss → retry once with the full-resolution original before
+        // declaring the frame broken (a 404ing thumb must not cost the
+        // frame its place in every future selection).
+        if (!retriedOriginal && primarySrc !== frame.assets.imageUrl) {
+          retriedOriginal = true;
+          back.src = frame.assets.imageUrl;
+          return; // handlers stay attached for the retry
+        }
         try { back.removeEventListener('error', onError); } catch (_) {}
         try { back.removeEventListener('load', onLoad); } catch (_) {}
         if (back.__vnErrorHandler === onError) back.__vnErrorHandler = null;
@@ -295,7 +309,7 @@
       back.addEventListener('error', onError);
       back.addEventListener('load', onLoad);
     }
-    back.src = frame.assets.imageUrl;
+    back.src = primarySrc;
     back.alt = _altForFrame(frame);
     back.setAttribute('data-frame-id', frame.id || '');
     back.setAttribute('data-frame-source', frame.source || '');

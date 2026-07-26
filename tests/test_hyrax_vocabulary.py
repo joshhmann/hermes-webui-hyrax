@@ -45,26 +45,13 @@ OPERATORS = {"tai", "rei", "nei", "mai"}
 EXPRESSION_FAMILIES = {"neutral", "positive", "wry", "focused", "intense", "sad"}
 
 # Registry state.pose vocabulary, per frame kind (VOCABULARY.md §5).
-PORTRAIT_POSES = {"standing", "sitting", "thinking", "clasped", "confident"}
+PORTRAIT_POSES = {"standing", "sitting", "thinking", "casual", "confident"}
 CHIBI_POSES = {"stand"}
 
 # Presence activity vocabulary (VOCABULARY.md §6).
 ACTIVITY_TYPES = {
     "idle", "conversing", "tool-working", "waiting-approval",
     "background-working", "resting", "offline",
-}
-
-# Known drift, reported 2026-07-26 (VOCABULARY.md §5 "Known drift"): 4 legacy
-# authored sprite frames (kind field absent) carry state.pose "hands-on-hips",
-# which is not in the vocabulary. Quarantined with frame-level precision —
-# the test fails if drift SPREADS beyond these ids, and passes unchanged once
-# the registry is rebuilt. Do not fix product code from this test; fix the
-# registry and remove the quarantine.
-_KNOWN_POSE_DRIFT = {
-    "frame.tai.sprite.neutral.0004": "hands-on-hips",
-    "frame.rei.sprite.neutral.0004": "hands-on-hips",
-    "frame.nei.sprite.neutral.0004": "hands-on-hips",
-    "frame.mai.sprite.neutral.0004": "hands-on-hips",
 }
 
 
@@ -239,8 +226,7 @@ class TestPoses:
 
     def test_registry_pose_values_in_vocabulary(self):
         """Every non-null state.pose in frames.registry.json is in the
-        per-kind pose vocabulary. Drift beyond the quarantined legacy frames
-        (_KNOWN_POSE_DRIFT) fails here."""
+        per-kind pose vocabulary."""
         violations = {}
         for frame in _registry_frames():
             state = frame.get("state") or {}
@@ -251,14 +237,10 @@ class TestPoses:
             vocab = CHIBI_POSES if kind == "chibi" else PORTRAIT_POSES
             if pose not in vocab:
                 violations[frame.get("id")] = pose
-        unexpected = {
-            fid: pose for fid, pose in violations.items()
-            if _KNOWN_POSE_DRIFT.get(fid) != pose
-        }
-        assert not unexpected, (
-            "registry pose values outside the vocabulary (and outside the "
-            "documented quarantine in docs/gestalt-vn/VOCABULARY.md §5): "
-            f"{unexpected}"
+        assert not violations, (
+            "registry pose values outside the vocabulary "
+            "(docs/gestalt-vn/VOCABULARY.md §5): "
+            f"{violations}"
         )
 
     def test_registry_poses_map_through_pose_family_consistently(self):

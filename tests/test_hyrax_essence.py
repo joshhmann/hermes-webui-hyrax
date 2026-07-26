@@ -526,7 +526,7 @@ class TestFramesRegistryGet:
         ]
         # 20 hand-dropped pose sprites + 2660 VNCCS emotion sprites
         # (133 SFW emotions × 4 operators × 5 pose variants 0001-0005:
-        # standing/sitting/thinking/clasped/confident)
+        # standing/sitting/thinking/casual/confident)
         assert len(sprites) == 2680
         for frame in sprites:
             display = frame["assets"].get("display")

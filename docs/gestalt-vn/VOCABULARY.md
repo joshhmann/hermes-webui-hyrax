@@ -116,7 +116,7 @@ Portrait pose vocabulary (registry `state.pose`, owner:
 | `standing` | default |
 | `sitting` | |
 | `thinking` | |
-| `clasped` | **pending rename** — the token `clasped` is scheduled to be renamed; treat it as canonical until the rename lands, then update this row, the registry, and any intents in one pass |
+| `casual` | hands-low / gripping-coat (renamed from `clasped` 2026-07-26) |
 | `confident` | |
 
 Chibi pose vocabulary: `stand` only (chibi frames, e.g. `frame.tai.chibi.stand`).
@@ -132,16 +132,9 @@ Chibi pose vocabulary: `stand` only (chibi frames, e.g. `frame.tai.chibi.stand`)
   `{standing, sitting, working, gesture}` — note the value is `gesture`,
   not `gesturing` (the key is `gesturing`).
 - The 5 registry portrait poses above are **not** keys of `_POSE_FAMILY`
-  (except `standing`/`sitting`), so `thinking`/`clasped`/`confident` all
+  (except `standing`/`sitting`), so `thinking`/`casual`/`confident` all
   bucket to `standing` — intentional: pose-family only separates
   stand/sit/work/gesture granularity in scene signatures.
-
-Known drift (reported 2026-07-26, NOT fixed here — documentation + tests
-only): 4 legacy sprite frames `frame.{tai,rei,nei,mai}.sprite.neutral.0004`
-(authored, `kind` field absent) carry `state.pose: "hands-on-hips"`, which
-is not in the vocabulary. Quarantined in
-`tests/test_hyrax_vocabulary.py::test_registry_pose_values_in_vocabulary`;
-remove the quarantine when the registry is rebuilt.
 
 Adding new terms: add the pose to this table first, then generate frames;
 new chibi poses extend the chibi row, not the portrait set.
