@@ -5,7 +5,9 @@
  * 300 ms crossfade (instant cut when reducedMotion), continuity handling via
  * the frames registry ladder, alt text from frame state, stale-image
  * indicator when essence state staleness > 3 days, text-first mode toggle
- * (class hook), subtle pointer parallax (off when reducedMotion).
+ * (class hook), subtle pointer parallax (off when reducedMotion), emotion
+ * jolt on expression-family change (class hook; keyframes in hyrax.css,
+ * only under prefers-reduced-motion: no-preference).
  *
  * Ships the v1 presentation providers (ESSENCE_RUNTIME_SPEC §9):
  * StaticEssenceFrameProvider + FallbackPortraitProvider, registered in
@@ -76,6 +78,21 @@
   var _parallaxLeave = null;
   var _stateUnsub = null;
   var _mounted = false;
+  var _expressionFamily = null;  // last expression family shown (jolt diff)
+  var _joltTimer = null;
+  var _desktopMq = null;         // matchMedia('(min-width: 721px)') listener
+  var _desktopMqHandler = null;
+
+  // Canonical expression families (hyrax-assets/essence/expression-families
+  // .json): neutral / positive / wry / focused / intense — each maps to a
+  // jolt keyframe class in hyrax.css.
+  var JOLT_CLASSES = [
+    'gestalt-vn-jolt-neutral',
+    'gestalt-vn-jolt-positive',
+    'gestalt-vn-jolt-wry',
+    'gestalt-vn-jolt-focused',
+    'gestalt-vn-jolt-intense',
+  ];
 
   function _el(tag, className, text) {
     var el = document.createElement(tag);
@@ -122,6 +139,103 @@
     }
   }
 
+  // Live reduced-motion check: init opts are the explicit override, but the
+  // shell doesn't pass one — matchMedia is the honest source at jolt time.
+  function _liveReducedMotion() {
+    if (_reducedMotion) return true;
+    try {
+      return typeof root.matchMedia === 'function' &&
+        root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (_) { return false; }
+  }
+
+  // Emotion jolt: a small physical reaction on the sprite when the
+  // expression FAMILY changes (positive = bounce, intense = shake, wry =
+  // tilt, focused = lean, neutral = settle). Class swap on the frame wrap;
+  // the animations themselves live in hyrax.css behind
+  // @media (prefers-reduced-motion: no-preference) — and the class is never
+  // applied under reduce, so reduced-motion runs carry no jolt markup.
+  function _maybeJolt(intent) {
+    var expr = intent && intent.expressionIntent;
+    if (!expr) return;
+    var family = essence.frames && typeof essence.frames.expressionFamily === 'function'
+      ? essence.frames.expressionFamily(expr) : 'neutral';
+    if (family === _expressionFamily) return; // no change → no reaction
+    _expressionFamily = family;
+    if (_liveReducedMotion() || !_frameWrap || !_frameWrap.classList) return;
+    var cls = 'gestalt-vn-jolt-' + family;
+    if (JOLT_CLASSES.indexOf(cls) === -1) return;
+    for (var i = 0; i < JOLT_CLASSES.length; i++) {
+      _frameWrap.classList.remove(JOLT_CLASSES[i]);
+    }
+    // Force reflow so a same-family retrigger restarts the animation.
+    try { void _frameWrap.offsetWidth; } catch (_) {}
+    _frameWrap.classList.add(cls);
+    if (_joltTimer) { clearTimeout(_joltTimer); _joltTimer = null; }
+    _joltTimer = setTimeout(function () {
+      _joltTimer = null;
+      if (_frameWrap && _frameWrap.classList) _frameWrap.classList.remove(cls);
+    }, 600);
+  }
+
+  // ── Per-frame sprite calibration ────────────────────────────────────────
+  // Desktop-only: the stage column is a centered 4/5 box (hyrax.css
+  // min-width:721px). Sprites sit on different regions/scales of their
+  // transparent canvases, so the registry carries per-frame display data
+  // (scripts/calibrate_frame_crops.py → assets.display {scale, focusX,
+  // objectPositionY}):
+  //   scale           img width as a multiple of the wrap width (≥1: zoom).
+  //                   Cover stays width-limited, so the visible source
+  //                   window shrinks uniformly to V0/scale.
+  //   focusX          content center as a fraction of the canvas width —
+  //                   the element's `left` shifts so the FIGURE (not the
+  //                   canvas) centers in the stage column.
+  //   objectPositionY anchors the window so the head top sits ~3% below
+  //                   the stage top instead of the canvas top.
+  // All values are percentages of the wrap, so viewport resizes need no
+  // recompute — only the desktop↔mobile media crossing does (inline
+  // styles must not leak into the mobile full-bleed layout).
+  function _isDesktopFraming() {
+    try {
+      if (_desktopMq) return !!_desktopMq.matches;
+      return typeof root.matchMedia !== 'function' ||
+        root.matchMedia('(min-width: 721px)').matches;
+    } catch (_) { return true; }
+  }
+
+  function _clearFrameCalibration(img) {
+    if (!img || !img.style) return;
+    img.style.width = '';
+    img.style.left = '';
+    img.style.right = '';
+    img.style.objectPosition = '';
+  }
+
+  function _applyFrameCalibration(img, frame) {
+    if (!img || !img.style) return;
+    var d = frame && frame.assets && frame.assets.display;
+    var ok = _isDesktopFraming() && d &&
+      typeof d.scale === 'number' && d.scale >= 1 &&
+      typeof d.focusX === 'number' && d.focusX >= 0 && d.focusX <= 1 &&
+      typeof d.objectPositionY === 'number' &&
+      d.objectPositionY >= 0 && d.objectPositionY <= 1;
+    if (!ok) { _clearFrameCalibration(img); return; }
+    img.style.width = (d.scale * 100).toFixed(1) + '%';
+    img.style.left = (50 - d.focusX * d.scale * 100).toFixed(2) + '%';
+    img.style.right = 'auto';
+    img.style.objectPosition =
+      'center ' + (d.objectPositionY * 100).toFixed(1) + '%';
+  }
+
+  // Re-apply on desktop↔mobile crossings: each img remembers the frame it
+  // currently shows (both crossfade buffers), so the media flip restores or
+  // strips the inline calibration without touching the frame selection.
+  function _reapplyCalibration() {
+    for (var i = 0; i < _frameImgs.length; i++) {
+      _applyFrameCalibration(_frameImgs[i], _frameImgs[i].__vnFrame || null);
+    }
+  }
+
   // Crossfade (or cut under reducedMotion) with continuity hints.
   function _showFrame(frame, transition) {
     if (!frame || !frame.assets || !frame.assets.imageUrl) return false;
@@ -131,6 +245,8 @@
     back.alt = _altForFrame(frame);
     back.setAttribute('data-frame-id', frame.id || '');
     back.setAttribute('data-frame-source', frame.source || '');
+    back.__vnFrame = frame;
+    _applyFrameCalibration(back, frame);
     // Camera-aware framing (close|medium|wide from the frame state; CSS
     // handles cover/contain + anchor — the mai-style half-cut look without
     // editing images).
@@ -242,6 +358,20 @@
     _applyVignette();
     _updateStaleBadge();
 
+    // Seed the jolt baseline from persisted essence state — the first
+    // intent after mount reacts only to an actual family change, never to
+    // re-entry itself.
+    _expressionFamily = null;
+    if (essence.state && _operatorId && essence.frames &&
+        typeof essence.frames.expressionFamily === 'function') {
+      var seedState = essence.state.get(_operatorId);
+      var seedExpr = seedState && seedState.presentation &&
+        seedState.presentation.expression;
+      if (seedExpr) {
+        _expressionFamily = essence.frames.expressionFamily(seedExpr);
+      }
+    }
+
     // Re-init replay: the persisted current frame outlives the DOM on
     // re-mount — put it straight back into the fresh layers (cut, no
     // crossfade) so the "loading scene…" placeholder never lingers and
@@ -249,6 +379,22 @@
     if (_currentFrame && _currentFrame.operatorId === _operatorId) {
       _showFrame(_currentFrame, 'cut');
     }
+
+    // Desktop ↔ mobile crossings re-apply/strip the per-frame calibration
+    // (inline styles are desktop-only; mobile keeps the full-bleed CSS).
+    _desktopMq = null;
+    _desktopMqHandler = null;
+    try {
+      if (typeof root.matchMedia === 'function') {
+        _desktopMq = root.matchMedia('(min-width: 721px)');
+        _desktopMqHandler = function () { _reapplyCalibration(); };
+        if (typeof _desktopMq.addEventListener === 'function') {
+          _desktopMq.addEventListener('change', _desktopMqHandler);
+        } else if (typeof _desktopMq.addListener === 'function') {
+          _desktopMq.addListener(_desktopMqHandler);
+        }
+      }
+    } catch (_) { _desktopMq = null; _desktopMqHandler = null; }
 
     // Subtle pointer parallax — off under reducedMotion.
     if (!_reducedMotion && _root.addEventListener) {      _parallaxHandler = function (ev) {
@@ -304,6 +450,7 @@
     return chain.then(function (result) {
       if (result && result.applied) {
         _root.classList.remove('text-first-fallback');
+        _maybeJolt(intent);
         return result;
       }
       // Bottom of the ladder: text-first.
@@ -343,6 +490,19 @@
     }
     _parallaxHandler = null;
     _parallaxLeave = null;
+    if (_joltTimer) { clearTimeout(_joltTimer); _joltTimer = null; }
+    _expressionFamily = null;
+    if (_desktopMq && _desktopMqHandler) {
+      try {
+        if (typeof _desktopMq.removeEventListener === 'function') {
+          _desktopMq.removeEventListener('change', _desktopMqHandler);
+        } else if (typeof _desktopMq.removeListener === 'function') {
+          _desktopMq.removeListener(_desktopMqHandler);
+        }
+      } catch (_) {}
+    }
+    _desktopMq = null;
+    _desktopMqHandler = null;
     if (_root && _root.remove) _root.remove();
     _root = _bgImg = _frameWrap = _overlay = _staleBadge = _placeholder = null;
     _frameImgs = [];
@@ -389,6 +549,19 @@
                 // the provider chain; otherwise the fallback provider would
                 // swap the correct frame for a generic portrait on re-entry
                 // (found in dogfood: sprite replaced by the old portrait).
+                //
+                // …but only when the stage DOM actually shows the frame.
+                // After HQ → operator B → HQ → operator A, the per-operator
+                // signature cache in essenceFrames still matches A's scene
+                // while the fresh stage DOM (rebuilt on remount; the init
+                // replay is skipped on operator mismatch) still sits on the
+                // "loading scene…" placeholder. Trust the DOM, not the
+                // cache: re-show (cut) when they disagree.
+                var onStage = typeof stageCtx.getCurrentFrame === 'function'
+                  ? stageCtx.getCurrentFrame() : null;
+                if (sel.frame && (!onStage || onStage.id !== sel.frame.id)) {
+                  stageCtx.showFrame(sel.frame, 'cut');
+                }
                 return { applied: true, frame: sel.frame, transition: 'none',
                   reason: sel.reason };
               }

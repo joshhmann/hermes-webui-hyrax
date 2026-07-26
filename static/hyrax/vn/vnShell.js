@@ -252,14 +252,32 @@
     dialogueRegion.appendChild(composerEl);
 
     // Draggable splitter between stage and chat (PRODUCT: the chat must not
-    // eat the scene). Persisted per operator via prefs.split (0.15–0.7).
-    var split = prefs && typeof prefs.split === 'number' ? prefs.split : 0.38;
-    if (split < 0.15 || split > 0.7) split = 0.38;
+    // eat the scene). prefs.split is the STAGE fraction of the center column
+    // (0.3–0.85 → dialogue 70%–15%); the default keeps the dialogue at
+    // roughly a third of the desktop viewport instead of half. Persisted per
+    // operator via prefs.split, SHARED across viewport classes (one drag
+    // preference per operator; the untouched default differs by class —
+    // 0.66 desktop, 0.38 mobile bottom-sheet).
+    var mobileLayout = false;
+    try {
+      mobileLayout = !!(root.matchMedia && root.matchMedia('(max-width: 719px)').matches);
+    } catch (_) {}
+    var defaultSplit = mobileLayout ? 0.38 : 0.66;
+    var split = prefs && typeof prefs.split === 'number' ? prefs.split : defaultSplit;
+    if (split < 0.3 || split > 0.85) split = defaultSplit;
     _setStyleVar(center, '--vn2-stage-h', (split * 100).toFixed(1) + '%');
     var splitter = _el('div', 'vn2-splitter');
     splitter.setAttribute('role', 'separator');
     splitter.setAttribute('aria-orientation', 'horizontal');
     splitter.setAttribute('aria-label', 'Resize chat and scene areas');
+    splitter.setAttribute('tabindex', '0');
+    var _syncSplitterAria = function() {
+      // Value = dialogue (chat) share of the center column, in percent.
+      splitter.setAttribute('aria-valuenow', String(Math.round((1 - split) * 100)));
+    };
+    splitter.setAttribute('aria-valuemin', '15');
+    splitter.setAttribute('aria-valuemax', '70');
+    _syncSplitterAria();
     var collapseBtn = _el('button', 'vn2-splitter-toggle',
       prefs && prefs.chatCollapsed ? '▲' : '▼');
     collapseBtn.setAttribute('type', 'button');
@@ -285,10 +303,11 @@
       var rect = center.getBoundingClientRect();
       if (!rect.height) return;
       var ratio = (e.clientY - rect.top) / rect.height;
-      if (ratio < 0.15) ratio = 0.15;
-      if (ratio > 0.7) ratio = 0.7;
+      if (ratio < 0.3) ratio = 0.3;
+      if (ratio > 0.85) ratio = 0.85;
       _setStyleVar(center, '--vn2-stage-h', (ratio * 100).toFixed(1) + '%');
       split = ratio;
+      _syncSplitterAria();
     });
     var endDrag = function() {
       if (!dragging) return;
@@ -297,6 +316,19 @@
     };
     splitter.addEventListener('pointerup', endDrag);
     splitter.addEventListener('pointercancel', endDrag);
+    // Keyboard resize (separator role): arrows step the split by 2%.
+    splitter.addEventListener('keydown', function(e) {
+      if (!e || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+      if (e.preventDefault) e.preventDefault();
+      var delta = e.key === 'ArrowUp' ? 0.02 : -0.02;
+      var next = split + delta;
+      if (next < 0.3) next = 0.3;
+      if (next > 0.85) next = 0.85;
+      split = next;
+      _setStyleVar(center, '--vn2-stage-h', (split * 100).toFixed(1) + '%');
+      _syncSplitterAria();
+      _writePrefs(operatorId, { split: split });
+    });
 
     center.appendChild(stage);
     center.appendChild(splitter);
@@ -530,6 +562,10 @@
     try {
       if (vn.stage && typeof vn.stage.init === 'function') {
         vn.stage.init(_regions.stage, { operatorId: operatorId });
+        // The essence stage owns the scene from here — hide the shell's
+        // static fallback portrait, or it bleeds through the sprite's
+        // transparent margins (doubled figure behind the essence frame).
+        if (_regions.portrait) _regions.portrait.hidden = true;
       }
     } catch (_) {}
 

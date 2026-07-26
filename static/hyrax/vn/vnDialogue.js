@@ -45,6 +45,8 @@
   var _earliestId = null;
   var _renderedIds = {};
   var _disposed = true;
+  var _settleObserver = null;
+  var _settleTimer = null;
 
   // ── Helpers ──
 
@@ -61,6 +63,68 @@
   function _scrollDown() {
     if (_userScrolledUp || !_scroller) return;
     try { _scroller.scrollTop = _scroller.scrollHeight; } catch (_) {}
+  }
+
+  // Unconditional bottom snap for the initial open — bypasses the
+  // user-scrolled-up suppression (nothing to suppress before first scroll).
+  function _snapToBottom() {
+    if (!_scroller) return;
+    try { _scroller.scrollTop = _scroller.scrollHeight; } catch (_) {}
+  }
+
+  // Open-settle pin: the first snap happens before the region finishes
+  // laying out (the stage/approvals regions resize the scroller client for
+  // a beat after init), and the snap's own scroll event can then arrive
+  // AFTER a shrink — reading a stale gap that looks exactly like the user
+  // scrolling up, poisoning the suppression flag and defeating every
+  // correction pass. So for a short window after init we FORCE-snap on
+  // every resize and treat only genuine user gestures (wheel/touch/keys)
+  // as "user scrolled up", then get out of the way so "load earlier"
+  // prepends never fight it.
+  var SETTLE_MS = 2500;
+
+  function _disconnectSettleObserver() {
+    if (_settleObserver) {
+      try { _settleObserver.disconnect(); } catch (_) {}
+      _settleObserver = null;
+    }
+    if (_settleTimer) {
+      clearTimeout(_settleTimer);
+      _settleTimer = null;
+    }
+  }
+
+  function _pinBottomDuringSettle() {
+    if (typeof root.ResizeObserver !== 'function' || !_scroller) return;
+    _disconnectSettleObserver();
+    var until = Date.now() + SETTLE_MS;
+    var endEarly = function() { _disconnectSettleObserver(); };
+    _settleObserver = new root.ResizeObserver(function() {
+      if (_disposed || Date.now() > until) {
+        _disconnectSettleObserver();
+        return;
+      }
+      _snapToBottom();
+      _userScrolledUp = false;
+    });
+    _settleObserver.observe(_scroller);
+    if (_historyEl) _settleObserver.observe(_historyEl);
+    if (_liveEl) _settleObserver.observe(_liveEl);
+    try {
+      _scroller.addEventListener('wheel', endEarly, { passive: true });
+      _scroller.addEventListener('touchstart', endEarly, { passive: true });
+      _scroller.addEventListener('keydown', endEarly);
+      _settleTimer = setTimeout(function() {
+        try {
+          _scroller.removeEventListener('wheel', endEarly);
+          _scroller.removeEventListener('touchstart', endEarly);
+          _scroller.removeEventListener('keydown', endEarly);
+        } catch (_) {}
+        _disconnectSettleObserver();
+      }, SETTLE_MS + 100);
+    } catch (_) {
+      _settleTimer = setTimeout(_disconnectSettleObserver, SETTLE_MS + 100);
+    }
   }
 
   function _onScroll() {
@@ -360,6 +424,22 @@
     var s = _session();
     var cur = s && typeof s.current === 'function' ? s.current() : null;
     _renderHistory(cur ? cur.messages : []);
+    // Open at the BOTTOM of history (latest message) — the chat-app norm.
+    // renderTranscript fills the scroller but nothing scrolled it, so a
+    // reopened conversation used to start at the top. The deferred passes
+    // catch late layout growth (markdown images still loading); they honor
+    // the user-scrolled-up suppression in case the user already scrolled.
+    _snapToBottom();
+    _pinBottomDuringSettle();
+    // Fallback for engines without ResizeObserver (old WebKit, test
+    // fakes): a few timed correction passes over the same settle window.
+    if (typeof root.ResizeObserver !== 'function') {
+      [50, 250, 900, 2000].forEach(function(ms) {
+        setTimeout(function() {
+          if (!_disposed && !_userScrolledUp) _snapToBottom();
+        }, ms);
+      });
+    }
 
     var ev = _events();
     if (ev) {
@@ -406,6 +486,7 @@
   }
 
   function dispose() {
+    _disconnectSettleObserver();
     for (var i = 0; i < _unsubs.length; i++) {
       try { _unsubs[i](); } catch (_) {}
     }
