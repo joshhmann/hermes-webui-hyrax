@@ -2401,3 +2401,115 @@ class TestVnDeriveExpression:
     def test_non_string_content_ignored(self):
         from api.hyrax_routes import _vn_derive_expression
         assert _vn_derive_expression([{"role": "assistant", "content": ["haha"]}]) is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: expression demotion (Phase B) — derived presentation beats keywords
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestVnExpressionDemotion:
+    """_vn_bounded_conversation expression precedence (ESSENCE_ACTIVE_RUNTIME
+    Phase B): fresh essenced derived presentation.expression wins; the keyword
+    stopgap (_vn_derive_expression) is the fallback for missing/stale derived
+    state; a session-carried expression still outranks both."""
+
+    def _write_derived(self, home, expression="smile", intensity=0.7,
+                       age_seconds: float = 0.0):
+        import json as _json
+        import os as _os
+        import time as _time
+
+        def leaf(value):
+            return {"value": value, "provenance": "derived",
+                    "updatedAt": "2026-07-26T00:00:00+00:00"}
+
+        payload = {
+            "version": 2,
+            "operatorId": "tai",
+            "mood": {"primary": leaf("happy")},
+            "condition": {"energy": leaf(0.6)},
+            "activity": {"type": leaf("idle")},
+            "presentation": {"expression": leaf(expression),
+                             "intensity": leaf(intensity),
+                             "poseIntent": leaf("standing"),
+                             "sceneIntent": leaf("ops")},
+        }
+        path = home / "essence" / "derived_state.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_json.dumps(payload))
+        if age_seconds:
+            old = _time.time() - age_seconds
+            _os.utime(path, (old, old))
+        return path
+
+    def _fixture_home(self, tmp_path, monkeypatch, *, age_seconds: float = 0.0):
+        """Point api.hyrax_essence._profile_home at a tmp home with derived
+        state (fresh unless age_seconds given). Hermetic: never reads the
+        real on-disk derived_state.json."""
+        import api.hyrax_essence as essence
+
+        home = tmp_path / "tai"
+        self._write_derived(home, age_seconds=age_seconds)
+        monkeypatch.setattr(essence, "_profile_home", lambda op: tmp_path / op)
+        return home
+
+    _KEYWORD_TRANSCRIPT = [
+        {"role": "user", "content": "tell me a joke"},
+        {"role": "assistant", "content": "Haha, good one!"},
+    ]
+
+    def test_fresh_derived_beats_keyword(self, tmp_path, monkeypatch):
+        from api.hyrax_routes import _vn_bounded_conversation
+
+        self._fixture_home(tmp_path, monkeypatch)
+        session = _make_mock_session("vn_demote_1",
+                                     messages=self._KEYWORD_TRANSCRIPT)
+        result = _vn_bounded_conversation(session)
+        # Derived "smile" wins over the keyword "laughing".
+        assert result["expression"] == {"current": "smile", "intensity": 0.7}
+
+    def test_stale_derived_falls_back_to_keyword(self, tmp_path, monkeypatch):
+        from api.hyrax_routes import _vn_bounded_conversation
+
+        self._fixture_home(tmp_path, monkeypatch, age_seconds=90000)
+        session = _make_mock_session("vn_demote_2",
+                                     messages=self._KEYWORD_TRANSCRIPT)
+        result = _vn_bounded_conversation(session)
+        assert result["expression"] == {"current": "laughing"}
+
+    def test_missing_derived_falls_back_to_keyword(self, tmp_path, monkeypatch):
+        import api.hyrax_essence as essence
+        from api.hyrax_routes import _vn_bounded_conversation
+
+        # Home exists but no derived_state.json.
+        (tmp_path / "tai" / "essence").mkdir(parents=True)
+        monkeypatch.setattr(essence, "_profile_home", lambda op: tmp_path / op)
+        session = _make_mock_session("vn_demote_3",
+                                     messages=self._KEYWORD_TRANSCRIPT)
+        result = _vn_bounded_conversation(session)
+        assert result["expression"] == {"current": "laughing"}
+
+    def test_session_carried_expression_outranks_derived(
+            self, tmp_path, monkeypatch):
+        from api.hyrax_routes import _vn_bounded_conversation
+
+        self._fixture_home(tmp_path, monkeypatch)
+        session = _make_mock_session("vn_demote_4",
+                                     messages=self._KEYWORD_TRANSCRIPT)
+        session.expression = {"current": "focused", "intensity": 0.9}
+        result = _vn_bounded_conversation(session)
+        assert result["expression"] == {"current": "focused", "intensity": 0.9}
+
+    def test_derived_read_failure_fails_closed_to_keyword(
+            self, tmp_path, monkeypatch):
+        import api.hyrax_essence as essence
+        from api.hyrax_routes import _vn_bounded_conversation
+
+        def _boom(op):
+            raise RuntimeError("profile resolution exploded")
+
+        monkeypatch.setattr(essence, "_profile_home", _boom)
+        session = _make_mock_session("vn_demote_5",
+                                     messages=self._KEYWORD_TRANSCRIPT)
+        result = _vn_bounded_conversation(session)
+        assert result["expression"] == {"current": "laughing"}

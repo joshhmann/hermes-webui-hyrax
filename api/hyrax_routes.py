@@ -760,14 +760,24 @@ def _vn_bounded_conversation(session, limit: int | None = None, before: str | No
     # not the raw message list (which includes tool/system messages)
     compact["message_count"] = len(transcript)
     compact["total"] = len(transcript)
-    # When the session carries no explicit expression, derive one from the
-    # latest assistant reply so the VN portrait/mood badge can react.
-    # Derived over the full filtered transcript (latest row wins) before
+    # When the session carries no explicit expression, resolve one for the
+    # VN portrait/mood badge. Precedence (Phase B, ESSENCE_ACTIVE_RUNTIME):
+    #   1. essenced's fresh derived presentation.expression — the runtime-
+    #      owned mood→expression mapping (read-only, fail closed to None);
+    #   2. the keyword stopgap over the latest assistant reply
+    #      (_vn_derive_expression), kept as the fallback for missing/stale
+    #      derived state.
+    # Resolved over the full filtered transcript (latest row wins) before
     # paging cuts the window.
     if "expression" not in compact:
-        derived = _vn_derive_expression(transcript)
-        if derived:
-            compact["expression"] = {"current": derived}
+        derived_expr = _vn_derived_presentation_expression(
+            getattr(session, "profile", ""))
+        if derived_expr is not None:
+            compact["expression"] = derived_expr
+        else:
+            derived = _vn_derive_expression(transcript)
+            if derived:
+                compact["expression"] = {"current": derived}
     # Paging: cut at the `before` cursor, then window to the last `limit` rows
     if before is not None:
         cut = _vn_resolve_before_cursor(transcript, before)
@@ -798,9 +808,10 @@ def _vn_resolve_before_cursor(transcript: list, before: str) -> int | None:
 
 
 # ── VN expression derivation ─────────────────────────────────────────────
-# Stopgap server-side mood derivation until the Essence pipeline (gateway-
-# driven expression events) lands. Conservative keyword signals over the
-# latest assistant reply; no match → None → client keeps its current pose.
+# Keyword mood derivation over the latest assistant reply — DEMOTED (Phase
+# B) to the fallback behind essenced's fresh derived presentation.expression
+# (see _vn_derived_presentation_expression below). Conservative keyword
+# signals; no match → None → client keeps its current pose.
 _VN_EXPRESSION_SIGNALS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("laughing", ("haha", "lol", "😂", "🤣")),
     ("happy", ("great news", "awesome", "glad", "yay", "🎉", "😄", "love it", "well done")),
@@ -832,6 +843,37 @@ def _vn_derive_expression(transcript) -> str | None:
             if signal in text:
                 return mood
     return None
+
+
+def _vn_derived_presentation_expression(profile) -> dict | None:
+    """essenced's fresh derived presentation.expression, bounded; else None.
+
+    Lazy import: api.hyrax_essence imports from THIS module at load time, so
+    a module-level import would be circular. Fail closed on any error —
+    the caller falls back to the keyword stopgap.
+    """
+    if not isinstance(profile, str) or not profile:
+        return None
+    try:
+        from api.hyrax_essence import derived_presentation_expression
+
+        expr = derived_presentation_expression(profile)
+    except Exception:
+        return None
+    if not isinstance(expr, dict):
+        return None
+    current = expr.get("current")
+    if not isinstance(current, str) or not current:
+        return None
+    bounded = {"current": current[:MAX_TRANSCRIPT_NAME_LENGTH]}
+    intensity = expr.get("intensity")
+    if isinstance(intensity, (int, float)) and not isinstance(intensity, bool):
+        import math as _math
+
+        val = float(intensity)
+        if _math.isfinite(val):
+            bounded["intensity"] = min(1.0, max(0.0, val))
+    return bounded
 
 
 def _vn_bounded_message(msg: dict) -> dict:

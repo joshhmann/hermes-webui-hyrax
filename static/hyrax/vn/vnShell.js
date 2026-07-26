@@ -558,6 +558,44 @@
     var vn = ns.vn || {};
     var essence = ns.essence || {};
 
+    // Current staged room. Scene intents from essenced (Phase B) arrive as
+    // intent.location through the essence state → intents pipeline; the
+    // background layer is owned by room manifests (same machinery as
+    // enterRoom), so a room CHANGE swaps the background here. Fail closed:
+    // an unknown/unloadable room keeps the current background — never blank.
+    var _stageLocation = OPERATOR_ROOM[operatorId] || null;
+    function _syncSceneBackground(intent) {
+      var roomId = intent && typeof intent.location === 'string' && intent.location
+        ? intent.location : null;
+      if (!roomId || roomId === _stageLocation) return;
+      _stageLocation = roomId;
+      if (!(vn.rooms && vn.stage && typeof vn.stage.setBackground === 'function')) return;
+      var applyBg = function(manifest) {
+        if (!manifest || typeof vn.rooms.backgroundUrl !== 'function') return;
+        var url = vn.rooms.backgroundUrl(manifest);
+        if (url) { try { vn.stage.setBackground(url); } catch (_) {} }
+      };
+      var manifest = typeof vn.rooms.get === 'function' ? vn.rooms.get(roomId) : null;
+      if (manifest) { applyBg(manifest); return; }
+      if (typeof vn.rooms.load === 'function') {
+        vn.rooms.load(roomId).then(function(result) {
+          if (!_mounted) return;
+          applyBg(result && result.manifest ? result.manifest
+            : (typeof vn.rooms.get === 'function' ? vn.rooms.get(roomId) : null));
+        }).catch(function() {});
+      }
+    }
+
+    // Presentation already fed by the HQ presence poll (Phase B: essenced's
+    // derived poseIntent/sceneIntent) seeds the initial scene below — the
+    // hardcoded standing/own-room intent must not stomp it.
+    var _fedPresentation = null;
+    try {
+      var fedState = essence.state && typeof essence.state.get === 'function'
+        ? essence.state.get(operatorId) : null;
+      _fedPresentation = fedState && fedState.presentation ? fedState.presentation : null;
+    } catch (_) { _fedPresentation = null; }
+
     // 1. Stage (Essence frames + providers).
     try {
       if (vn.stage && typeof vn.stage.init === 'function') {
@@ -586,6 +624,7 @@
             if (intent && intent.expressionIntent) {
               setTopBar({ mood: intent.expressionIntent });
             }
+            _syncSceneBackground(intent);
           } catch (_) {}
         }));
       }
@@ -597,10 +636,17 @@
       // scene-entry intent the stage sits on its placeholder forever (QA:
       // empty frame, "loading scene…" stuck).
       if (vn.stage && typeof vn.stage.applyIntent === 'function') {
+        var entryLocation = (_fedPresentation && _fedPresentation.location) ||
+          OPERATOR_ROOM[operatorId];
+        // Fed sceneIntent (≠ the operator's own room) swaps the background
+        // at mount; _syncSceneBackground also advances _stageLocation.
+        if (_fedPresentation && _fedPresentation.location) {
+          _syncSceneBackground({ location: _fedPresentation.location });
+        }
         vn.stage.applyIntent({
           operatorId: operatorId,
-          location: OPERATOR_ROOM[operatorId],
-          poseIntent: 'standing',
+          location: entryLocation,
+          poseIntent: (_fedPresentation && _fedPresentation.pose) || 'standing',
           trigger: 'scene-entry',
         });
       }
@@ -647,6 +693,7 @@
           enterRoom: function(roomId) {
             // Canonical path: manifest-driven location intent + background
             // swap (vn.rooms.applyScene). Bare location intent as fallback.
+            _stageLocation = roomId || _stageLocation;
             var manifest = vn.rooms && typeof vn.rooms.get === 'function'
               ? vn.rooms.get(roomId) : null;
             if (manifest && typeof vn.rooms.applyScene === 'function') {
@@ -678,8 +725,11 @@
                 vn.sidebar.setRoom(manifest);
               }
               // Opening the VN from an HQ room click lands in the operator's
-              // room: the manifest owns the stage background from here.
-              if (vn.stage && typeof vn.stage.setBackground === 'function' &&
+              // room: the manifest owns the stage background from here —
+              // unless a fed sceneIntent (Phase B) already moved the stage
+              // to another room, which owns the background instead.
+              if (_stageLocation === roomId &&
+                  vn.stage && typeof vn.stage.setBackground === 'function' &&
                   typeof vn.rooms.backgroundUrl === 'function') {
                 vn.stage.setBackground(vn.rooms.backgroundUrl(manifest));
               }

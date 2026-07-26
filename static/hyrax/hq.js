@@ -191,6 +191,7 @@
     // Chibis — presence endpoint first (live activity/mood/approvals),
     // profiles endpoint as availability fallback.
     fetchPresence().then(function(presenceMap) {
+      feedEssencePresentation(presenceMap);
       var slots = assignSlots(presenceMap);
       HQ_SISTERS.forEach(function(s) {
         stage.appendChild(createChibi(s, presenceMap[s.id] || null, slots[s.id]));
@@ -521,8 +522,35 @@
     }
   }
 
+  // ── Essence active runtime (Phase B) ──
+  // Presence items carry essenced's derived presentation intents in
+  // derivedState {poseIntent, sceneIntent}. Feed them into the VN essence
+  // state so the intent pipeline (essenceIntents → vnStage.applyIntent)
+  // picks up pose/scene changes through THIS polling path — no new
+  // polling. Fresh derived state only; anything else leaves the current
+  // presentation untouched (fail closed).
+  function feedEssencePresentation(map) {
+    try {
+      var gv = window.GestaltVN || {};
+      var essence = gv.essence || {};
+      if (!essence.state || typeof essence.state.setPresentation !== 'function') return;
+      Object.keys(map || {}).forEach(function(opId) {
+        var item = map[opId];
+        var ds = item && item.derivedState;
+        if (!ds || ds.fresh !== true) return;
+        var patch = {};
+        if (typeof ds.poseIntent === 'string' && ds.poseIntent) patch.pose = ds.poseIntent;
+        if (typeof ds.sceneIntent === 'string' && ds.sceneIntent) patch.location = ds.sceneIntent;
+        if (Object.keys(patch).length) {
+          try { essence.state.setPresentation(opId, patch); } catch (_) {}
+        }
+      });
+    } catch (_) {}
+  }
+
   function refreshPresence() {
     fetchPresence().then(function(map) {
+      feedEssencePresentation(map);
       renderOperatorsPanel(map);
       updateWarRoom(document.querySelector('#mainHq .hq-warroom'), map);
       applyTimeTint();

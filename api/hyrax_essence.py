@@ -857,6 +857,8 @@ _DERIVED_STATE_UNAVAILABLE = {
     "focus": None,
     "stress": None,
     "staleness_days": None,
+    "poseIntent": None,
+    "sceneIntent": None,
 }
 
 
@@ -878,7 +880,10 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
     Returns (block, expression):
       - block: the compact derivedState payload for the presence item. When
         the file is missing/stale/corrupt this is _DERIVED_STATE_UNAVAILABLE
-        (fresh: false, all nulls) — never an exception, never a 500.
+        (fresh: false, all nulls) — never an exception, never a 500. The
+        presentation intents (poseIntent/sceneIntent) are non-null only
+        while fresh: they drive the VN stage, so a stale file must never
+        move pose or scene.
       - expression: {"current", "intensity"} to REPLACE the session-derived
         expression, or None. Only non-None when the file is fresh: essenced's
         presentation.expression is the runtime-owned mood→expression mapping,
@@ -906,6 +911,18 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
             "stress": _bounded_score(_derived_leaf(state, "condition", "stress"), 0.0, 1.0),
             # Fresh state is by definition <120s old → staleness_days 0.
             "staleness_days": 0 if fresh else round(age / 86400.0, 2),
+            # Presentation intents (poseIntent/sceneIntent) drive the VN
+            # stage, so they are exposed ONLY while fresh — a stale file
+            # must never move the sprite or the room (fail closed → null,
+            # the client keeps its current presentation).
+            "poseIntent": (
+                _bounded_str(_derived_leaf(state, "presentation", "poseIntent"))
+                if fresh else None
+            ),
+            "sceneIntent": (
+                _bounded_str(_derived_leaf(state, "presentation", "sceneIntent"))
+                if fresh else None
+            ),
         }
         expression = None
         if fresh:
@@ -923,6 +940,21 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
     except Exception:
         _logger.warning("derived_state read failed for one sister", exc_info=True)
         return dict(_DERIVED_STATE_UNAVAILABLE), None
+
+
+def derived_presentation_expression(operator: str) -> dict | None:
+    """Fresh essenced presentation.expression for one sister, else None.
+
+    Shared consumer entry point (presence + the VN conversation payload):
+    when essenced's derived_state.json is fresh, its runtime-owned
+    mood→expression mapping wins; anything else (missing/stale/corrupt
+    file, unknown operator) fails closed to None so the caller keeps its
+    own fallback (the keyword stopgap in api.hyrax_routes).
+    """
+    if operator not in _VN_PROFILES:
+        return None
+    _block, expression = _presence_derived_state(operator)
+    return expression
 
 
 def _bounded_count(value) -> int:

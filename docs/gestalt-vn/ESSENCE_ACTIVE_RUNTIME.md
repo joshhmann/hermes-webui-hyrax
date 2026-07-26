@@ -420,6 +420,21 @@ endpoint reports `staleness_days: 0`; zero LLM calls in logs.
   task completion → relief family + confident pose; reduced-motion intact;
   browser harness green.
 
+As built (2026-07-26): the presence `derivedState` block carries
+`poseIntent`/`sceneIntent` (non-null only while fresh — a stale file never
+moves the stage). `hq.js` feeds them into `essence.state` (pose→
+`presentation.pose`, scene→`presentation.location`) from its existing
+30 s presence poll — no new polling — so `essenceIntents` emits on the
+pose/location trigger change and `vnStage.applyIntent` swaps pose variants
+with the usual crossfade/jolt. `vnShell` swaps the background layer on
+scene-intent room changes through the room-manifest machinery (`vn.rooms`
+backgroundUrl → `stage.setBackground`, fail closed: unknown room keeps the
+current background). The conversation GET's expression resolves
+session-carried → fresh derived `presentation.expression` → keyword
+stopgap (`_vn_derive_expression`, demoted not deleted). Verified by
+`tests/browser_vn_phaseb.py` (pose/scene from derived, keyword fallback,
+zero console errors).
+
 ### Phase C — proactive outreach (§13) — target: 1-2 sessions
 
 - `wants.py` — want templates (social/purpose/stimulation), threshold

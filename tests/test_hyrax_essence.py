@@ -912,7 +912,8 @@ class TestPresence:
 
 def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
                            expression="smile", intensity=0.7,
-                           activity_type="idle"):
+                           activity_type="idle",
+                           pose_intent="sitting", scene_intent="ops"):
     def leaf(value):
         return {"value": value, "provenance": "derived",
                 "updatedAt": "2026-07-26T00:00:00+00:00"}
@@ -924,7 +925,9 @@ def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
                       "stress": leaf(stress)},
         "activity": {"type": leaf(activity_type)},
         "presentation": {"expression": leaf(expression),
-                         "intensity": leaf(intensity)},
+                         "intensity": leaf(intensity),
+                         "poseIntent": leaf(pose_intent),
+                         "sceneIntent": leaf(scene_intent)},
     }
 
 
@@ -994,10 +997,12 @@ class TestPresenceDerivedState:
         _, handler = _call_essence_get("/api/hyrax/presence")
         assert handler.status == 200
         item = self._items_by_operator(handler)["tai"]
-        # Derived state block merged.
+        # Derived state block merged, including the fresh presentation
+        # intents that drive the VN stage (Phase B).
         assert item["derivedState"] == {
             "fresh": True, "mood": "happy", "energy": 0.62, "focus": 0.81,
             "stress": 0.12, "staleness_days": 0,
+            "poseIntent": "sitting", "sceneIntent": "ops",
         }
         # Expression comes from derived presentation.expression, NOT the
         # session-derived "laughing".
@@ -1017,6 +1022,10 @@ class TestPresenceDerivedState:
         assert item["derivedState"]["staleness_days"] > 0
         # Values are visible but stale; expression stays session-derived.
         assert item["derivedState"]["mood"] == "happy"
+        # Presentation intents are nulled while stale — a stale file must
+        # never move the VN stage's pose or scene.
+        assert item["derivedState"]["poseIntent"] is None
+        assert item["derivedState"]["sceneIntent"] is None
         assert item["expression"]["current"] == "laughing"
 
     def test_corrupt_derived_state_falls_back(self, monkeypatch, profile_home):
@@ -1030,6 +1039,7 @@ class TestPresenceDerivedState:
         assert item["derivedState"] == {
             "fresh": False, "mood": None, "energy": None, "focus": None,
             "stress": None, "staleness_days": None,
+            "poseIntent": None, "sceneIntent": None,
         }
         assert item["expression"]["current"] == "laughing"
 
@@ -1062,6 +1072,91 @@ class TestPresenceDerivedState:
         # Expression still merges (fresh derived state).
         assert item["expression"] == {"current": "smile", "intensity": 0.7}
         assert item["derivedState"]["fresh"] is True
+
+    def test_fresh_block_carries_presentation_intents(
+            self, monkeypatch, profile_home):
+        # Phase B: fresh derived state exposes poseIntent/sceneIntent in the
+        # compact derivedState block so the client intent pipeline can drive
+        # pose/scene swaps through the existing presence poll.
+        home = profile_home("tai", None)
+        self._write_derived(
+            home, _derived_state_payload(pose_intent="thinking",
+                                         scene_intent="lab"))
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["poseIntent"] == "thinking"
+        assert item["derivedState"]["sceneIntent"] == "lab"
+
+    def test_fresh_block_nulls_absent_presentation_intents(
+            self, monkeypatch, profile_home):
+        # Fresh file without presentation intent leaves → null intents
+        # (bounded absence), never an exception or an invented value.
+        home = profile_home("tai", None)
+        payload = _derived_state_payload()
+        del payload["presentation"]["poseIntent"]
+        del payload["presentation"]["sceneIntent"]
+        self._write_derived(home, payload)
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["fresh"] is True
+        assert item["derivedState"]["poseIntent"] is None
+        assert item["derivedState"]["sceneIntent"] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: derived_presentation_expression (shared by presence + VN payload)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestDerivedPresentationExpression:
+    """derived_presentation_expression: fresh essenced expression, else None."""
+
+    def _write_derived(self, home, payload, age_seconds: float = 0.0):
+        path = home / "essence" / "derived_state.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload))
+        if age_seconds:
+            old = time.time() - age_seconds
+            os.utime(path, (old, old))
+        return path
+
+    def test_fresh_returns_expression(self, profile_home):
+        import api.hyrax_essence as essence
+
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(
+            expression="smile", intensity=0.7))
+        assert essence.derived_presentation_expression("tai") == {
+            "current": "smile", "intensity": 0.7,
+        }
+
+    def test_stale_returns_none(self, profile_home):
+        import api.hyrax_essence as essence
+
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(), age_seconds=90000)
+        assert essence.derived_presentation_expression("tai") is None
+
+    def test_missing_returns_none(self, profile_home):
+        import api.hyrax_essence as essence
+
+        profile_home("tai", None)  # home exists, no derived_state.json
+        assert essence.derived_presentation_expression("tai") is None
+
+    def test_unknown_operator_returns_none(self, profile_home):
+        import api.hyrax_essence as essence
+
+        assert essence.derived_presentation_expression("eve") is None
+        assert essence.derived_presentation_expression("") is None
+
+    def test_unknown_expression_normalizes_to_neutral(self, profile_home):
+        import api.hyrax_essence as essence
+
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(expression="giddy"))
+        expr = essence.derived_presentation_expression("tai")
+        assert expr == {"current": "neutral", "intensity": 0.7}
 
 
 # ══════════════════════════════════════════════════════════════════════════
