@@ -882,6 +882,80 @@ async function main() {
     'reducedMotion → instant cut, no crossfade');
   stage.dispose();
 
+  // Broken imagery fails closed (vnStage error path + noteFrameFailed):
+  // a frame whose image errors must never take the stage — the previous
+  // frame is restored and the broken entry leaves every future selection.
+  console.log('\n── Stage: image load error fails closed ──');
+  const errContainer = makeEl('div');
+  frames._reset('tai');
+  registryError = false;
+  const fxGood = mkFrame('fx-good', 'sig-good',
+    { location: 'ops', expression: 'focused', pose: 'working' });
+  const fxBad = mkFrame('fx-bad', 'sig-bad',
+    { location: 'lab', expression: 'sad', pose: 'standing' });
+  registryFixture = { frames: [fxGood, fxBad] };
+  stage.init(errContainer, { operatorId: 'tai' });
+  await sleep(20);
+  const errRoot = errContainer._children[0];
+  applied = await stage.applyIntent({
+    operatorId: 'tai', expressionIntent: 'focused', poseIntent: 'working',
+    location: 'ops', framing: 'medium',
+  });
+  assert(applied.applied === true && applied.frame.id === 'fx-good',
+    'good frame applied first');
+  applied = await stage.applyIntent({
+    operatorId: 'tai', expressionIntent: 'sad', poseIntent: 'standing',
+    location: 'lab', framing: 'medium',
+  });
+  assert(applied.applied === true && applied.frame.id === 'fx-bad',
+    'second frame committed before its load error arrives');
+  const errImgs = byClass(errRoot, 'gestalt-vn-stage-frame');
+  const badImg = errImgs.filter(function (img) { return img.src === '/img/fx-bad.png'; })[0];
+  const goodImg = errImgs.filter(function (img) { return img.src === '/img/fx-good.png'; })[0];
+  assert(!!badImg && !!goodImg, 'both buffers located by src');
+  badImg._fire('error');
+  assert(stage.getState().currentFrame && stage.getState().currentFrame.id === 'fx-good',
+    'load error reverts to the previous frame');
+  assert(badImg.classList.contains('xfade-out') && !badImg.classList.contains('xfade-in'),
+    'broken buffer faded back out');
+  assert(goodImg.classList.contains('xfade-in') && !goodImg.classList.contains('xfade-out'),
+    'previous buffer restored visible');
+  // The failed frame is excluded from every future selection.
+  const selAfterFail = frames.selectFrame({
+    operatorId: 'tai', expressionIntent: 'sad', poseIntent: 'standing',
+    location: 'lab', framing: 'medium',
+  }, {});
+  assert(!selAfterFail.frame || selAfterFail.frame.id !== 'fx-bad',
+    'failed frame never wins a tier again');
+  stage.dispose();
+
+  // First-frame failure (no previous frame): the loading placeholder comes
+  // back instead of a blank stage, and failed generic ids are skipped.
+  const reiContainer = makeEl('div');
+  frames._reset('rei');
+  registryError = false;
+  registryFixture = { frames: [fxGood, fxBad] }; // tai-only — filtered out for rei
+  stage.init(reiContainer, { operatorId: 'rei' });
+  await sleep(20);
+  const reiRoot = reiContainer._children[0];
+  applied = await stage.applyIntent({ operatorId: 'rei', expressionIntent: 'neutral' });
+  assert(applied.applied === true && applied.frame.id === 'generic.rei.portrait.neutral',
+    'empty registry → generic portrait fallback');
+  const reiImg = byClass(reiRoot, 'gestalt-vn-stage-frame').filter(function (img) {
+    return img.src === '/api/hyrax/assets/rei.portrait.neutral';
+  })[0];
+  reiImg._fire('error');
+  assert(stage.getState().currentFrame === null,
+    'first-frame failure clears the current frame');
+  assert(byClass(reiRoot, 'gestalt-vn-stage-placeholder')[0].hidden === false,
+    'first-frame failure restores the loading placeholder');
+  const genericAfterFail = frames.genericFrameFor('rei', 'neutral');
+  assert(genericAfterFail && genericAfterFail.assets.imageUrl === '/api/hyrax/assets/rei.portrait.calm',
+    'failed generic id skipped on the fallback rung');
+  stage.dispose();
+  frames._reset('rei');
+  frames._reset('tai');
+
   // ── Results ────────────────────────────────────────────────────────────
   console.log('\n═══ Results: ' + passed + ' passed, ' + failed + ' failed ═══\n');
   if (failures.length > 0) {

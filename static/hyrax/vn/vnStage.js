@@ -243,6 +243,58 @@
     if (!frame || !frame.assets || !frame.assets.imageUrl) return false;
     var front = _frameImgs[0];
     var back = _frameImgs[1];
+    // Fail closed on broken imagery: a frame whose image cannot load must
+    // never take the stage. Without this guard a 404ing frame faded IN
+    // empty while the good frame faded OUT and _currentFrame pointed at
+    // the broken entry — the portrait "vanished" until some later intent
+    // happened to select a working frame (found live: the mai generic
+    // ladder referenced asset ids missing from the manifest). On error we
+    // restore whatever the front buffer actually shows (its __vnFrame —
+    // not _currentFrame, which can hold a frame from a prior mount's DOM),
+    // and report the failure so selection stops picking the broken entry
+    // (essenceFrames.noteFrameFailed).
+    if (typeof back.addEventListener === 'function') {
+      if (back.__vnErrorHandler) {
+        try { back.removeEventListener('error', back.__vnErrorHandler); } catch (_) {}
+        back.__vnErrorHandler = null;
+      }
+      if (back.__vnLoadHandler) {
+        try { back.removeEventListener('load', back.__vnLoadHandler); } catch (_) {}
+        back.__vnLoadHandler = null;
+      }
+      var onError = function () {
+        try { back.removeEventListener('error', onError); } catch (_) {}
+        try { back.removeEventListener('load', onLoad); } catch (_) {}
+        if (back.__vnErrorHandler === onError) back.__vnErrorHandler = null;
+        if (back.__vnLoadHandler === onLoad) back.__vnLoadHandler = null;
+        // A later _showFrame may already have moved the buffers on — only
+        // revert when the broken frame is still the committed one.
+        if (_currentFrame !== frame) return;
+        var restoreFrame = front.__vnFrame || null;
+        back.classList.add('xfade-out');
+        back.classList.remove('xfade-in');
+        if (restoreFrame) {
+          front.classList.add('xfade-in');
+          front.classList.remove('xfade-out');
+        }
+        _frameImgs = [front, back];
+        _currentFrame = restoreFrame;
+        if (!restoreFrame && _placeholder) _placeholder.hidden = false;
+        if (essence.frames && typeof essence.frames.noteFrameFailed === 'function') {
+          try { essence.frames.noteFrameFailed(_operatorId, frame.id); } catch (_) {}
+        }
+      };
+      var onLoad = function () {
+        try { back.removeEventListener('load', onLoad); } catch (_) {}
+        try { back.removeEventListener('error', onError); } catch (_) {}
+        if (back.__vnErrorHandler === onError) back.__vnErrorHandler = null;
+        if (back.__vnLoadHandler === onLoad) back.__vnLoadHandler = null;
+      };
+      back.__vnErrorHandler = onError;
+      back.__vnLoadHandler = onLoad;
+      back.addEventListener('error', onError);
+      back.addEventListener('load', onLoad);
+    }
     back.src = frame.assets.imageUrl;
     back.alt = _altForFrame(frame);
     back.setAttribute('data-frame-id', frame.id || '');

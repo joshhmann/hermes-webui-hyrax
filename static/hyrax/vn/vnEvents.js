@@ -27,6 +27,19 @@
  * Reconnect: native EventSource retry; on a subsequent `open` a synthetic
  * {kind:'reconnect', source:'gestalt'} event is fanned out so consumers can
  * re-sync (ARCH §7). Dedupe by server event id (lastEventId / payload.id).
+ *
+ * One run per connection (server contract): the native SSE handler detaches
+ * after the run's terminal frame (stream_end / cancel / apperror / error)
+ * and returns — but the response carries no Content-Length/chunked framing
+ * on a keep-alive HTTP/1.1 socket, so the browser never observes the end
+ * and EventSource never retries: every later turn streams into a dead
+ * connection (found live: turn 1 streamed, turn 2 processed server-side
+ * but zero frames reached the dialogue until a full remount). The client
+ * therefore RE-ARMS on every terminal frame: close the spent connection
+ * and open a fresh one with ?after_event_id=<last server id> so the
+ * journal replay backfills the gap. This is per-turn, not a special case
+ * for turn 2 — every terminal frame re-arms, and the native `error` type
+ * is subscribed for the same reason (it is terminal server-side too).
  */
 (function() {
   'use strict';
@@ -59,6 +72,7 @@
     done: 'response.completed',
     cancel: 'interruption',
     apperror: 'response.failed',
+    error: 'response.failed',
     stream_end: 'stream.end',
   };
 
@@ -68,14 +82,25 @@
     'title_status', 'context_status', 'goal', 'goal_continue',
     'bg_task_complete', 'compressing', 'compressed', 'metering',
     'pending_steer_leftover', 'warning', 'done', 'cancel', 'apperror',
-    'stream_end',
+    'error', 'stream_end',
   ];
+
+  // Native types the server treats as run-terminal (_RUN_TERMINAL_EVENTS):
+  // the SSE handler detaches and returns after sending one, leaving the
+  // keep-alive socket open but dead. Each one re-arms the connection.
+  var TERMINAL_NATIVE_TYPES = {
+    stream_end: true,
+    cancel: true,
+    apperror: true,
+    error: true,
+  };
 
   var BUFFER_MAX = 500;
   var SEEN_MAX = 1000;
 
   // ── State ──
   var _es = null;
+  var _esHandlers = [];  // [{type, fn}] attached to _es (for clean re-arm)
   var _sessionId = null;
   var _operatorId = null;
   var _subs = [];        // [{matcher, fn}]
@@ -83,6 +108,7 @@
   var _seen = [];        // dedupe id ring (oldest first)
   var _seenSet = {};
   var _seq = 0;          // last sequence (server or internal)
+  var _lastServerId = null; // last server event id (resume cursor for re-arm)
   var _synthCounter = 0; // synthetic id counter
   var _everOpened = false;
   var _disposed = true;
@@ -190,6 +216,7 @@
     if (ev._serverId) {
       if (_seenBefore(ev.id)) return false;
       _markSeen(ev.id);
+      _lastServerId = ev.id; // resume cursor for the re-arm reconnect
     }
     _buffer.push(ev);
     while (_buffer.length > BUFFER_MAX) _buffer.shift();
@@ -223,7 +250,13 @@
     var type = nativeType || _guessNativeType(data);
     var lastEventId = messageEvent && typeof messageEvent.lastEventId === 'string'
       ? messageEvent.lastEventId : '';
-    _push(_normalize(type, data, lastEventId));
+    var ev = _normalize(type, data, lastEventId);
+    var fresh = _push(ev);
+    // Terminal frame: the server has finished this connection's run and
+    // will never write to it again. Re-arm AFTER the fanout so consumers
+    // see the terminal event first, and only for frames we actually
+    // delivered (a deduped terminal already re-armed once).
+    if (fresh && TERMINAL_NATIVE_TYPES[ev.nativeType]) _rearm();
   }
 
   function _onOpen() {
@@ -238,6 +271,58 @@
 
   // ── Public API ──
 
+  function _eventsUrl(withResume) {
+    var url = '/api/hyrax/vn/conversations/' + encodeURIComponent(_sessionId) + '/events';
+    // Resume cursor: the server replays the run journal after this id, so
+    // a re-arm never loses frames that fired between connections.
+    if (withResume && _lastServerId) {
+      url += '?after_event_id=' + encodeURIComponent(_lastServerId);
+    }
+    return url;
+  }
+
+  function _attach(es) {
+    for (var i = 0; i < NATIVE_TYPES.length; i++) {
+      (function(type) {
+        var fn = function(ev) { _onFrame(type, ev); };
+        es.addEventListener(type, fn);
+        _esHandlers.push({ type: type, fn: fn });
+      })(NATIVE_TYPES[i]);
+    }
+    es.addEventListener('open', _onOpen);
+    _esHandlers.push({ type: 'open', fn: _onOpen });
+    // Untyped frames (real EventSource supports the onmessage property).
+    es.onmessage = function(ev) { _onFrame(null, ev); };
+  }
+
+  function _detach(es) {
+    for (var i = 0; i < _esHandlers.length; i++) {
+      try { es.removeEventListener(_esHandlers[i].type, _esHandlers[i].fn); }
+      catch (_) {}
+    }
+    _esHandlers = [];
+    try { es.onmessage = null; } catch (_) {}
+  }
+
+  // Re-arm after a terminal frame: the spent connection is closed and a
+  // fresh one opened with the resume cursor. Subscribers, the dedupe ring
+  // and the buffer all survive — only the transport is replaced (same
+  // contract as _resetTransport, which exists because early subscribers
+  // must never be wiped).
+  function _rearm() {
+    if (_disposed || !_sessionId) return;
+    var ES = root.EventSource;
+    if (typeof ES !== 'function') return;
+    var old = _es;
+    _es = null;
+    if (old) {
+      _detach(old);
+      try { old.close(); } catch (_) {}
+    }
+    _es = new ES(_eventsUrl(true));
+    _attach(_es);
+  }
+
   // Transport reset for (re-)init: close the stream and reset stream state,
   // but PRESERVE subscribers. Modules subscribe before events.init() runs
   // (shell wires consumers first, the SSE source last) — a full dispose()
@@ -245,6 +330,7 @@
   // composer's response.failed handler never fired, Cancel stuck visible).
   function _resetTransport() {
     if (_es) {
+      _detach(_es);
       try { _es.close(); } catch (_) {}
       _es = null;
     }
@@ -252,6 +338,7 @@
     _seen = [];
     _seenSet = {};
     _seq = 0;
+    _lastServerId = null;
     _sessionId = null;
     _operatorId = null;
     _everOpened = false;
@@ -270,17 +357,8 @@
     _sessionId = sid;
     _operatorId = typeof opts.operatorId === 'string' ? opts.operatorId : null;
 
-    var url = '/api/hyrax/vn/conversations/' + encodeURIComponent(sid) + '/events';
-    _es = new ES(url);
-
-    for (var i = 0; i < NATIVE_TYPES.length; i++) {
-      (function(type) {
-        _es.addEventListener(type, function(ev) { _onFrame(type, ev); });
-      })(NATIVE_TYPES[i]);
-    }
-    _es.addEventListener('open', _onOpen);
-    // Untyped frames (real EventSource supports the onmessage property).
-    _es.onmessage = function(ev) { _onFrame(null, ev); };
+    _es = new ES(_eventsUrl(false));
+    _attach(_es);
     return true;
   }
 

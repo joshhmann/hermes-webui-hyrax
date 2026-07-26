@@ -81,7 +81,11 @@
 
   // Known authored asset ids (hyrax-assets/vn/ASSET_MANIFEST.json, 29 assets).
   // Generic fallback ladder rung: plain portraits served through the existing
-  // /api/hyrax/assets/ allowlist machinery.
+  // /api/hyrax/assets/ allowlist machinery. Every id MUST exist in the
+  // manifest — a missing id serves 404 and (before the stage's load-error
+  // guard) blanked the sprite mid-crossfade. mai has no authored sarcastic
+  // or focused portrait; those expressions fall back to ids[0] (neutral)
+  // here and are covered by registry frames when the registry loads.
   var GENERIC_PORTRAIT_IDS = {
     tai: ['tai.portrait.neutral', 'tai.portrait.smile', 'tai.portrait.focused',
       'tai.portrait.happy-emote', 'tai.portrait.sarcastic'],
@@ -89,7 +93,6 @@
     nei: ['nei.portrait.neutral', 'nei.portrait.observant', 'nei.portrait.thinking'],
     mai: ['mai.portrait.neutral', 'mai.portrait.smile', 'mai.portrait.light-smile',
       'mai.portrait.laughing', 'mai.portrait.ohhoai', 'mai.portrait.shy-smile',
-      'mai.portrait.sarcastic', 'mai.portrait.focused',
       'mai.portrait.scream-of-fury', 'mai.portrait.yandere-smile',
       'mai.portrait.observant'],
   };
@@ -107,6 +110,7 @@
   var _lru = {};             // operatorId -> [frameId, ...] (most recent last)
   var _currentSignature = {}; // operatorId -> last applied signature
   var _currentFrame = {};    // operatorId -> last applied frame
+  var _failed = {};          // operatorId -> {frameId: true} — image failed to load
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -265,6 +269,25 @@
     if (frame) _noteUsed(operatorId, frame);
   }
 
+  function _isFailed(operatorId, frameId) {
+    return !!(frameId && _failed[operatorId] && _failed[operatorId][frameId]);
+  }
+
+  // A frame's image failed to load (vnStage error path). Exclude it from
+  // every future selection — a broken frame must never win a tier again —
+  // and drop it from the applied cache so the next identical intent
+  // re-selects (excluding it) instead of no-oping onto the broken entry.
+  function noteFrameFailed(operatorId, frameId) {
+    if (!operatorId || !frameId) return;
+    var set = _failed[operatorId] = _failed[operatorId] || {};
+    set[frameId] = true;
+    var cur = _currentFrame[operatorId];
+    if (cur && cur.id === frameId) {
+      delete _currentFrame[operatorId];
+      delete _currentSignature[operatorId];
+    }
+  }
+
   // ── Generic fallback portraits ───────────────────────────────────────────
 
   function genericPortraitUrls(operatorId) {
@@ -276,10 +299,15 @@
     var ids = GENERIC_PORTRAIT_IDS[operatorId] || [];
     if (!ids.length) return null;
     var wanted = _norm(expression);
-    var pick = ids[0];
+    var pick = null;
+    // Skip ids whose image already failed to load; expression match first,
+    // then the list head (neutral) as the honest degradation.
     for (var i = 0; i < ids.length; i++) {
+      if (_isFailed(operatorId, 'generic.' + ids[i])) continue;
       if (ids[i].split('.').pop() === wanted) { pick = ids[i]; break; }
+      if (pick === null) pick = ids[i];
     }
+    if (pick === null) return null;
     return {
       id: 'generic.' + pick,
       operatorId: operatorId,
@@ -361,6 +389,10 @@
       // (stage bg, HQ chibis) — they must never win the frame slot
       // (QA: sparse intent rendered the room background as the portrait).
       if (frames[i].kind && frames[i].kind !== 'portrait') continue;
+      // Load-failure filter: a frame whose image 404'd/errored once is
+      // dead weight in every tier — skip it forever (vnStage reports via
+      // noteFrameFailed).
+      if (_isFailed(operatorId, frames[i].id)) continue;
       if (_approved(frames[i])) approved.push(frames[i]);
     }
 
@@ -460,6 +492,7 @@
     for (var i = 0; i < frames.length; i++) {
       var frame = frames[i];
       if (frame.kind && frame.kind !== 'portrait') continue;
+      if (_isFailed(operatorId, frame.id)) continue;
       if (!_approved(frame)) continue;
       if (poseFamily((frame.state || {}).pose) === family) return true;
     }
@@ -480,6 +513,7 @@
     delete _lru[operatorId];
     delete _currentFrame[operatorId];
     delete _currentSignature[operatorId];
+    delete _failed[operatorId];
   }
 
   essence.frames = {
@@ -487,6 +521,7 @@
     selectFrame: selectFrame,
     hasPoseFrame: hasPoseFrame,
     noteApplied: noteApplied,
+    noteFrameFailed: noteFrameFailed,
     computeSceneSignature: computeSceneSignature,
     expressionFamily: expressionFamily,
     poseFamily: poseFamily,

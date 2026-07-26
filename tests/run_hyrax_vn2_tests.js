@@ -382,9 +382,6 @@ async function testEvents() {
   es._emit('metering', { tps: 12 }, 'e3');
   assert(allEvents.some(function(e) { return e.kind === 'metering.update'; }),
     'kind mapped metering→metering.update');
-  es._emit('apperror', { label: 'boom' }, 'e4');
-  assert(allEvents.some(function(e) { return e.kind === 'response.failed'; }),
-    'kind mapped apperror→response.failed');
 
   // Dedupe by server event id
   es._emit('token', { text: 'Hello again' }, 'e1');
@@ -394,22 +391,66 @@ async function testEvents() {
   es._emitUntyped({ text: 'untyped delta' }, 'e5');
   assert(received.length === 2, 'untyped text payload treated as token');
 
-  // Replay: ordered ring buffer
+  // Terminal frame (apperror): the server serves one run per connection and
+  // never writes to it again — the module must close the spent EventSource
+  // and re-arm a fresh one with the after_event_id resume cursor.
+  es._emit('apperror', { label: 'boom' }, 'e4');
+  assert(allEvents.some(function(e) { return e.kind === 'response.failed'; }),
+    'kind mapped apperror→response.failed');
+  assert(FakeEventSource.instances.length === 2,
+    'terminal frame re-arms a fresh EventSource');
+  assert(es.closed === true, 'terminal frame closes the spent EventSource');
+  const es2 = FakeEventSource.instances[1];
+  assert(es2.url === '/api/hyrax/vn/conversations/s1/events?after_event_id=e4',
+    're-armed stream resumes after the last server id (got ' + es2.url + ')');
+
+  // The spent connection is dead: frames from it are dropped.
+  es._emit('token', { text: 'stale frame' }, 'e9');
+  assert(received.length === 2, 'frames from the closed stream are dropped');
+
+  // Dedupe survives the re-arm (the ring is transport-independent).
+  es2._emit('token', { text: 'Hello again' }, 'e1');
+  assert(received.length === 2, 'duplicate server id dropped across re-arm');
+
+  // Reconnect signal on the re-armed stream's first open.
+  es2._open();
+  assert(reconnects.length === 1, 're-armed open emits reconnect to subscribers');
+
+  // Turn 2 on the re-armed stream: events flow again.
+  es2._emit('token', { text: 'turn two' }, 'e6');
+  assert(received.length === 3 && received[2].payload.text === 'turn two',
+    'next turn streams on the re-armed connection');
+
+  // The native `error` type is terminal server-side too — mapped and re-armed.
+  es2._emit('error', { label: 'native error' }, 'e7');
+  assert(allEvents.filter(function(e) { return e.kind === 'response.failed'; }).length === 2,
+    'kind mapped error→response.failed');
+  assert(FakeEventSource.instances.length === 3 &&
+    FakeEventSource.instances[2].url.indexOf('after_event_id=e7') !== -1,
+    'native error re-arms with the resume cursor');
+  const es3 = FakeEventSource.instances[2];
+
+  // stream_end re-arms as well (the normal end-of-run path).
+  es3._emit('stream_end', { session_id: 's1' }, 'e8');
+  assert(allEvents.some(function(e) { return e.kind === 'stream.end'; }),
+    'kind mapped stream_end→stream.end');
+  assert(FakeEventSource.instances.length === 4 &&
+    FakeEventSource.instances[3].url.indexOf('after_event_id=e8') !== -1,
+    'stream_end re-arms with the resume cursor');
+  const es4 = FakeEventSource.instances[3];
+
+  // Replay: ordered ring buffer (undisturbed by re-arms)
   const replayed = [];
   GestaltVN.events.replay(function(ev) { replayed.push(ev.id); });
-  assert(replayed.join(',') === 'e1,e2,e3,e4,e5',
+  assert(replayed.join(',') === 'e1,e2,e3,e5,e4,e6,e7,e8',
     'replay delivers buffered events in order (got ' + replayed.join(',') + ')');
-  assert(GestaltVN.events.getSequence() >= 5, 'getSequence advances');
-
-  // Reconnect signal on re-open
-  es._open();
-  assert(reconnects.length === 1, 'second open emits reconnect to subscribers');
+  assert(GestaltVN.events.getSequence() >= 8, 'getSequence advances');
 
   // Dispose
   GestaltVN.events.dispose();
-  assert(es.closed === true, 'dispose closes the EventSource');
-  es._emit('token', { text: 'after dispose' }, 'e6');
-  assert(received.length === 2, 'frames after dispose are dropped');
+  assert(es4.closed === true, 'dispose closes the EventSource');
+  es4._emit('token', { text: 'after dispose' }, 'e10');
+  assert(received.length === 3, 'frames after dispose are dropped');
   const empty = [];
   GestaltVN.events.replay(function(ev) { empty.push(ev); });
   assert(empty.length === 0, 'dispose clears the ring buffer');
