@@ -146,6 +146,15 @@ shock), and by an operator personality weight (§7).
 Rules live in a data file (`rules.yaml`-style JSON), not code, so tuning is
 a diff, not a deploy.
 
+**Sentiment-enriched user messages (2026-07-27):** the sessions watcher
+classifies each new user message against the deterministic
+`sentiment.signals` table in rules.json (first match wins, ordered
+specific-before-structural: praise / criticism / question / long-message /
+short-ack) and tags the `user message arrived` event with the matched
+signal. The daemon applies that signal's deltas *on top of* the flat event
+deltas (same taper, personality weights and clamps) and journals the signal
+with the delta.
+
 ## 5. Decay model (the ticker)
 
 Every 30 s, each continuous trait moves toward its baseline:
@@ -180,6 +189,16 @@ day + continuity with the previous frame):
   common area; approval → director's office; resting → quiet room) +
   time-of-day lighting band.
 - **intensity** ← mood.intensity — drives jolt strength selection.
+- **tone** ← ordered `presentation.tone_by_state` rules (first match wins:
+  low-energy/tired → weary-gentle, stressed → clipped, frustrated →
+  irritable, happy+high-arousal → bright, focused → precise, otherwise a
+  per-operator default — Rei drier, Mai warmer). A single clean token
+  (2026-07-27, mood-to-voice): the sister-essence plugin's `pre_llm_call`
+  hook reads it (with the raw mood/energy/stress numbers) and injects a
+  compact `[essence] … tone: <token>` line into the current user message
+  every turn, so state colors *how* operators speak, not just how they
+  look. The same token is exposed in the presence `derivedState` block for
+  the future emotional-TTS layer.
 
 The VN consumes these through the existing intent pipeline (essenceIntents.js)
 — no VN changes needed beyond pointing intents at the new state file shape.

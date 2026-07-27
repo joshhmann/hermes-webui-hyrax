@@ -919,6 +919,7 @@ _DERIVED_STATE_UNAVAILABLE = {
     "staleness_days": None,
     "poseIntent": None,
     "sceneIntent": None,
+    "tone": None,
 }
 
 
@@ -941,9 +942,9 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
       - block: the compact derivedState payload for the presence item. When
         the file is missing/stale/corrupt this is _DERIVED_STATE_UNAVAILABLE
         (fresh: false, all nulls) — never an exception, never a 500. The
-        presentation intents (poseIntent/sceneIntent) are non-null only
-        while fresh: they drive the VN stage, so a stale file must never
-        move pose or scene.
+        presentation intents (poseIntent/sceneIntent/tone) are non-null only
+        while fresh: they drive the VN stage and voice, so a stale file must
+        never move pose, scene, or tone.
       - expression: {"current", "intensity"} to REPLACE the session-derived
         expression, or None. Only non-None when the file is fresh: essenced's
         presentation.expression is the runtime-owned mood→expression mapping,
@@ -981,6 +982,12 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
             ),
             "sceneIntent": (
                 _bounded_str(_derived_leaf(state, "presentation", "sceneIntent"))
+                if fresh else None
+            ),
+            # Voice tone token (mood-to-voice): fresh-only like the other
+            # presentation intents — a stale file must never color speech.
+            "tone": (
+                _bounded_str(_derived_leaf(state, "presentation", "tone"))
                 if fresh else None
             ),
         }

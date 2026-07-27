@@ -1048,7 +1048,8 @@ class TestPresence:
 def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
                            expression="smile", intensity=0.7,
                            activity_type="idle",
-                           pose_intent="sitting", scene_intent="ops"):
+                           pose_intent="sitting", scene_intent="ops",
+                           tone="bright"):
     def leaf(value):
         return {"value": value, "provenance": "derived",
                 "updatedAt": "2026-07-26T00:00:00+00:00"}
@@ -1062,7 +1063,8 @@ def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
         "presentation": {"expression": leaf(expression),
                          "intensity": leaf(intensity),
                          "poseIntent": leaf(pose_intent),
-                         "sceneIntent": leaf(scene_intent)},
+                         "sceneIntent": leaf(scene_intent),
+                         "tone": leaf(tone)},
     }
 
 
@@ -1137,7 +1139,7 @@ class TestPresenceDerivedState:
         assert item["derivedState"] == {
             "fresh": True, "mood": "happy", "energy": 0.62, "focus": 0.81,
             "stress": 0.12, "staleness_days": 0,
-            "poseIntent": "sitting", "sceneIntent": "ops",
+            "poseIntent": "sitting", "sceneIntent": "ops", "tone": "bright",
         }
         # Expression comes from derived presentation.expression, NOT the
         # session-derived "laughing".
@@ -1158,9 +1160,10 @@ class TestPresenceDerivedState:
         # Values are visible but stale; expression stays session-derived.
         assert item["derivedState"]["mood"] == "happy"
         # Presentation intents are nulled while stale — a stale file must
-        # never move the VN stage's pose or scene.
+        # never move the VN stage's pose or scene, nor color her voice.
         assert item["derivedState"]["poseIntent"] is None
         assert item["derivedState"]["sceneIntent"] is None
+        assert item["derivedState"]["tone"] is None
         assert item["expression"]["current"] == "laughing"
 
     def test_corrupt_derived_state_falls_back(self, monkeypatch, profile_home):
@@ -1174,7 +1177,7 @@ class TestPresenceDerivedState:
         assert item["derivedState"] == {
             "fresh": False, "mood": None, "energy": None, "focus": None,
             "stress": None, "staleness_days": None,
-            "poseIntent": None, "sceneIntent": None,
+            "poseIntent": None, "sceneIntent": None, "tone": None,
         }
         assert item["expression"]["current"] == "laughing"
 
@@ -1238,6 +1241,29 @@ class TestPresenceDerivedState:
         assert item["derivedState"]["fresh"] is True
         assert item["derivedState"]["poseIntent"] is None
         assert item["derivedState"]["sceneIntent"] is None
+
+    def test_fresh_block_carries_tone(self, monkeypatch, profile_home):
+        # Mood-to-voice: fresh derived state exposes the tone token so
+        # clients (and the future TTS layer) can read how she should sound.
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(tone="clipped"))
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["tone"] == "clipped"
+
+    def test_fresh_block_nulls_absent_tone(self, monkeypatch, profile_home):
+        # A pre-tone derived_state.json (older essenced) reads as tone null,
+        # never an exception or an invented token.
+        home = profile_home("tai", None)
+        payload = _derived_state_payload()
+        del payload["presentation"]["tone"]
+        self._write_derived(home, payload)
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["fresh"] is True
+        assert item["derivedState"]["tone"] is None
 
 
 # ══════════════════════════════════════════════════════════════════════════
