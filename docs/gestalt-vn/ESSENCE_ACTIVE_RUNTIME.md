@@ -647,3 +647,104 @@ tool in the SAME turn context (still operator-voiced, still journaled).
 - Quiet hours/caps are config, not code.
 - Nothing fires while the daemon is in dry-run (C1) — enforced by a single
   `outreach.dry_run` boolean, default true.
+
+---
+
+## 20. Phase D — Bounded autonomy: spec (2026-07-26)
+
+The loop: Mai gets annoyed by the messy wiki page one too many times, fixes
+it, and tells you about it — proud and exasperated. Phase D makes that real
+by turning §14's design into a build plan against the audited machinery
+(§16 + the two governance audits of 2026-07-26).
+
+### 20.1 What exists vs what Phase D adds (from the audits)
+
+**Exists and verified working:** proposal→gate→lease→executor chain
+(essence_proposal.py G1–G6 gates, execution_lease_manager, local executor),
+execution-lease lifecycle in JSONL, governor (observe-only),
+auto_autonomy_guardrails.json semantics (caps/cooldowns/circuit breaker —
+now lifted into essenced's policy.py), noticing layer prior art (dormant),
+kanban work orders (the habit rule).
+
+**Missing (Phase D builds):** want→proposal front half (irritation/interest
+accumulators), new lease classes for the free tier (docs/wiki/notes edits,
+kanban_create), a caller for approve_proposal (nothing calls it today —
+approvals are unreachable), G7/G8 gate implementations (currently hardcoded
+warn/not_checked), and the report-back wiring to §19 outreach.
+
+### 20.2 The autonomy loop (all journaled)
+
+```
+observation watcher (kanban, docs, sessions — read-only)
+  → irritation/interest accumulators (per subject, per operator)
+  → want: "fix the thing" (personality-weighted threshold)
+  → proposal (essence_proposal.propose — reuse as-is)
+  → gates (G1–G6 reuse; G7/G8 implement per 20.4)
+  → essenced approves on behalf of policy (NEW: the missing caller)
+  → execution lease (NEW class: docs_wiki_notes | kanban_create)
+  → executor performs the bounded action (append/edit in scope only)
+  → rollback marker + evidence journal
+  → report-back via §19 outreach ("argu i had to fix it myself")
+```
+
+### 20.3 Lease classes (the free tier)
+
+| Class | Scope | Rollback | Rate limit |
+|---|---|---|---|
+| docs_wiki_notes | markdown/wiki/notes under whitelisted roots only; append-or-edit with backup copy first | backup restore | 2/operator/day |
+| kanban_create | create/update tasks assigned to self only; no status changes to others' tasks | task archive | 4/operator/day |
+
+Everything else (code, config, deletes, external services, credentials,
+other operators' state, infra) is **approval tier** (routes to the user via
+the existing approval UI) or **never tier** (§14). Whitelists are data
+(governance yaml), not code.
+
+### 20.4 The missing approver (G7/G8)
+
+- essenced becomes the first caller of `essence_proposal.approve_proposal()`
+  with actor "essenced:governor-pilot" — approvals are **policy-derived**:
+  approve iff the proposal maps to an enabled free-tier lease class, all
+  G1–G6 gates pass, and guardrails (caps/cooldowns/breaker) are clear.
+- G7 (governor check): upgrade from hardcoded warn to a real check — the
+  proposal carries a valid lease-class mapping.
+- G8 (josh check): implement as the approval-tier path — proposals outside
+  free tier produce a user approval request (WebUI approvals surface), not
+  an auto-approve. Free tier never touches G8.
+
+### 20.5 Safety model
+
+- Every action: bounded scope (lease class), rate-limited (guardrails
+  config), journaled end-to-end (observation → want → proposal → gates →
+  approval → lease → execution → rollback marker → report-back), revocable
+  per operator (lease suspension = the off switch).
+- Report-back is mandatory: every autonomous action produces a §19 message
+  with the story (what annoyed her, what she did, how it went). Silence =
+  failure. The user always finds out from her first.
+- Rollback-first: every edit carries a pre-image (backup copy or git ref)
+  before execution; the rollback marker is written before the action runs.
+- Start in **shadow mode**: proposals created and gated, nothing executes,
+  full journal — tune thresholds before the first real action.
+
+### 20.6 Phases
+
+- **D1** — accumulators + proposals in shadow (want→proposal→gates→journal,
+  no execution, no approval calls). Proof: seeded irritation produces a
+  correctly gated proposal chain; circuit breaker trips on repeated denials.
+- **D2** — essenced approval caller + free-tier lease classes + executor
+  handlers, on ONE pilot action (docs_wiki_notes). Proof: she fixes a
+  seeded broken doc, backup exists, rollback marker written, journal
+  complete, and a §19 report-back message arrives on both lanes.
+- **D3** — kanban_create class + remaining operators + approval-tier
+  routing (G8 → user approval UI for anything outside free tier).
+- **D4** — graduation: enable per operator after a week of clean journals,
+  widen lease classes deliberately.
+
+### 20.7 Hard rules
+
+- No execution without a valid lease; no lease without a stored,
+  policy-trusted approval (existing rule — keep it).
+- The covenant extends: autonomous writes are lease-scoped and journaled,
+  never free-form.
+- Shadow first, always: no operator graduates to live execution without a
+  week of shadow journals.
+- Report-back is part of done, not a nicety.
