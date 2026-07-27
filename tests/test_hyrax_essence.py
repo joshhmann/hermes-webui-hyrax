@@ -180,12 +180,76 @@ class TestExpressionEnum:
                 assert current == name
                 assert issues == []
 
-    def test_unknown_name_falls_back_to_neutral_with_issue(self):
+    def test_curated_name_maps_to_nearest_valid_family_member(self):
+        from api.hyrax_essence import EXPRESSION_ENUM, normalize_expression
+        # 'laughing' is mai-only in the enum, but it is emittable (keyword
+        # stopgap + rules.json-adjacent moods) — it must resolve to the
+        # nearest valid family member inside each sister's enum, never
+        # silently to neutral.
+        expectations = {
+            ("rei", "laughing"): "calm",
+            ("rei", "annoyed"): "alert",
+            ("tai", "annoyed"): "sarcastic",
+            ("nei", "annoyed"): "thinking",
+            ("mai", "annoyed"): "scream-of-fury",
+            ("tai", "laughing"): "happy-emote",
+            ("rei", "sarcastic"): "alert",
+            ("nei", "focused"): "observant",
+            ("rei", "thinking"): "alert",
+            ("mai", "shy"): "shy-smile",
+        }
+        for (operator, raw), expected in expectations.items():
+            current, issues = normalize_expression(operator, raw)
+            assert current == expected, (operator, raw, current)
+            assert current in EXPRESSION_ENUM[operator]
+            assert issues == []
+
+    def test_truly_unknown_name_falls_back_to_neutral_with_issue(self):
         from api.hyrax_essence import normalize_expression
-        current, issues = normalize_expression("rei", "laughing")  # mai-only name
+        current, issues = normalize_expression("rei", "flibbertigibbet")
         assert current == "neutral"
         assert len(issues) == 1
-        assert "laughing" in issues[0]
+        assert "flibbertigibbet" in issues[0]
+
+    def test_every_emittable_expression_resolves_inside_each_enum(self):
+        """Every expression the runtime can emit normalizes INTO each enum.
+
+        Emittable sources: the keyword stopgap signals in
+        api/hyrax_routes.py (_VN_EXPRESSION_SIGNALS) and essenced's
+        rules.json expression_by_mood chains (read live when present; the
+        known v1 chain set is asserted regardless so the contract holds on
+        machines without an essenced install).
+        """
+        from api.hyrax_essence import EXPRESSION_ENUM, normalize_expression
+        from api.hyrax_routes import _VN_EXPRESSION_SIGNALS
+
+        emittable = {mood for mood, _signals in _VN_EXPRESSION_SIGNALS}
+        emittable |= {
+            # rules.json v1 expression_by_mood chains (see
+            # ~/.hermes/essenced/rules.json §presentation).
+            "smile", "happy-emote", "light-smile", "neutral", "calm",
+            "focused", "thinking", "observant", "alert", "scream-of-fury",
+            "sarcastic",
+        }
+        rules_path = (
+            Path.home() / ".hermes" / "essenced" / "rules.json"
+        )
+        if rules_path.is_file():
+            import json as _json
+
+            rules = _json.loads(rules_path.read_text(encoding="utf-8"))
+            for chain in (
+                rules.get("presentation", {})
+                .get("expression_by_mood", {})
+                .values()
+            ):
+                emittable.update(chain)
+
+        assert emittable, "emittable expression inventory must not be empty"
+        for operator, enum in EXPRESSION_ENUM.items():
+            for name in emittable:
+                current, _issues = normalize_expression(operator, name)
+                assert current in enum, (operator, name, current)
 
     def test_absent_name_is_neutral_without_issue(self):
         from api.hyrax_essence import normalize_expression
@@ -348,7 +412,10 @@ class TestEssenceEndpoint:
         assert handler.status == 200
         assert handler.json_body()["available"] is False
 
-    def test_unknown_expression_normalized_with_issue(self, profile_home):
+    def test_emittable_expression_maps_into_enum_without_issue(self, profile_home):
+        # scream-of-fury is emittable (rules.json frustrated chain) but absent
+        # from rei's enum — it must resolve to the nearest valid family
+        # member (alert), not collapse to neutral.
         profile_home("rei", {
             "mood": "calm",
             "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -356,8 +423,20 @@ class TestEssenceEndpoint:
         })
         handled, handler = _call_essence_get("/api/hyrax/essence/rei")
         body = handler.json_body()
+        assert body["expression"]["current"] == "alert"
+        assert body["expression"]["issues"] == []
+        assert body["provenance"]["expression"] == "derived"
+
+    def test_unknown_expression_normalized_with_issue(self, profile_home):
+        profile_home("rei", {
+            "mood": "calm",
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "expression": {"current": "flibbertigibbet", "intensity": 0.9},
+        })
+        handled, handler = _call_essence_get("/api/hyrax/essence/rei")
+        body = handler.json_body()
         assert body["expression"]["current"] == "neutral"
-        assert any("scream-of-fury" in i for i in body["expression"]["issues"])
+        assert any("flibbertigibbet" in i for i in body["expression"]["issues"])
         assert body["provenance"]["expression"] == "derived"
 
     def test_unparseable_last_updated_yields_null_staleness(self, profile_home):

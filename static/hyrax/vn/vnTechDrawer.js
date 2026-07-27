@@ -84,9 +84,16 @@
     var rows = [];
     var ev = ns.events;
     if (ev && typeof ev.replay === 'function') {
-      ev.replay(function(e) {
-        if (e && typeof e.kind === 'string' && e.kind.slice(0, 5) === 'tool.') rows.push(e);
-      });
+      try {
+        ev.replay(function(e) {
+          if (e && typeof e.kind === 'string' && e.kind.slice(0, 5) === 'tool.') rows.push(e);
+        });
+      } catch (err) {
+        // A replay failure must never blank the panel silently — say so.
+        _listEl.appendChild(_el('div', 'vn2-drawer-empty',
+          'Tool activity unavailable (' + (err && err.message || err) + ').'));
+        return;
+      }
     }
     if (rows.length > MAX_TOOL_ROWS) rows = rows.slice(rows.length - MAX_TOOL_ROWS);
     if (!rows.length) {
@@ -112,6 +119,33 @@
     _renderTools();
   }
 
+  // A render error must never leave a silently empty panel: surface it.
+  function _safeRenderAll() {
+    try {
+      _renderAll();
+    } catch (err) {
+      try {
+        if (_container && !_container.querySelector('.vn2-drawer-error')) {
+          _container.appendChild(_el('div', 'vn2-drawer-empty vn2-drawer-error',
+            'Render error — panel content may be incomplete (' +
+            (err && err.message || err) + ').'));
+        }
+      } catch (_) { /* container gone */ }
+    }
+  }
+
+  // Explicit failure content for an init/build failure: the panel must
+  // always show SOMETHING truthful, never an empty slide-over.
+  function _buildErrorContent(err) {
+    if (!_container) return;
+    try {
+      _container.replaceChildren();
+      _container.appendChild(_el('div', 'vn2-drawer-title', 'Technical'));
+      _container.appendChild(_el('div', 'vn2-drawer-empty vn2-drawer-error',
+        'Technical details unavailable (' + (err && err.message || err) + ').'));
+    } catch (_) { /* container gone */ }
+  }
+
   // ── Links ──
 
   function _link(label, fn) {
@@ -125,15 +159,10 @@
 
   // ── Public API ──
 
-  function init(opts) {
-    opts = opts || {};
-    dispose();
-    if (!opts.container) return false;
-    _disposed = false;
-    _container = opts.container;
-    _toggleButton = opts.toggleButton || null;
-    _container.classList.add('vn2-drawer');
-
+  // Content build, extracted so init AND a wiped-container recovery in
+  // open() share one path. Throws propagate to the caller, which substitutes
+  // explicit failure content (_buildErrorContent) — never a silent blank.
+  function _buildContent() {
     // Header row: title + a real close affordance. The drawer overlays the
     // sidebar and the topbar toggle, so without this there is no way to
     // dismiss it (QA: "opens a sidebar that can't be closed").
@@ -145,22 +174,6 @@
     closeBtn.addEventListener('click', close);
     header.appendChild(closeBtn);
     _container.appendChild(header);
-
-    // Backdrop: click-outside dismisses (sibling behind the drawer panel).
-    _backdrop = _el('div', 'vn2-drawer-backdrop');
-    _backdrop.addEventListener('click', close);
-    if (_container.parentNode) {
-      _container.parentNode.insertBefore(_backdrop, _container);
-    }
-
-    // Escape closes the drawer first (before the shell's Escape→HQ handler).
-    _escHandler = function(event) {
-      if (event && event.key === 'Escape' && _open) {
-        event.stopPropagation();
-        close();
-      }
-    };
-    document.addEventListener('keydown', _escHandler, true);
 
     var sessionRow = _el('div', 'vn2-drawer-row');
     sessionRow.appendChild(_el('span', 'vn2-drawer-label', 'Session'));
@@ -195,10 +208,44 @@
       if (typeof root.switchPanel === 'function') root.switchPanel('workspaces');
     }));
     _container.appendChild(links);
+  }
 
+  function init(opts) {
+    opts = opts || {};
+    dispose();
+    if (!opts.container) return false;
+    _disposed = false;
+    _container = opts.container;
+    _toggleButton = opts.toggleButton || null;
+    _container.classList.add('vn2-drawer');
+
+    // Wire the toggle FIRST: whatever happens during content build below,
+    // the topbar button must always reflect and control the drawer state.
     if (_toggleButton) {
       _toggleButton.addEventListener('click', toggle);
       _toggleButton.setAttribute('aria-expanded', 'false');
+    }
+
+    // Backdrop: click-outside dismisses (sibling behind the drawer panel).
+    _backdrop = _el('div', 'vn2-drawer-backdrop');
+    _backdrop.addEventListener('click', close);
+    if (_container.parentNode) {
+      _container.parentNode.insertBefore(_backdrop, _container);
+    }
+
+    // Escape closes the drawer first (before the shell's Escape→HQ handler).
+    _escHandler = function(event) {
+      if (event && event.key === 'Escape' && _open) {
+        event.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener('keydown', _escHandler, true);
+
+    try {
+      _buildContent();
+    } catch (err) {
+      _buildErrorContent(err);
     }
 
     var ev = ns.events;
@@ -219,17 +266,26 @@
     if (s && typeof s.on === 'function') {
       _sessionUnsub = s.on(function() { if (_open) _renderSession(); });
     }
-    _renderAll();
+    _safeRenderAll();
     return true;
   }
 
   function open() {
     if (_disposed || !_container) return;
+    // Recovery: if the container was emptied after init (external wipe,
+    // partial teardown), rebuild rather than sliding out a blank panel.
+    if (!_container.children || !_container.children.length) {
+      try {
+        _buildContent();
+      } catch (err) {
+        _buildErrorContent(err);
+      }
+    }
     _open = true;
     _container.classList.add('vn2-drawer--open');
     if (_backdrop) _backdrop.classList.add('vn2-drawer-backdrop--visible');
     if (_toggleButton) _toggleButton.setAttribute('aria-expanded', 'true');
-    _renderAll();
+    _safeRenderAll();
   }
 
   function close() {

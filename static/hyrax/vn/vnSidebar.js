@@ -2,7 +2,9 @@
  *
  * Sections Operator / Room / Work / System with ≤5 visible entries plus a
  * "More…" overflow. Availability (`when`) is re-evaluated on vnEvents
- * (busy / approval / activity) and essence intent changes — never on timers.
+ * (busy / approval / activity), essence intent changes, and stage frame
+ * commits (pose availability tracks the frame the stage actually shows —
+ * provider chains are async) — never on timers.
  * Disabled actions carry a reason tooltip + aria. confirmation.required
  * actions route through an inline dialog. Mobile bottom-sheet behavior is
  * CSS-driven off the root class hook only.
@@ -41,6 +43,7 @@
   var _dialog = null;
   var _eventsUnsub = null;
   var _intentUnsub = null;
+  var _stageUnsub = null;
   var _overflowOpen = {};   // sectionId -> bool
   var _mounted = false;
 
@@ -228,6 +231,15 @@
     if (essence.intents && typeof essence.intents.subscribe === 'function') {
       _intentUnsub = essence.intents.subscribe(function () { render(); });
     }
+    // Pose/expression availability is computed against the on-stage frame
+    // (_poseAvailability), but provider chains commit frames ASYNC — an
+    // intent subscriber (above) fires before the new pose lands, so a
+    // manual sit/stand click or an essenced-derived pose beat used to leave
+    // the action list evaluated against the stale frame. Re-render when the
+    // stage actually commits a frame.
+    if (vn.stage && typeof vn.stage.subscribe === 'function') {
+      _stageUnsub = vn.stage.subscribe(function () { render(); });
+    }
 
     render();
     _mounted = true;
@@ -249,6 +261,7 @@
   function dispose() {
     if (_eventsUnsub) { try { _eventsUnsub(); } catch (e) {} _eventsUnsub = null; }
     if (_intentUnsub) { try { _intentUnsub(); } catch (e) {} _intentUnsub = null; }
+    if (_stageUnsub) { try { _stageUnsub(); } catch (e) {} _stageUnsub = null; }
     _closeDialog();
     if (_root && _root.remove) _root.remove();
     _root = null;

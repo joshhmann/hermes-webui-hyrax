@@ -316,6 +316,31 @@ def main():
             record("3.availability flips while sitting (disabled-with-reason)",
                    ok3a, f"avail={avail}")
 
+            # Item 3a-dom: the SIDEBAR DOM reflects the flip without a manual
+            # re-render (regression: the action list rendered once and kept
+            # "Sit together" enabled while sitting — the stage commit now
+            # notifies the sidebar to re-evaluate).
+            dom_flip = page.evaluate("""() => {
+                const sit = document.querySelector(
+                    '[data-action-id="op.sit-together"]');
+                const stand = document.querySelector(
+                    '[data-action-id="op.stand-up"]');
+                return {
+                    sitInDom: !!sit,
+                    sitDisabled: sit ? !!sit.disabled : null,
+                    sitReason: sit ? (sit.getAttribute('title') || '') : null,
+                    standInDom: !!stand,
+                    standDisabled: stand ? !!stand.disabled : null,
+                };
+            }""")
+            ok3dom = bool(dom_flip["sitInDom"]
+                          and dom_flip["sitDisabled"] is True
+                          and "Already sitting" in dom_flip["sitReason"]
+                          and (not dom_flip["standInDom"]
+                               or dom_flip["standDisabled"] is False))
+            record("3a-dom.sidebar buttons reflect pose flip", ok3dom,
+                   f"dom_flip={dom_flip}")
+
             # Item 3b: Stand up → standing variant, family still preserved.
             # stand-up sits in the operator section overflow.
             more = page.locator('.gestalt-vn-sidebar-section[data-section="operator"]'

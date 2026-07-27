@@ -48,6 +48,7 @@ PORT = int(os.getenv("VNIX_PORT", "8798"))
 BASE = f"http://127.0.0.1:{PORT}"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS = os.path.join(REPO, "dogfood-output", "vn-fixes")
+SHOTS2 = os.path.join(REPO, "dogfood-output", "vn-fixes2")
 
 # Same known-benign noise filter as tests/browser_living_hq.py.
 BENIGN = [
@@ -317,6 +318,160 @@ def main():
                    f"baseline={jolt['baselineClasses']!r} "
                    f"positive=({jolt['positiveClasses']!r},{jolt['positiveAnim']}) "
                    f"intense=({jolt['intenseClasses']!r},{jolt['intenseAnim']})")
+
+            # ── Item 6: markdown renders in the VN dialogue ───────────
+            # Rei's seeded history ends with an assistant row carrying a
+            # fenced code block, bold, and a list — the transcript must
+            # render them as HTML, not raw text.
+            md = page.evaluate("""() => {
+                const rows = [...document.querySelectorAll(
+                    '.vn2-history .msg-row[data-role="assistant"]')];
+                const row = rows.find(r =>
+                    (r.textContent || '').includes('all green'));
+                if (!row) return { found: false };
+                return {
+                    found: true,
+                    hasPre: !!row.querySelector('pre code'),
+                    hasStrong: !!row.querySelector('strong'),
+                    hasList: !!row.querySelector('ul li'),
+                    rawFence: (row.textContent || '').includes('```'),
+                    rawStars: (row.textContent || '').includes('**all green**'),
+                };
+            }""")
+            ok6 = bool(md.get("found") and md.get("hasPre")
+                       and md.get("hasStrong") and md.get("hasList")
+                       and not md.get("rawFence") and not md.get("rawStars"))
+            record("6.dialogue renders markdown (code block, bold, list)",
+                   ok6, f"md={md}")
+            os.makedirs(SHOTS2, exist_ok=True)
+            md_row = page.locator(
+                '.vn2-history .msg-row[data-role="assistant"]',
+                has_text="all green")
+            if md_row.count():
+                md_row.first.screenshot(
+                    path=os.path.join(SHOTS2, "dialogue-markdown.png"))
+            else:
+                page.locator(".vn2-dialogue").screenshot(
+                    path=os.path.join(SHOTS2, "dialogue-markdown.png"))
+
+            # ── Item 7: tech drawer renders content on open ───────────
+            page.click(".vn2-tech-toggle", timeout=10000)
+            page.wait_for_timeout(500)
+            drawer = page.evaluate("""() => {
+                const btn = document.querySelector('.vn2-tech-toggle');
+                const d = document.querySelector('.vn2-drawer-region');
+                if (!d) return { present: false };
+                const err = d.querySelector('.vn2-drawer-error');
+                return {
+                    present: true,
+                    ariaExpanded: btn && btn.getAttribute('aria-expanded'),
+                    open: d.classList.contains('vn2-drawer--open'),
+                    children: d.children.length,
+                    hasSessionRow: !!d.querySelector('.vn2-drawer-row'),
+                    hasTools: !!d.querySelector('.vn2-drawer-tools'),
+                    toolsEmptyState: (() => {
+                        const t = d.querySelector('.vn2-drawer-tools');
+                        return t ? (t.textContent || '') : null;
+                    })(),
+                    explicitError: err ? (err.textContent || '') : null,
+                };
+            }""")
+            # Pass: content rows, or the explicit failure state — never a
+            # silently empty panel.
+            ok7 = bool(drawer.get("present")
+                       and drawer.get("ariaExpanded") == "true"
+                       and drawer.get("open")
+                       and drawer.get("children", 0) > 0
+                       and (drawer.get("hasSessionRow")
+                            or drawer.get("explicitError")))
+            record("7.tech drawer renders content (or explicit error state)",
+                   ok7, f"drawer={drawer}")
+            os.makedirs(SHOTS2, exist_ok=True)
+            page.screenshot(path=os.path.join(SHOTS2, "tech-panel-open.png"))
+            page.locator(".vn2-drawer-region").screenshot(
+                path=os.path.join(SHOTS2, "tech-panel-drawer.png"))
+            # Close via the drawer close affordance (the open drawer
+            # overlays the topbar toggle).
+            page.click(".vn2-drawer-close", timeout=10000)
+            page.wait_for_timeout(400)
+
+            # ── Item 8: sidebar pose availability flips in the DOM ────
+            # After Sit together applies, the SIDEBAR (not just evaluate())
+            # must re-evaluate: sit disabled with reason, stand enabled.
+            page.wait_for_selector('[data-action-id="op.sit-together"]',
+                                   state="visible", timeout=10000)
+            stand_visible_before = page.locator(
+                '[data-action-id="op.stand-up"]').count()
+            more = page.locator(
+                '.gestalt-vn-sidebar-section[data-section="operator"]'
+                ' .gestalt-vn-sidebar-more')
+            if more.count() and not page.locator(
+                    '[data-action-id="op.stand-up"]').is_visible():
+                more.first.click()
+            page.click('[data-action-id="op.sit-together"]', timeout=10000)
+            flip = None
+            deadline = time.time() + 12
+            while time.time() < deadline:
+                flip = page.evaluate("""() => {
+                    const sit = document.querySelector(
+                        '[data-action-id="op.sit-together"]');
+                    const stand = document.querySelector(
+                        '[data-action-id="op.stand-up"]');
+                    const pose = (() => {
+                        const st = GestaltVN.vn.stage.getState();
+                        return st.currentFrame && st.currentFrame.state
+                            && st.currentFrame.state.pose;
+                    })();
+                    return {
+                        pose: pose,
+                        sitDisabled: sit ? !!sit.disabled : null,
+                        sitReason: sit ? (sit.getAttribute('title') || '') : null,
+                        standDisabled: stand ? !!stand.disabled : null,
+                    };
+                }""")
+                if (flip.get("pose") == "sitting"
+                        and flip.get("sitDisabled") is True
+                        and flip.get("standDisabled") is False):
+                    break
+                time.sleep(0.25)
+            ok8 = bool(flip and flip.get("pose") == "sitting"
+                       and flip.get("sitDisabled") is True
+                       and "Already sitting" in (flip.get("sitReason") or "")
+                       and flip.get("standDisabled") is False)
+            record("8.sidebar flips sit→stand after pose applies", ok8,
+                   f"flip={flip} standInDomBefore={stand_visible_before}")
+            # Reverse: Stand up → sit re-enabled, stand disabled.
+            page.click('[data-action-id="op.stand-up"]', timeout=10000)
+            flip_back = None
+            deadline = time.time() + 12
+            while time.time() < deadline:
+                flip_back = page.evaluate("""() => {
+                    const sit = document.querySelector(
+                        '[data-action-id="op.sit-together"]');
+                    const stand = document.querySelector(
+                        '[data-action-id="op.stand-up"]');
+                    const st = GestaltVN.vn.stage.getState();
+                    return {
+                        pose: st.currentFrame && st.currentFrame.state
+                            && st.currentFrame.state.pose,
+                        sitDisabled: sit ? !!sit.disabled : null,
+                        standDisabled: stand ? !!stand.disabled : null,
+                        standReason: stand
+                            ? (stand.getAttribute('title') || '') : null,
+                    };
+                }""")
+                if (flip_back.get("pose") == "standing"
+                        and flip_back.get("sitDisabled") is False
+                        and flip_back.get("standDisabled") is True):
+                    break
+                time.sleep(0.25)
+            ok8b = bool(flip_back and flip_back.get("pose") == "standing"
+                        and flip_back.get("sitDisabled") is False
+                        and flip_back.get("standDisabled") is True
+                        and "Already standing" in
+                            (flip_back.get("standReason") or ""))
+            record("8b.sidebar flips stand→sit after pose applies", ok8b,
+                   f"flip_back={flip_back}")
             ctx.close()
 
             # ── Item 4 (reduce): no jolt class under reduced motion ───

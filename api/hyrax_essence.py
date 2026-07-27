@@ -92,6 +92,44 @@ EXPRESSION_ENUM: _MappingProxyType = _MappingProxyType({
 
 NEUTRAL_EXPRESSION = "neutral"
 
+# ── Curated expression fallback chains (fail closed, no invented frames) ────
+# Every expression the runtime can EMIT must resolve to a member of each
+# sister's enum — never silently to neutral when a valid near-equivalent
+# exists. Emittable sources: essenced's rules.json expression_by_mood chains
+# (smile, happy-emote, light-smile, calm, focused, thinking, observant,
+# alert, scream-of-fury, sarcastic) and the keyword stopgap in
+# api/hyrax_routes.py _VN_EXPRESSION_SIGNALS (laughing, happy, smile,
+# teasing, annoyed, shy, thinking). Each chain lists nearest valid family
+# members (hyrax-assets/essence/expression-families.json v2 families) in
+# preference order; the first candidate inside the sister's enum wins. No
+# chain introduces a name outside the existing enums, so every resolution
+# maps to an expression that already has registered frames.
+_EXPRESSION_FALLBACKS: dict[str, tuple[str, ...]] = {
+    # Keyword-stopgap moods (_VN_EXPRESSION_SIGNALS).
+    "laughing": ("laughing", "happy-emote", "smile", "light-smile", "calm"),
+    "happy": ("happy-emote", "smile", "light-smile", "calm"),
+    "teasing": ("sarcastic", "ohhoai", "smile", "light-smile", "alert", "calm"),
+    "annoyed": (
+        "scream-of-fury", "yandere-smile", "sarcastic", "alert",
+        "focused", "thinking", "calm",
+    ),
+    "shy": ("shy-smile", "light-smile", "smile", "observant", "calm"),
+    # rules.json expression_by_mood members absent from some enums.
+    "smile": ("smile", "light-smile", "calm"),
+    "happy-emote": ("happy-emote", "smile", "light-smile", "calm"),
+    "light-smile": ("light-smile", "smile", "calm"),
+    "calm": ("calm", "light-smile", "smile", "observant"),
+    "focused": ("focused", "alert", "observant", "thinking"),
+    "thinking": ("thinking", "observant", "focused", "alert"),
+    "observant": ("observant", "thinking", "focused", "alert"),
+    "alert": ("alert", "focused", "observant", "thinking"),
+    "scream-of-fury": (
+        "scream-of-fury", "yandere-smile", "sarcastic", "alert",
+        "focused", "thinking",
+    ),
+    "sarcastic": ("sarcastic", "ohhoai", "alert", "calm"),
+}
+
 # ── Frame registry validation patterns ───────────────────────────────────────
 _FRAME_ID_RE = _re.compile(r"^frame\.[a-z0-9-]+(\.[a-z0-9-]+)*$")
 _FRAME_IMAGE_NAME_RE = _re.compile(
@@ -120,9 +158,12 @@ _REGISTRY_WRITE_LOCK = _threading.Lock()
 def normalize_expression(operator: str, raw) -> tuple[str, list[str]]:
     """Normalize a raw expression name against the sister's canonical enum.
 
-    Returns (current, issues). Unknown names fall back to the sister's
-    neutral expression and record an issues[] entry. Absent/empty input is
-    not an error — it yields neutral with no issue.
+    Returns (current, issues). Names outside the enum first walk the curated
+    fallback chain (_EXPRESSION_FALLBACKS) to the nearest valid family member
+    inside the enum — a known emittable expression must never collapse to
+    neutral when a valid near-equivalent exists. Truly unknown names fall
+    back to the sister's neutral expression and record an issues[] entry.
+    Absent/empty input is not an error — it yields neutral with no issue.
     """
     enum = EXPRESSION_ENUM.get(operator) or frozenset({NEUTRAL_EXPRESSION})
     if not isinstance(raw, str) or not raw.strip():
@@ -130,6 +171,9 @@ def normalize_expression(operator: str, raw) -> tuple[str, list[str]]:
     name = raw.strip()[:MAX_ESSENCE_STRING]
     if name in enum:
         return name, []
+    for candidate in _EXPRESSION_FALLBACKS.get(name, ()):  # curated chain
+        if candidate in enum:
+            return candidate, []
     return NEUTRAL_EXPRESSION, [
         f"unknown expression '{name}' normalized to '{NEUTRAL_EXPRESSION}'"
     ]
@@ -344,11 +388,16 @@ def build_essence_payload(operator: str, *, now: _datetime | None = None) -> dic
         raw_intensity = raw_expr_obj.get("intensity")
     current, expr_issues = normalize_expression(operator, raw_expression)
     issues.extend(expr_issues)
+    remapped = (
+        isinstance(raw_expression, str)
+        and current != raw_expression.strip()[:MAX_ESSENCE_STRING]
+    )
     if raw_expression is None:
         provenance["expression"] = "unknown"
         intensity = 0.0
-    elif expr_issues:
-        # Server-side normalization over a read value → derived
+    elif expr_issues or remapped:
+        # Server-side normalization over a read value (issue fallback or a
+        # curated enum mapping) → derived
         provenance["expression"] = "derived"
         intensity = _bounded_score(raw_intensity, 0.0, 1.0)
         intensity = intensity if intensity is not None else 0.0

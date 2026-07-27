@@ -502,13 +502,19 @@
     setState({ busy: !!ref.busy });
 
     // Wire the modules. Dialogue renders the authoritative history first
-    // (legacy pattern), then the single SSE subscriber connects.
-    ns.dialogue.init({ container: _regions.dialogue, operatorName: name });
-    ns.composer.init({ container: _regions.composer });
-    ns.approvals.init({ container: _regions.approvals, sessionId: ref.sessionId });
-    ns.techDrawer.init({ container: _regions.drawer, toggleButton: _regions.techBtn });
+    // (legacy pattern), then the single SSE subscriber connects. Each module
+    // init is isolated: a failure in one must not abort the mount and leave
+    // the other regions dead (the drawer, composer, and approvals stay
+    // usable with explicit empty states).
+    try { ns.dialogue.init({ container: _regions.dialogue, operatorName: name }); } catch (_) {}
+    try { ns.composer.init({ container: _regions.composer }); } catch (_) {}
+    try { ns.approvals.init({ container: _regions.approvals, sessionId: ref.sessionId }); } catch (_) {}
+    try { ns.techDrawer.init({ container: _regions.drawer, toggleButton: _regions.techBtn }); } catch (_) {}
 
-    var connected = ns.events.init({ sessionId: ref.sessionId, operatorId: operatorId });
+    var connected = false;
+    try {
+      connected = ns.events.init({ sessionId: ref.sessionId, operatorId: operatorId });
+    } catch (_) { connected = false; }
     if (!connected) {
       _setStateChip('disconnected');
       _toast('Live updates unavailable — transcript still works.');

@@ -277,3 +277,6 @@ not a canonical token.
    green without editing the tests. Editing the tests to absorb drift is
    only allowed as a documented quarantine with frame-level precision
    (see §5).
+
+
+Note (2026-07-26): expression normalization uses curated `_EXPRESSION_FALLBACKS` chains (api/hyrax_essence.py) — emittable expressions resolve to the nearest valid family member inside each operator enum; truly unknown fails closed to neutral.

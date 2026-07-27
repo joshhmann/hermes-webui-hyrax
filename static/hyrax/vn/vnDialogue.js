@@ -15,7 +15,10 @@
  *   dispose()
  *
  * Rendering safety: history goes through window.renderTranscript/renderMd
- * (the sanctioned pipeline); anything we render ourselves is textContent-only.
+ * (the sanctioned pipeline); rows we render ourselves (load-earlier prepend,
+ * the no-renderTranscript fallback, finalized stream bubbles) go through
+ * _renderMarkdownInto, which uses the same renderMd pipeline and degrades
+ * to textContent when it is absent or throws.
  */
 (function() {
   'use strict';
@@ -168,14 +171,16 @@
         return;
       } catch (_) { /* fall through to safe manual render */ }
     }
-    // Fallback: textContent-only rows.
+    // Fallback: textContent-safe rows, markdown through the same sanctioned
+    // pipeline when it is available (renderMd degrades to textContent).
     _historyEl.replaceChildren();
     for (var j = 0; j < list.length; j++) {
       var m = list[j];
       if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
       var row = _el('div', 'msg-row');
       row.setAttribute('data-role', m.role);
-      var body = _el('div', 'msg-body', typeof m.content === 'string' ? m.content : (m.text || ''));
+      var body = _el('div', 'msg-body');
+      _renderMarkdownInto(body, typeof m.content === 'string' ? m.content : (m.text || ''));
       row.appendChild(body);
       _historyEl.appendChild(row);
     }
@@ -378,7 +383,11 @@
         if (m.id && _renderedIds[m.id]) continue;
         var row = _el('div', 'msg-row');
         row.setAttribute('data-role', m.role);
-        row.appendChild(_el('div', 'msg-body', typeof m.content === 'string' ? m.content : (m.text || '')));
+        // Same markdown pipeline as the initial history render — paged-in
+        // rows must not degrade to raw text (code blocks, bold, lists).
+        var body = _el('div', 'msg-body');
+        _renderMarkdownInto(body, typeof m.content === 'string' ? m.content : (m.text || ''));
+        row.appendChild(body);
         _historyEl.insertBefore(row, _historyEl.children[0] || null);
         if (m.id) _renderedIds[m.id] = true;
         added++;

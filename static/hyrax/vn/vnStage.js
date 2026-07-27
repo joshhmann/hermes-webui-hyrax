@@ -73,6 +73,7 @@
   var _reducedMotion = false;
   var _textFirst = false;
   var _currentFrame = null;
+  var _frameListeners = [];    // frame-change subscribers (sidebar availability)
   var _providerInstances = [];
   var _parallaxHandler = null;
   var _parallaxLeave = null;
@@ -238,6 +239,16 @@
     }
   }
 
+  // Frame-change notification: consumers (the interactable sidebar) must
+  // re-evaluate availability against the pose/expression the stage ACTUALLY
+  // committed — provider chains are async, so an intent's subscribers fire
+  // long before the new frame lands. Listener errors are isolated.
+  function _notifyFrameChanged(frame) {
+    for (var i = 0; i < _frameListeners.length; i++) {
+      try { _frameListeners[i](frame); } catch (_) { /* isolated */ }
+    }
+  }
+
   // Crossfade (or cut under reducedMotion) with continuity hints.
   function _showFrame(frame, transition) {
     if (!frame || !frame.assets || !frame.assets.imageUrl) return false;
@@ -297,6 +308,7 @@
         if (essence.frames && typeof essence.frames.noteFrameFailed === 'function') {
           try { essence.frames.noteFrameFailed(_operatorId, frame.id); } catch (_) {}
         }
+        _notifyFrameChanged(restoreFrame);
       };
       var onLoad = function () {
         try { back.removeEventListener('load', onLoad); } catch (_) {}
@@ -340,6 +352,7 @@
     _frameImgs = [back, front];
     _currentFrame = frame;
     if (_placeholder) _placeholder.hidden = true;
+    _notifyFrameChanged(frame);
     return true;
   }
 
@@ -543,6 +556,18 @@
     else _root.classList.remove('text-first');
   }
 
+  // Frame-change subscription (sidebar availability re-evaluation). The
+  // listener runs AFTER _currentFrame commits — pose/expression reads via
+  // getState() are authoritative from that point. Returns an unsubscribe.
+  function subscribe(fn) {
+    if (typeof fn !== 'function') return function () {};
+    _frameListeners.push(fn);
+    return function unsubscribe() {
+      var idx = _frameListeners.indexOf(fn);
+      if (idx !== -1) _frameListeners.splice(idx, 1);
+    };
+  }
+
   // Room-scene background swap. Fail closed: only a non-empty string swaps,
   // and a load error restores the previous background — the stage never
   // shows a broken image behind the sprite.
@@ -604,6 +629,7 @@
     if (_root && _root.remove) _root.remove();
     _root = _bgImg = _frameWrap = _overlay = _staleBadge = _placeholder = null;
     _frameImgs = [];
+    _frameListeners = [];
     // _currentFrame intentionally persists across re-mounts: init() replays
     // it into the fresh DOM (guarded by operator match), which keeps the
     // loading placeholder from lingering and no-op selections honest.
@@ -617,6 +643,7 @@
     setTextFirst: setTextFirst,
     setBackground: setBackground,
     getState: getState,
+    subscribe: subscribe,
     dispose: dispose,
     CROSSFADE_MS: CROSSFADE_MS,
   };

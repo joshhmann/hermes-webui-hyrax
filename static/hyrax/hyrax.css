@@ -1024,6 +1024,7 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 .vn2-drawer-tool-kind { color: var(--muted, #8b949e); }
 .vn2-drawer-tool-ts { margin-left: auto; color: var(--muted, #8b949e); }
 .vn2-drawer-empty { font-size: 12px; color: var(--muted, #8b949e); }
+.vn2-drawer-error { color: var(--danger, #f0883e); }
 .vn2-drawer-links { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 
 /* Loading / error states */

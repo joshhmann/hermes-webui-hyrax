@@ -50,11 +50,26 @@ def main(state_dir):
     tai.save()
 
     # Rei: short history — only needed so her VN mounts with a real session.
+    # The final assistant row carries markdown (fenced code, bold, list) so
+    # the dialogue-render harness can assert the markdown pipeline is live.
     rei = models.new_session(profile="rei", project_id="hyrax-vn")
     rei.title = "Rei VN"
     rei.messages = [
         {"id": "seed-rei-u-0", "role": "user", "content": "evening check"},
         {"id": "seed-rei-a-0", "role": "assistant", "content": "perimeter quiet."},
+        {"id": "seed-rei-u-1", "role": "user",
+         "content": "show me the gateway status snippet again"},
+        {"id": "seed-rei-a-1", "role": "assistant",
+         "content": (
+             "Here it is — **all green** across the board:\n\n"
+             "```bash\n"
+             "gatewayctl status --cluster east\n"
+             "# 3/3 nodes healthy\n"
+             "```\n\n"
+             "Notes:\n\n"
+             "- latency steady at 41ms\n"
+             "- cert rotation scheduled\n"
+         )},
     ]
     rei.save()
 
