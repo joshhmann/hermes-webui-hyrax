@@ -1056,7 +1056,6 @@ _SESSION_SSE_SENT_EVENT_ID_LIMIT = 4096
 # agree, otherwise a handler stays pinned to a dead run's subscriber queue
 # after a failed run and never sees subsequent runs (or leaks the thread
 # until client disconnect).
-_RUN_TERMINAL_EVENTS = ("stream_end", "error", "cancel", "apperror")
 
 
 def _normalize_messaging_source(raw_source) -> str:
@@ -9679,6 +9678,7 @@ from api.run_journal import (
     read_session_run_events,
     session_journal_fingerprint,
     stale_interrupted_event,
+    SSE_RELAY_CLOSE_EVENTS,
 )
 from api.todo_state import attach_todo_state
 from api.providers import (
@@ -14591,7 +14591,6 @@ def handle_post(handler, parsed) -> bool:
         import api.routes as _routes
         _routes.get_session = _models.get_session
         _routes.Session = _models.Session
-        _routes.compact = _models.compact
         return j(handler, {"status": "ok", "reloaded": "api.models"})
 
     if parsed.path == "/api/sessions/cleanup":
@@ -17473,7 +17472,7 @@ def _stream_runner_run_events(handler, run_id: str, cursor: str | None = None) -
                 event = _runner_event_name(entry)
                 _sse_with_id(handler, event, _runner_event_payload(entry), _runner_event_id(run_id, entry))
                 emitted = True
-                if event in _RUN_TERMINAL_EVENTS:
+                if event in SSE_RELAY_CLOSE_EVENTS:
                     terminal = True
             next_cursor = getattr(event_stream, "cursor", None)
             if next_cursor not in (None, ""):
@@ -17567,7 +17566,7 @@ def _handle_sse_stream(handler, parsed):
                 _sse_with_id(handler, event, data, event_id)
             else:
                 _sse(handler, event, data)
-            # NOTE: literal tuple kept (mirrors _RUN_TERMINAL_EVENTS) —
+            # NOTE: literal tuple kept (mirrors SSE_RELAY_CLOSE_EVENTS) —
             # tests/test_regressions.py probes this break condition's exact
             # source shape and requires 'cancel' in the tuple.
             if event in ("stream_end", "error", "cancel", "apperror"):
@@ -17708,7 +17707,7 @@ def _handle_session_run_journal_stream_for_session(handler, parsed, session_id):
                     queued_event_id = STREAM_LAST_EVENT_ID.get(active_stream_id)
                 event_id = queued_event_id or STREAM_LAST_EVENT_ID.get(active_stream_id)
                 event_seq = _run_journal_same_run_seq(event_id, active_stream_id)
-                _is_terminal = event in _RUN_TERMINAL_EVENTS
+                _is_terminal = event in SSE_RELAY_CLOSE_EVENTS
                 _already_sent = (
                     (replay_cutoff_seq is not None and event_seq is not None and event_seq <= replay_cutoff_seq)
                     or (event_id and event_id in sent_event_ids)
@@ -17865,18 +17864,7 @@ def _handle_terminal_output(handler, parsed):
     sid = qs.get("session_id", [""])[0]
     if not sid:
         return bad(handler, "session_id required")
-    from api.terminal import get_terminal
-    term = get_terminal(sid)
-    if term is None:
-        return j(handler, {"error": "terminal not running"}, status=404)
-
-    handler.send_response(200)
-    handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
-    handler.send_header("Cache-Control", "no-cache")
-    handler.send_header("X-Accel-Buffering", "no")
-    handler.send_header("Connection", "close")
-    end_sse_headers(handler)
-    _sse_set_write_deadline(handler)  # Defect A: slow tab can't pin this thread
+    from api.terminal import attach_terminal
     # EventSource automatically returns the last received SSE id on transport
     # reconnect. Seed only newer backlog entries in that case so already-rendered
     # terminal bytes (including ANSI cursor controls) are not written twice. A
@@ -17888,8 +17876,32 @@ def _handle_terminal_output(handler, parsed):
             after_seq = max(0, int(last_event_id))
         except ValueError:
             pass
-    output = term.subscribe(after_seq=after_seq)
+    # Look up and subscribe in one atomic step. A separate `get_terminal()` then
+    # `term.subscribe()` leaves a window in which the idle reaper can claim and
+    # tear the terminal down, leaving this stream attached to a corpse after we
+    # already committed a 200. Attaching atomically means we either hold a live
+    # viewer (which makes the terminal un-reapable) or learn it is gone in time
+    # to answer 404.
+    attached = attach_terminal(sid, after_seq=after_seq)
+    if attached is None:
+        return j(handler, {"error": "terminal not running"}, status=404)
+    term, output = attached
+
+    # The subscription is live from here on, so EVERY exit path — including a
+    # failure while writing the response headers — must unsubscribe. Writing
+    # headers to a client that already dropped raises BrokenPipeError, and if
+    # that escaped before the try block the queue would stay in
+    # `_subscribers` forever, pinning `unwatched_since` at None and making the
+    # terminal permanently unreapable: the exact fd/thread leak this reaper
+    # exists to prevent. Hence the try starts immediately after the attach.
     try:
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("X-Accel-Buffering", "no")
+        handler.send_header("Connection", "close")
+        end_sse_headers(handler)
+        _sse_set_write_deadline(handler)  # Defect A: slow tab can't pin this thread
         while True:
             try:
                 event_seq, event, data = output.get(timeout=_SSE_HEARTBEAT_INTERVAL_SECONDS)
