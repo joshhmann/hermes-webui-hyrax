@@ -243,30 +243,70 @@ def convert_cskel27(d, npz_path: str, out_path: str, contract_path: str | None =
     print(f"wrote {out_path}: skeleton=cskel27, T={T} frames, fps={out['fps']}")
 
 
-def _parse_bvh_joints(bvh_path: str) -> list[str] | None:
-    """Extract joint names in depth-first order from a BVH file.
+def _parse_bvh_hierarchy(bvh_path: str) -> tuple[list[str] | None, list[int] | None]:
+    """Parse BVH file for joint names in depth-first order and parent indices.
 
-    Returns a list of joint names (excluding the ROOT node) or None if the
-    file is missing or unparseable. The order matches the channel layout in
-    the corresponding NPZ's global_rot_mats.
+    Returns (joint_names, parent_indices) matching the channel layout in the
+    corresponding NPZ's global_rot_mats.  Parent index is -1 for the root
+    (Hips).  The depth-first hierarchy is reconstructed by tracking brace
+    nesting depth: each JOINT/ROOT declaration records the current depth, then
+    the parent of joint[i] is the most recent joint[j<i] at depth[i]-1.
     """
     if not os.path.isfile(bvh_path):
-        return None
+        return None, None
     try:
-        joints = []
+        depth = 0
+        names = []
+        depths = []
         with open(bvh_path) as f:
             for line in f:
+                stripped = line.strip()
+                if "{" in stripped:
+                    depth += stripped.count("{")
+                if "}" in stripped:
+                    depth -= stripped.count("}")
                 m = _BVH_JOINT_RE.match(line)
                 if m:
                     name = m.group(1)
-                    if name != "Root":  # skip the BVH root node
-                        joints.append(name)
-        return joints if joints else None
+                    if name == "Root":
+                        continue  # skip the BVH root node
+                    names.append(name)
+                    depths.append(depth)
+        if not names:
+            return None, None
+        parents = [-1] * len(names)
+        for i in range(1, len(names)):
+            for j in range(i - 1, -1, -1):
+                if depths[j] == depths[i] - 1:
+                    parents[i] = j
+                    break
+        return names, parents
     except (OSError, UnicodeDecodeError):
-        return None
+        return None, None
 
 
 _BVH_JOINT_RE = re.compile(r"^\s*(?:ROOT|JOINT)\s+(\S+)")
+
+
+def _legacy_rest_offsets(d, n, layout, rot):
+    """Fallback rest-offset computation when BVH is unavailable (direct
+    first-n truncation path).  Estimates from posed_joints at frame 0."""
+    rest = np.zeros((n, 3), dtype=np.float64)
+    if "posed_joints" not in d:
+        return rest
+    name_idx = {name: i for i, (name, _) in enumerate(layout)}
+    parent_idx = [None if p is None else name_idx[p] for _, p in layout]
+    posed = np.asarray(d["posed_joints"][0], dtype=np.float64)
+    if posed.ndim == 1:
+        posed = posed.reshape(-1, 3)
+    for j in range(1, n):
+        pi = parent_idx[j]
+        if pi is None:
+            continue
+        delta = posed[j] - posed[pi]
+        R_p = rot[0, pi]
+        rest[j] = R_p.T @ delta
+    return rest
 
 
 def convert(npz_path: str, out_path: str, contract_path: str | None = None):
@@ -285,40 +325,70 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
 
     # Build index map from sibling BVH (or fall back to first-n truncation)
     bvh_path = os.path.splitext(npz_path)[0] + ".bvh"
-    src_joints = _parse_bvh_joints(bvh_path)
-    src_count = d["global_rot_mats"].shape[1]
-    if src_joints and len(src_joints) == src_count:
-        # Map each SOMA30 name to its index in the NPZ's global_rot_mats
-        src_idx = {name: i for i, name in enumerate(src_joints)}
+    bvh_joints, bvh_parents = _parse_bvh_hierarchy(bvh_path)
+    full_world = np.asarray(d["global_rot_mats"], dtype=np.float64)
+    src_count = full_world.shape[1]
+
+    # SOMA30 parent indices (name → index under the collapsed hierarchy)
+    name_in_layout = {name: i for i, (name, _) in enumerate(layout)}
+    layout_parent_idx = [None if p is None else name_in_layout[p]
+                         for _, p in layout]
+
+    if bvh_joints and len(bvh_joints) == src_count:
+        # Map each SOMA30 name to its position in the 77-joint BVH order
+        src_idx = {name: i for i, name in enumerate(bvh_joints)}
         idx_map = [src_idx.get(name) for name, _ in layout]
         if None not in idx_map:
-            # All SOMA30 joints found — reorder from actual positions
-            rot = d["global_rot_mats"][:, idx_map]          # [T, 30, 3, 3]
+            # ── World-space collapse: extract world transforms for the 30
+            # retained joints, then derive new local rotations under the
+            # collapsed SOMA30 hierarchy. ──
+            sel_world = full_world[:, idx_map]          # [T, 30, 3, 3]
+
+            # R_local[j] = R_local[root] for j=0, else
+            # R_local[j] = R_world[parent_select]^T @ R_world[j]
+            T = sel_world.shape[0]
+            reduced_local = np.zeros_like(sel_world)    # [T, 30, 3, 3]
+            reduced_local[:, 0] = sel_world[:, 0]       # root keeps world
+            for j in range(1, n):
+                p = layout_parent_idx[j]
+                # Batched per-frame: R_p^T @ R_j
+                reduced_local[:, j] = np.matmul(
+                    np.transpose(sel_world[:, p], (0, 2, 1)),
+                    sel_world[:, j],
+                )
+            rot = reduced_local
+
+            # Rest offsets from world positions at frame 0.
+            # offset[j] = R_world[parent]^T @ (world_j - world_parent)
+            if "posed_joints" in d:
+                posed = np.asarray(d["posed_joints"], dtype=np.float64)
+                sel_pos = posed[:, idx_map]             # [T, 30, 3]
+                rest_offsets = np.zeros((n, 3), dtype=np.float64)
+                for j in range(1, n):
+                    p = layout_parent_idx[j]
+                    delta = sel_pos[0, j] - sel_pos[0, p]
+                    R_p = sel_world[0, p]
+                    rest_offsets[j] = R_p.T @ delta
+            else:
+                rest_offsets = np.zeros((n, 3), dtype=np.float64)
+
+            skeleton_label = "somaskel77"
         else:
-            print(f"warning: {os.path.basename(npz_path)}: {sum(1 for i in idx_map if i is None)} SOMA30 joints not in BVH; falling back to first-{n} truncation", file=sys.stderr)
-            rot = d["global_rot_mats"][:, :n]
+            print(f"warning: {os.path.basename(npz_path)}: "
+                  f"{sum(1 for i in idx_map if i is None)} SOMA30 joints "
+                  f"not in BVH; falling back to legacy truncation",
+                  file=sys.stderr)
+            rot = full_world[:, :n]
+            skeleton_label = detect_skeleton(d)
+            rest_offsets = _legacy_rest_offsets(d, n, layout, rot)
     else:
-        rot = d["global_rot_mats"][:, :n]                  # [T, J, 3, 3]
+        rot = full_world[:, :n]
+        skeleton_label = detect_skeleton(d)
+        rest_offsets = _legacy_rest_offsets(d, n, layout, rot)
     T = rot.shape[0]
 
-    # Build parent index array and compute rest_offsets from the first frame.
-    name_idx = {name: i for i, (name, _) in enumerate(layout)}
-    parent_idx = [None if p is None else name_idx[p] for _, p in layout]
-    posed = np.asarray(d.get("posed_joints", d["root_positions"])[0], dtype=np.float64)
-    if posed.ndim == 1:
-        posed = posed.reshape(-1, 3)
-    rest_offsets = np.zeros((n, 3), dtype=np.float64)
-    if "posed_joints" in d:
-        for j in range(1, n):
-            pi = parent_idx[j]
-            if pi is None:
-                continue
-            delta = posed[j] - posed[pi]
-            R_p = rot[0, pi]  # 3x3 rotation matrix of parent at frame 0
-            rest_offsets[j] = R_p.T @ delta
-
     out = {
-        "skeleton": skeleton,
+        "skeleton": skeleton_label,
         "fps": int(d["fps"]) if "fps" in d else 30,
         "joints": [name for name, _ in layout],
         "parents": [p for _, p in layout],
@@ -332,7 +402,7 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
         out["smooth_root_pos"] = d["smooth_root_pos"].tolist()
     with open(out_path, "w") as f:
         json.dump(out, f)
-    print(f"wrote {out_path}: skeleton={skeleton}, T={T} frames")
+    print(f"wrote {out_path}: skeleton={skeleton_label}, T={T} frames")
 
 
 # (name, parent) pairs for a Kimodo-style cskel27 matrix export — same
@@ -375,6 +445,64 @@ def validate_cskel27(json_path: str, npz_path: str, contract_path: str | None = 
     return ok
 
 
+def validate_77to30(json_path: str, npz_path: str,
+                    tolerance_mm: float = 1.0) -> bool:
+    """Round-trip validation: collapse 77→30, FK the collapsed output, and
+    compare retained-joint world positions against the source NPZ.
+
+    If the collapse is mathematically correct, every retained joint's world
+    position should match to within tolerance_mm.
+    """
+    with open(json_path) as f:
+        m = json.load(f)
+    d = np.load(npz_path)
+    if "posed_joints" not in d:
+        print(f"SKIP {json_path}: NPZ has no posed_joints to validate against")
+        return True
+    bvh_path = os.path.splitext(npz_path)[0] + ".bvh"
+    bvh_joints, _ = _parse_bvh_hierarchy(bvh_path)
+    if not bvh_joints or len(bvh_joints) != d["global_rot_mats"].shape[1]:
+        print(f"SKIP {json_path}: BVH unavailable or mismatched joint count")
+        return True
+
+    src_idx = {name: i for i, name in enumerate(bvh_joints)}
+    idx_map = [src_idx.get(name) for name in m["joints"]]
+    if None in idx_map:
+        print(f"SKIP {json_path}: SOMA30 joints missing from BVH")
+        return True
+
+    # Source world positions of retained joints
+    posed = np.asarray(d["posed_joints"], dtype=np.float64)
+    ref_world = posed[:, idx_map]  # [T, 30, 3]
+
+    # FK the collapsed hierarchy
+    J = len(m["joints"])
+    rot = np.asarray(m["global_rot_mats"], dtype=np.float64).reshape(-1, J, 3, 3)
+    offsets = np.asarray(m["rest_offsets_m"], dtype=np.float64)
+    root = np.asarray(m["root_positions"], dtype=np.float64)
+    T = rot.shape[0]
+    parents = [None if p is None else m["joints"].index(p) for p in m["parents"]]
+
+    pos = np.zeros((T, J, 3), dtype=np.float64)
+    for t in range(T):
+        pos[t, 0] = root[t]
+        # Compute world rotations from collapsed local rotations
+        wrot = np.zeros((J, 3, 3), dtype=np.float64)
+        wrot[0] = rot[t, 0]
+        for j in range(1, J):
+            p = parents[j]
+            wrot[j] = wrot[p] @ rot[t, j]
+            pos[t, j] = pos[t, p] + wrot[p] @ offsets[j]
+
+    err_mm = np.linalg.norm(pos - ref_world[:T], axis=2) * 1000.0
+    ok = bool(err_mm.max() < tolerance_mm)
+    verdict = "PASS" if ok else "FAIL"
+    print(f"{verdict} {os.path.basename(json_path)}: "
+          f"max={err_mm.max():.4f} mm  mean={err_mm.mean():.4f} mm "
+          f"(T={T}, n={J}, tol={tolerance_mm} mm)")
+    return ok
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     contract = None
@@ -384,5 +512,9 @@ if __name__ == "__main__":
         del args[i:i + 2]
     if args and args[0] == "--validate":
         ok = validate_cskel27(args[1], args[2], contract)
+        sys.exit(0 if ok else 1)
+    if args and args[0] == "--validate-77to30":
+        ok = validate_77to30(args[1], args[2],
+                             float(args[3]) if len(args) > 3 else 1.0)
         sys.exit(0 if ok else 1)
     convert(args[0], args[1], contract)
