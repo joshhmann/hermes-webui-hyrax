@@ -17,6 +17,7 @@
 # FK convention proven to 0.0005 mm against posed_joints.
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -242,6 +243,32 @@ def convert_cskel27(d, npz_path: str, out_path: str, contract_path: str | None =
     print(f"wrote {out_path}: skeleton=cskel27, T={T} frames, fps={out['fps']}")
 
 
+def _parse_bvh_joints(bvh_path: str) -> list[str] | None:
+    """Extract joint names in depth-first order from a BVH file.
+
+    Returns a list of joint names (excluding the ROOT node) or None if the
+    file is missing or unparseable. The order matches the channel layout in
+    the corresponding NPZ's global_rot_mats.
+    """
+    if not os.path.isfile(bvh_path):
+        return None
+    try:
+        joints = []
+        with open(bvh_path) as f:
+            for line in f:
+                m = _BVH_JOINT_RE.match(line)
+                if m:
+                    name = m.group(1)
+                    if name != "Root":  # skip the BVH root node
+                        joints.append(name)
+        return joints if joints else None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+_BVH_JOINT_RE = re.compile(r"^\s*(?:ROOT|JOINT)\s+(\S+)")
+
+
 def convert(npz_path: str, out_path: str, contract_path: str | None = None):
     d = np.load(npz_path)
     skeleton = detect_skeleton(d)
@@ -251,9 +278,27 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
 
     # Kimodo path (somaskel30/77, or a cskel27 export that carries matrices):
     # the NPZ already has global rotations and per-channel contacts.
+    # For 77-joint captures, parse the sibling BVH to get the true joint
+    # order (depth-first), then map SOMA30 names to their actual indices.
     layout = CORE27_LAYOUT if skeleton == "cskel27" else SOMA30
     n = len(layout)
-    rot = d["global_rot_mats"][:, :n]          # [T, J, 3, 3]
+
+    # Build index map from sibling BVH (or fall back to first-n truncation)
+    bvh_path = os.path.splitext(npz_path)[0] + ".bvh"
+    src_joints = _parse_bvh_joints(bvh_path)
+    src_count = d["global_rot_mats"].shape[1]
+    if src_joints and len(src_joints) == src_count:
+        # Map each SOMA30 name to its index in the NPZ's global_rot_mats
+        src_idx = {name: i for i, name in enumerate(src_joints)}
+        idx_map = [src_idx.get(name) for name, _ in layout]
+        if None not in idx_map:
+            # All SOMA30 joints found — reorder from actual positions
+            rot = d["global_rot_mats"][:, idx_map]          # [T, 30, 3, 3]
+        else:
+            print(f"warning: {os.path.basename(npz_path)}: {sum(1 for i in idx_map if i is None)} SOMA30 joints not in BVH; falling back to first-{n} truncation", file=sys.stderr)
+            rot = d["global_rot_mats"][:, :n]
+    else:
+        rot = d["global_rot_mats"][:, :n]                  # [T, J, 3, 3]
     T = rot.shape[0]
 
     # Build parent index array and compute rest_offsets from the first frame.
