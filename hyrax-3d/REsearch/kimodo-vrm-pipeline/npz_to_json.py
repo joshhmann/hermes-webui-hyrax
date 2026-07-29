@@ -255,6 +255,23 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
     n = len(layout)
     rot = d["global_rot_mats"][:, :n]          # [T, J, 3, 3]
     T = rot.shape[0]
+
+    # Build parent index array and compute rest_offsets from the first frame.
+    name_idx = {name: i for i, (name, _) in enumerate(layout)}
+    parent_idx = [None if p is None else name_idx[p] for _, p in layout]
+    posed = np.asarray(d.get("posed_joints", d["root_positions"])[0], dtype=np.float64)
+    if posed.ndim == 1:
+        posed = posed.reshape(-1, 3)
+    rest_offsets = np.zeros((n, 3), dtype=np.float64)
+    if "posed_joints" in d:
+        for j in range(1, n):
+            pi = parent_idx[j]
+            if pi is None:
+                continue
+            delta = posed[j] - posed[pi]
+            R_p = rot[0, pi]  # 3x3 rotation matrix of parent at frame 0
+            rest_offsets[j] = R_p.T @ delta
+
     out = {
         "skeleton": skeleton,
         "fps": int(d["fps"]) if "fps" in d else 30,
@@ -262,6 +279,7 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
         "parents": [p for _, p in layout],
         "global_rot_mats": rot.reshape(T, n, 9).tolist(),  # row-major
         "root_positions": d["root_positions"].tolist(),   # true pelvis — drives hips
+        "rest_offsets_m": rest_offsets.tolist(),           # FK ground truth
         "foot_contacts": decode_contacts(d, T).tolist(),  # [T, 4] L-heel, L-toe, R-heel, R-toe
     }
     # Kimodo only: keep the smoothed root for path logic (ARDY aliases it — do not rely on it).
