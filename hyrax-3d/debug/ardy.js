@@ -124,8 +124,10 @@ function afterMotionLoad(label) {
 
 // FK: p_0 = root; p_j = p_parent + R_parent @ offset_j. R row-major 9 floats.
 // Same convention the converter was validated against (posed_joints < 0.002 mm).
-const _pos = new Float32Array(27 * 3)
+let _pos = null
 function fkPositions(f) {
+  const J = motion.joints.length
+  if (!_pos || _pos.length < J * 3) _pos = new Float32Array(J * 3)
   const { parentIdx, offsets, rot, root } = motion
   _pos[0] = root[f][0]; _pos[1] = root[f][1]; _pos[2] = root[f][2]
   for (let j = 1; j < parentIdx.length; j += 1) {
@@ -247,7 +249,11 @@ function rebuildRetargeter() {
   const rf = restFrameIndex()
   const played = motionJsonForRetargeter()
   cmpMotion = vrmYawFlip ? conjugateClipY180(played) : played
-  cmpRest = restClip ? (vrmYawFlip ? conjugateClipY180(restClip) : restClip) : null
+  // Only use the T-pose rest clip when its skeleton matches the current
+  // capture (cskel27 vs somaskel30 have different joint hierarchies).
+  const sameSkel = restClip && restClip.skeleton === motion.skeleton
+  cmpRest = sameSkel ? (vrmYawFlip ? conjugateClipY180(restClip) : restClip) : null
+  _restJointIdx.clear()
   if (cmpRest) {
     retargeter = new SomaVrmRetargeter(vrm, cmpRest, { restFrame: rf })
     retargeter.motion = cmpMotion
