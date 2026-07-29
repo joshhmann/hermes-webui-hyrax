@@ -28229,6 +28229,8 @@ async function GS(i, e, t) {
     const b = document.createElement("button");
     b.textContent = A[0].toUpperCase() + A.slice(1), b.addEventListener("click", () => c.setCameraMode(A)), a.append(b);
   }
+  const D = document.createElement("button");
+  D.textContent = "Debug", D.title = "Open ARDY debug view (capture player / retarget compare)", D.addEventListener("click", () => window.open("/api/hyrax/3d/debug/ardy.html", "_blank")), a.append(D);
   const h = document.createElement("span");
   h.className = "tai-loft-ardy-status", h.dataset.state = "connecting", h.title = "ARDY motion stream";
   const u = document.createElement("input");

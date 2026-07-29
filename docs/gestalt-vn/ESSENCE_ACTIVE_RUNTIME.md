@@ -767,3 +767,49 @@ the existing approval UI) or **never tier** (§14). Whitelists are data
 - Shadow first, always: no operator graduates to live execution without a
   week of shadow journals.
 - Report-back is part of done, not a nicety.
+
+### 20.8 D1 as built (2026-07-28)
+
+D1 shipped in shadow mode, mai pilot only. New essenced modules:
+
+- `irritation.py` — per-operator per-subject accumulators. Sources
+  (read-only): kanban blocked aging >24h, kanban ready (unclaimed) aging
+  >72h (new `KanbanWatcher.ready_tasks()`), repeated tool failures from
+  the operator's own journal.jsonl (inert today — the sessions watcher
+  emits no tool-failed events; the collector lights up when one does).
+  Docs/wiki staleness was dropped per the "keep the source list small"
+  clause. Weight builds per sighting (source weight × per-operator
+  multiplier mai 1.3 / tai 1.0 / nei 0.8 / rei 0.6), decays exponentially
+  (tau), fires at `fire_threshold`; a standing observation counts once per
+  `resight_seconds`. All numbers in rules.json `autonomy`.
+- `proposals.py` — want → REAL `essence_proposal.propose()` (type
+  `handoff_note`, candidate_action `ask_josh`) → G1–G6 verdicts from the
+  plugin's own `check_proposal_gates` journaled into
+  outreach_journal.jsonl → STOP. Shadow enforcement is two-layer:
+  `install_shadow_guard()` replaces the plugin's `approve_proposal` with a
+  raising stub in-process, and `tests/test_shadow.py` static-scans the
+  package for approval/lease/executor references. Circuit breaker: a
+  denial (propose failure other than a routine cooldown deferral, or a
+  negative evaluation — suppress decision or blocking gate) increments a
+  counter; 3 consecutive opens the breaker for 6h (`autonomy.breaker`).
+- Delivery reuses the §19 lanes unchanged with want kind
+  `autonomy-proposal`: one composition turn (system note = proposal
+  summary + derived state + constraints "one message, your voice, tell
+  Josh what you want to do and why, no infra"), WebUI + Discord DM, one
+  fire_id. Policy gate is separate: `autonomy.enabled` (default OFF, mai
+  ON pilot), `autonomy_daily` cap (1/day, separate counter), quiet hours
+  reused from outreach, breaker check. `outreach.dry_run` remains the
+  single kill-switch.
+- Test hook: `essenced.py --seed-irritation OP SUBJECT [--seed-weight W]`
+  primes an accumulator and runs one tick through the real pipeline.
+
+Known D1 caveat: with Local Mind down, the plugin's weighted fallback only
+knows expression types {local_note, microthought, dream_context,
+distill_context}, so every handoff_note proposal evaluates to
+decision=suppress (G4 fails, G2/G5 warn). The proposal record, lifecycle,
+and gate verdicts are all real and journaled; the suppressions count
+toward the circuit breaker, so after 3 fires the breaker opens for 6h
+while Local Mind is unavailable — fail-closed, by design. Delivery of the
+report message is NOT conditioned on gate verdicts (the gates govern
+future approval, not her telling Josh).
+

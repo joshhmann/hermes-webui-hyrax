@@ -162,6 +162,16 @@
     }
   }
 
+  function setRoom(name) {
+    if (!_regions || !_regions.roomEl) return;
+    if (name && typeof name === 'string') {
+      _regions.roomEl.textContent = name;
+      _regions.roomEl.hidden = false;
+    } else {
+      _regions.roomEl.hidden = true;
+    }
+  }
+
   function _setStateChip(state) {
     var chip = _regions && _regions.stateEl;
     if (!chip) return;
@@ -181,6 +191,11 @@
     backBtn.setAttribute('type', 'button');
     backBtn.addEventListener('click', _backToHq);
     var nameEl = _el('span', 'vn2-name', name);
+    var roomEl = _el('span', 'vn2-room-label', '');
+    roomEl.hidden = true;
+    var nameWrap = _el('div', 'vn2-name-wrap');
+    nameWrap.appendChild(nameEl);
+    nameWrap.appendChild(roomEl);
     var moodEl = _el('span', 'vn2-mood', 'neutral');
     moodEl.setAttribute('title', 'Mood: neutral');
     var stateEl = _el('span', 'vn2-state-chip', 'connecting');
@@ -195,7 +210,7 @@
       if (s && typeof s.openInStandardChat === 'function') s.openInStandardChat();
     });
     topBar.appendChild(backBtn);
-    topBar.appendChild(nameEl);
+    topBar.appendChild(nameWrap);
     topBar.appendChild(moodEl);
     topBar.appendChild(stateEl);
     topBar.appendChild(techBtn);
@@ -379,6 +394,8 @@
       root: rootEl,
       topBar: topBar,
       nameEl: nameEl,
+      nameWrap: nameWrap,
+      roomEl: roomEl,
       moodEl: moodEl,
       stateEl: stateEl,
       techBtn: techBtn,
@@ -580,6 +597,10 @@
         if (!manifest || typeof vn.rooms.backgroundUrl !== 'function') return;
         var url = vn.rooms.backgroundUrl(manifest);
         if (url) { try { vn.stage.setBackground(url); } catch (_) {} }
+        if (manifest.displayName) { setRoom(manifest.displayName); }
+        if (vn.stage && typeof vn.stage.updateObjectHints === 'function') {
+          vn.stage.updateObjectHints(manifest.roomId);
+        }
       };
       var manifest = typeof vn.rooms.get === 'function' ? vn.rooms.get(roomId) : null;
       if (manifest) { applyBg(manifest); return; }
@@ -616,9 +637,17 @@
     // 2. Essence state + intents → stage + top bar mood.
     try {
       if (essence.state && typeof essence.state.refresh === 'function') {
-        essence.state.refresh(operatorId).catch(function() {});
-      }
-      if (essence.intents && typeof essence.intents.init === 'function') {
+        essence.state.refresh(operatorId).then(function() {
+          if (essence.intents && typeof essence.intents.init === 'function') {
+            essence.intents.init({ operatorId: operatorId });
+          }
+        }).catch(function() {
+          // init anyway even if refresh fails
+          if (essence.intents && typeof essence.intents.init === 'function') {
+            essence.intents.init({ operatorId: operatorId });
+          }
+        });
+      } else if (essence.intents && typeof essence.intents.init === 'function') {
         essence.intents.init({ operatorId: operatorId });
       }
       if (essence.intents && typeof essence.intents.subscribe === 'function') {
@@ -653,6 +682,7 @@
           operatorId: operatorId,
           location: entryLocation,
           poseIntent: (_fedPresentation && _fedPresentation.pose) || 'standing',
+          expressionIntent: (_fedPresentation && _fedPresentation.expression) || 'neutral',
           trigger: 'scene-entry',
         });
       }
@@ -702,6 +732,12 @@
             _stageLocation = roomId || _stageLocation;
             var manifest = vn.rooms && typeof vn.rooms.get === 'function'
               ? vn.rooms.get(roomId) : null;
+            if (manifest && manifest.displayName) {
+              setRoom(manifest.displayName);
+            }
+            if (vn.stage && typeof vn.stage.updateObjectHints === 'function') {
+              vn.stage.updateObjectHints(roomId || null);
+            }
             if (manifest && typeof vn.rooms.applyScene === 'function') {
               vn.rooms.applyScene(manifest, {
                 operatorId: operatorId, roomManifest: manifest,
@@ -717,6 +753,10 @@
           _regions.sidebar.initExperience();
         }
         vn.sidebar.init(_regions.sidebar, ctx);
+        // Quick actions need the same context for evaluate/run.
+        if (ns.composer && typeof ns.composer.setActionCtx === 'function') {
+          try { ns.composer.setActionCtx(ctx); } catch (_) {}
+        }
         // Room manifest → sidebar room section + stage location context.
         var roomId = OPERATOR_ROOM[operatorId];
         if (roomId && vn.rooms && typeof vn.rooms.load === 'function') {
@@ -729,6 +769,14 @@
             try {
               if (vn.sidebar && typeof vn.sidebar.setRoom === 'function') {
                 vn.sidebar.setRoom(manifest);
+              }
+              // Room label in top bar.
+              if (manifest.displayName) {
+                setRoom(manifest.displayName);
+              }
+              // Object inspect hints on stage.
+              if (vn.stage && typeof vn.stage.updateObjectHints === 'function') {
+                vn.stage.updateObjectHints(manifest.roomId);
               }
               // Opening the VN from an HQ room click lands in the operator's
               // room: the manifest owns the stage background from here —
@@ -806,6 +854,7 @@
     isMounted: isMounted,
     setTopBar: setTopBar,
     setState: setState,
+    setRoom: setRoom,
     regions: function() { return _regions; },
   };
 

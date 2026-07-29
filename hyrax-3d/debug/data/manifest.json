@@ -1,0 +1,42 @@
+{
+ "captures": [
+  {
+   "id": "capture-tpose",
+   "prompt": "a person stands completely still in a T-pose, arms straight out to the sides horizontally",
+   "fps": 20.0,
+   "chunks": [
+    "capture-tpose-chunk_000.json"
+   ]
+  },
+  {
+   "id": "capture-idle",
+   "prompt": "a person stands idle, breathing calmly",
+   "fps": 20.0,
+   "chunks": [
+    "capture-idle-chunk_000.json",
+    "capture-idle-chunk_001.json",
+    "capture-idle-chunk_002.json"
+   ]
+  },
+  {
+   "id": "capture-crouch",
+   "prompt": "a person crouches down low and stays crouched",
+   "fps": 20.0,
+   "chunks": [
+    "capture-crouch-chunk_000.json",
+    "capture-crouch-chunk_001.json",
+    "capture-crouch-chunk_002.json"
+   ]
+  },
+  {
+   "id": "capture-turn",
+   "prompt": "a person walks forward then turns around 180 degrees",
+   "fps": 20.0,
+   "chunks": [
+    "capture-turn-chunk_000.json",
+    "capture-turn-chunk_001.json",
+    "capture-turn-chunk_002.json"
+   ]
+  }
+ ]
+}

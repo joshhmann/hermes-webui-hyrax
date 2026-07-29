@@ -1320,3 +1320,62 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 @media (max-width: 719px) {
   .vn2-sidebar.vn2-sidebar--collapsed .gestalt-vn-sidebar { display: none; }
 }
+
+/* ── Room label in top bar (vnShell.js) ── */
+.vn2-name-wrap {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.vn2-room-label {
+  font-size: 10px;
+  color: var(--muted, #8b949e);
+  display: block;
+  line-height: 1.2;
+}
+
+/* ── Object hints on stage (vnStage.js) ── */
+.vn2-object-hints {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 5;
+  pointer-events: auto;
+}
+.vn2-object-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: rgba(22,27,34,.75);
+  border: 1px solid var(--line, #30363d);
+  border-radius: 12px;
+  color: var(--muted, #8b949e);
+  opacity: 0.5;
+  transition: opacity .2s;
+  cursor: pointer;
+}
+.vn2-object-chip:hover { opacity: 1; color: #e6edf3; }
+.vn2--text-first .vn2-object-hints { display: none; }
+
+/* ── Quick action chips above composer (vnComposer.js) ── */
+.vn2-quick-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  flex-wrap: wrap;
+}
+.vn2-quick-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--line, #30363d);
+  border-radius: 14px;
+  background: rgba(22,27,34,.5);
+  color: var(--muted, #8b949e);
+  cursor: pointer;
+  transition: border-color .15s;
+  touch-action: manipulation;
+}
+.vn2-quick-chip:hover { border-color: var(--muted, #8b949e); color: #e6edf3; }
+.vn2-quick-chip:disabled { opacity: 0.35; cursor: not-allowed; }

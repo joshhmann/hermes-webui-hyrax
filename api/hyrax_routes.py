@@ -222,6 +222,10 @@ def handle_hyrax_get(handler, parsed) -> bool:
         from api.hyrax_routes import handle_hyrax_vn_get
         return handle_hyrax_vn_get(handler, parsed)
 
+    # /api/hyrax/3d/* — serve static assets from hyrax-3d/ (ARDY debug page, etc.)
+    if path.startswith("/api/hyrax/3d/"):
+        return _serve_3d_dep(handler, path)
+
     # Unknown /api/hyrax/* -> sanitised 404
     j(handler, {"error": "not found"}, status=404)
     return True
@@ -342,6 +346,77 @@ def _serve_asset(handler, asset_name: str) -> bool:
         with stream:
             while True:
                 chunk = stream.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                try:
+                    handler.wfile.write(chunk)
+                except _DISCONNECT_ERRORS:
+                    break
+    except OSError:
+        pass
+
+    return True
+
+
+_3D_BASE = Path(__file__).resolve().parent.parent / "hyrax-3d"
+"""Root for 3D static assets (node_modules, REsearch, debug). Sandboxed."""
+
+_3D_MIME = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".css": "text/css",
+    ".png": "image/png",
+    ".vrm": "model/gltf-binary",
+    ".glb": "model/gltf-binary",
+}
+
+
+def _serve_3d_dep(handler, path: str) -> bool:
+    """Serve static files from hyrax-3d/ via /api/hyrax/3d/<rel_path>.
+
+    Security model:
+      - The relative path is extracted from the URL and resolved within
+        _3D_BASE. Path traversal (../) is rejected.
+      - The resolved path must fall under _3D_BASE.
+      - Only regular files are served (no dirs, no symlinks).
+    """
+    rel = path[len("/api/hyrax/3d/"):]
+    if not rel:
+        j(handler, {"error": "not found"}, status=404)
+        return True
+
+    # Reject path traversal and empty segments
+    if ".." in rel or rel.startswith("/"):
+        j(handler, {"error": "not found"}, status=404)
+        return True
+
+    try:
+        base = _3D_BASE.resolve(strict=True)
+        candidate = (base / rel).resolve(strict=True)
+        candidate.relative_to(base)
+        if not candidate.is_file() or candidate.is_symlink():
+            j(handler, {"error": "not found"}, status=404)
+            return True
+    except (OSError, ValueError, RuntimeError):
+        j(handler, {"error": "not found"}, status=404)
+        return True
+
+    ext = candidate.suffix.lower()
+    content_type = _3D_MIME.get(ext, "application/octet-stream")
+    size = candidate.stat().st_size
+
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(size))
+    handler.send_header("Cache-Control", "public, max-age=3600")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.end_headers()
+
+    try:
+        with open(candidate, "rb") as f:
+            while True:
+                chunk = f.read(CHUNK_SIZE)
                 if not chunk:
                     break
                 try:

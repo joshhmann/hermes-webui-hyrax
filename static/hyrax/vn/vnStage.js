@@ -83,6 +83,7 @@
   var _joltTimer = null;
   var _desktopMq = null;         // matchMedia('(min-width: 721px)') listener
   var _desktopMqHandler = null;
+  var _hintsEl = null;           // object hints container
 
   // Canonical expression families (hyrax-assets/essence/expression-families
   // .json v2): neutral / positive / wry / focused / intense / sad — each maps
@@ -391,7 +392,18 @@
   function init(container, opts) {
     opts = opts || {};
     if (!container) return null;
+    var prevOperatorId = _operatorId;
     dispose();
+
+    // Clear stale cached frame on operator switch: _currentFrame
+    // intentionally persists across re-mounts so the re-init replay
+    // (below, guarded by operator match) prevents the "loading scene…"
+    // placeholder from lingering on same-operator re-init. On operator
+    // switch we must clear it to avoid flashing the previous operator's
+    // frame while the new one's frames load.
+    if (prevOperatorId && prevOperatorId !== opts.operatorId) {
+      _currentFrame = null;
+    }
 
     _operatorId = opts.operatorId || null;
     _reducedMotion = !!opts.reducedMotion;
@@ -425,6 +437,9 @@
     _root.appendChild(_overlay);
     _root.appendChild(_staleBadge);
     _root.appendChild(_placeholder);
+    _hintsEl = _el('div', 'vn2-object-hints');
+    _hintsEl.hidden = true;
+    _root.appendChild(_hintsEl);
     container.appendChild(_root);
 
     // Instantiate registered providers in registration order.
@@ -586,6 +601,41 @@
     return true;
   }
 
+  // Room-object inspect hints: reads visibleObjectIds from the room manifest
+  // and renders clickable chips at the bottom of the stage. Clears when room
+  // changes or roomId is null.
+  function updateObjectHints(roomId) {
+    if (!_hintsEl || !_mounted) return;
+    _hintsEl.replaceChildren();
+    if (!roomId) { _hintsEl.hidden = true; return; }
+    var manifest = vn.rooms && typeof vn.rooms.get === 'function'
+      ? vn.rooms.get(roomId) : null;
+    if (!manifest || !Array.isArray(manifest.visibleObjectIds) ||
+        !manifest.visibleObjectIds.length) {
+      _hintsEl.hidden = true;
+      return;
+    }
+    var ctx = { operatorId: _operatorId, roomManifest: manifest, surface: 'vn' };
+    manifest.visibleObjectIds.forEach(function(objectId) {
+      var actionId = 'room.' + objectId + '.inspect';
+      var entry = vn.actions && typeof vn.actions.get === 'function'
+        ? vn.actions.get(actionId) : null;
+      if (!entry) return;
+      var label = objectId.replace(/-/g, ' ');
+      var chip = _el('button', 'vn2-object-chip', '🔍 ' + label);
+      chip.setAttribute('type', 'button');
+      chip.setAttribute('aria-label', 'Inspect ' + label);
+      chip.addEventListener('click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (vn.actions && typeof vn.actions.run === 'function') {
+          vn.actions.run(actionId, ctx);
+        }
+      });
+      _hintsEl.appendChild(chip);
+    });
+    _hintsEl.hidden = _hintsEl.children.length === 0;
+  }
+
   function getState() {
     return {
       operatorId: _operatorId,
@@ -627,12 +677,16 @@
     _desktopMq = null;
     _desktopMqHandler = null;
     if (_root && _root.remove) _root.remove();
+    if (_hintsEl) { try { _hintsEl.remove(); } catch (_) {} }
+    _hintsEl = null;
     _root = _bgImg = _frameWrap = _overlay = _staleBadge = _placeholder = null;
     _frameImgs = [];
     _frameListeners = [];
-    // _currentFrame intentionally persists across re-mounts: init() replays
-    // it into the fresh DOM (guarded by operator match), which keeps the
-    // loading placeholder from lingering and no-op selections honest.
+    // _currentFrame persists across re-mounts for same-operator re-inits,
+    // so init() replays it into the fresh DOM (guarded by operator match)
+    // to keep the loading placeholder from lingering. On operator switch,
+    // init() clears _currentFrame to avoid flashing the previous operator's
+    // frame — see init()'s prevOperatorId check.
     _operatorId = null;
     _mounted = false;
   }
@@ -642,6 +696,7 @@
     applyIntent: applyIntent,
     setTextFirst: setTextFirst,
     setBackground: setBackground,
+    updateObjectHints: updateObjectHints,
     getState: getState,
     subscribe: subscribe,
     dispose: dispose,

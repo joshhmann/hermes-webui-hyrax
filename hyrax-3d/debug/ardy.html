@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ARDY debug view — capture player / retarget compare / contract inspector</title>
+<!--
+  ARDY debug view (no build step). Accessible via the WebUI at:
+      /api/hyrax/3d/debug/ardy.html
+  Optional query params: ?capture=capture-turn  ?vrm=<url>  ?mode=compare
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1117; color: #c9d1d9;
+               font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+             padding: 6px 10px; background: #161b22; border-bottom: 1px solid #30363d; }
+  #toolbar button, #toolbar select, #toolbar input[type=number] {
+    background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+    border-radius: 4px; padding: 3px 8px; font: inherit; }
+  #toolbar button:hover { background: #30363d; }
+  #toolbar label { display: flex; gap: 4px; align-items: center; }
+  #main { display: flex; flex: 1; min-height: 0; }
+  #view { flex: 1; position: relative; min-width: 0; }
+  #view canvas { display: block; }
+  #status { position: absolute; left: 8px; bottom: 8px; color: #8b949e;
+            pointer-events: none; white-space: pre; }
+  #err { position: absolute; left: 8px; top: 8px; color: #f85149;
+         pointer-events: none; white-space: pre-wrap; max-width: 70%; }
+  #panel { width: 380px; overflow-y: auto; border-left: 1px solid #30363d;
+           padding: 8px 10px; background: #0d1117; }
+  #panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+              color: #8b949e; margin: 14px 0 4px; }
+  #panel h2:first-child { margin-top: 0; }
+  #panel table { border-collapse: collapse; width: 100%; }
+  #panel td, #panel th { border-bottom: 1px solid #21262d; padding: 2px 6px 2px 0;
+                         text-align: left; white-space: nowrap; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+        margin-right: 4px; vertical-align: -1px; }
+  .on { color: #3fb950; font-weight: bold; }
+  .off { color: #484f58; }
+  #scrub { flex: 1; min-width: 120px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/api/hyrax/3d/node_modules/three/build/three.module.js",
+    "three/addons/": "/api/hyrax/3d/node_modules/three/examples/jsm/",
+    "@pixiv/three-vrm": "/api/hyrax/3d/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <label>capture <select id="captureSel"></select></label>
+    <label>mode <select id="modeSel">
+      <option value="player">player</option>
+      <option value="compare">compare (vs VRM)</option>
+    </select></label>
+    <button id="playBtn">▶ play</button>
+    <button id="prevBtn">−1f</button>
+    <button id="nextBtn">+1f</button>
+    <input id="scrub" type="range" min="0" max="0" value="0" step="1">
+    <span id="frameLabel">0/0</span>
+    <label><input id="loopChk" type="checkbox" checked> loop</label>
+    <label>rest f <input id="restFrame" type="number" min="0" value="20" title="rest frame in the tpose reference clip (settled T-pose, ≥10)" style="width:56px"></label>
+    <label>motion <input id="motionFile" type="file" accept=".json"></label>
+    <label>VRM <input id="vrmFile" type="file" accept=".vrm"></label>
+  </div>
+  <div id="main">
+    <div id="view"><div id="err"></div><div id="status">loading…</div></div>
+    <div id="panel"></div>
+  </div>
+</div>
+<script type="module" src="./ardy.js"></script>
+</body>
+</html>

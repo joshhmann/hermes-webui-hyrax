@@ -139,7 +139,20 @@
       return vn.actions.evaluate(entry.id, _ctx).visible;
     });
     if (!visible.length) {
-      wrap.hidden = true;
+      var roomLoaded = _ctx && !!_ctx.roomManifest;
+      var text;
+      if (section.category === 'environment' && !roomLoaded) {
+        text = 'Loading room…';
+      } else {
+        var labels = {
+          operator: 'No operator actions',
+          environment: 'No room interactions',
+          work: 'No workspace actions',
+          system: 'No system controls',
+        };
+        text = labels[section.category] || 'No actions available';
+      }
+      wrap.appendChild(_el('div', 'vn2-sidebar-placeholder', text));
       return wrap;
     }
 

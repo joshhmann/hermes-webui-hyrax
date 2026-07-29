@@ -40,6 +40,12 @@
   var _unsubs = [];
   var _sessionUnsub = null;
   var _disposed = true;
+  var _quickActionsEl = null;  // quick action chip bar
+  var _actionCtx = null;        // context for vn.actions.evaluate/run
+
+  var QUICK_ACTION_IDS = [
+    'op.talk', 'op.ask-feeling', 'op.observe', 'op.sit-together',
+  ];
 
   function _el(tag, className, text) {
     var e = document.createElement(tag);
@@ -81,6 +87,42 @@
     if (_container) {
       if (busy) _container.classList.add('vn2-composer--busy');
       else _container.classList.remove('vn2-composer--busy');
+    }
+    _renderQuickActions();
+  }
+
+  // Render quick action chips above the composer.
+  function _renderQuickActions() {
+    if (!_quickActionsEl) return;
+    _quickActionsEl.replaceChildren();
+    var vn = root.GestaltVN && root.GestaltVN.vn;
+    if (!vn || !vn.actions) return;
+    var ctx = _actionCtx || {};
+    for (var i = 0; i < QUICK_ACTION_IDS.length; i++) {
+      var id = QUICK_ACTION_IDS[i];
+      var avail = vn.actions.evaluate(id, ctx);
+      if (!avail.visible) continue;
+      var entry = vn.actions.get(id);
+      if (!entry) continue;
+      (function(actionId, actionEntry, actionAvail) {
+        var chip = _el('button', 'vn2-quick-chip', actionEntry.label);
+        chip.setAttribute('type', 'button');
+        chip.setAttribute('data-action-id', actionId);
+        if (!actionAvail.enabled) {
+          chip.disabled = true;
+          if (actionAvail.reasonDisabled) {
+            chip.setAttribute('title', actionAvail.reasonDisabled);
+            chip.setAttribute('aria-label',
+              actionEntry.label + ' — ' + actionAvail.reasonDisabled);
+          }
+        }
+        chip.addEventListener('click', function() {
+          if (chip.disabled) return;
+          vn.actions.run(actionId, ctx);
+          _renderQuickActions();
+        });
+        _quickActionsEl.appendChild(chip);
+      })(id, entry, avail);
     }
   }
 
@@ -152,6 +194,13 @@
       if (!dupe) _staged.push(f);
     }
     _renderTray();
+  }
+
+  // Provide the action context for quick chip evaluation and execution.
+  // Called by the shell when the sidebar context is established.
+  function setActionCtx(ctx) {
+    _actionCtx = ctx || {};
+    _renderQuickActions();
   }
 
   function _uploadStaged(sid) {
@@ -354,6 +403,10 @@
     _container = opts.container;
     _container.classList.add('vn2-composer');
 
+    // Quick action chips (above the composer form).
+    _quickActionsEl = _el('div', 'vn2-quick-actions');
+    _container.appendChild(_quickActionsEl);
+
     _tray = _el('div', 'vn2-attach-tray');
     _tray.hidden = true;
 
@@ -458,6 +511,9 @@
       try { _container._form.remove(); } catch (_) {}
       _container._form = null;
     }
+    if (_quickActionsEl) { try { _quickActionsEl.remove(); } catch (_) {} }
+    _quickActionsEl = null;
+    _actionCtx = null;
     if (_container) _container.classList.remove('vn2-composer--busy');
     _container = null;
     _textarea = null;
@@ -477,6 +533,7 @@
     init: init,
     send: send,
     stageFiles: stageFiles,
+    setActionCtx: setActionCtx,
     cancel: cancel,
     editLast: editLast,
     regenerate: regenerate,
