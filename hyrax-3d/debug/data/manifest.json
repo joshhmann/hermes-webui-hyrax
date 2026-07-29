@@ -37,6 +37,48 @@
     "capture-turn-chunk_001.json",
     "capture-turn-chunk_002.json"
    ]
+  },
+  {
+   "id": "kmd-walk-carry-05f3",
+   "prompt": "Kimodo-generated: walking with weight shift, 150 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_05f37604cdc2_1783916923.json"]
+  },
+  {
+   "id": "kmd-reach-215f",
+   "prompt": "Kimodo-generated: reaching motion, 150 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_215f4b4edcaf_1783917058.json"]
+  },
+  {
+   "id": "kmd-brace-7ac6",
+   "prompt": "Kimodo-generated: bracing/defensive motion, 150 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_7ac6d7a4be91_1783917013.json"]
+  },
+  {
+   "id": "kmd-sway-d2f7",
+   "prompt": "Kimodo-generated: rhythmic sway, 150 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_d2f715f06e46_1783916882.json"]
+  },
+  {
+   "id": "kmd-stance-4e05",
+   "prompt": "Kimodo-generated: weight shift stance, 150 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_4e0539f56da2_1783916830.json"]
+  },
+  {
+   "id": "kmd-quick-451d",
+   "prompt": "Kimodo-generated: quick motion, 60 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_451dbd9a029b_1783917452.json"]
+  },
+  {
+   "id": "kmd-jerk-9ead",
+   "prompt": "Kimodo-generated: jerking motion, 60 frames",
+   "fps": 30.0,
+   "chunks": ["kimodo_9ead5ef20fa9_1783917428.json"]
   }
  ]
 }
