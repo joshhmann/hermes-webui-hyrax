@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Avatar Calibration Studio</title>
+<!--
+  Calibration Studio — Phase 1: baseline profile validation.
+
+  Workflow:
+    1. Load an avatar file (VRM / GLB / FBX)
+    2. Load a calibration profile (or use baseline)
+    3. Load a reference SOMA motion capture
+    4. Compare profile-driven retarget against the hardcoded
+       SomaVrmRetargeter path — PASS when results match.
+
+  No runtime changes. This page proves the profile format.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1117; color: #c9d1d9;
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px;
+    background: #161b22; border-bottom: 1px solid #30363d; flex-wrap: wrap; }
+  #toolbar label { color: #8b949e; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; }
+  #toolbar select, #toolbar button { background: #21262d; color: #c9d1d9;
+    border: 1px solid #30363d; border-radius: 4px; padding: 4px 10px;
+    font: inherit; cursor: pointer; }
+  #toolbar button:hover { background: #30363d; }
+  #toolbar .file-label { display: inline-flex; align-items: center; gap: 6px; }
+  #main { display: flex; flex: 1; overflow: hidden; }
+  #viewport { flex: 1; position: relative; }
+  #viewport canvas { display: block; width: 100%; height: 100%; }
+  #panel { width: 380px; overflow-y: auto; padding: 12px; border-left: 1px solid #30363d;
+    background: #0d1117; }
+  #panel h2 { margin: 0 0 8px; font-size: 13px; color: #58a6ff;
+    text-transform: uppercase; letter-spacing: 0.05em; }
+  #panel table { width: 100%; border-collapse: collapse; font-size: 12px;
+    margin-bottom: 16px; }
+  #panel td, #panel th { padding: 3px 6px; border: 1px solid #21262d;
+    text-align: left; white-space: nowrap; }
+  #panel th { background: #161b22; color: #8b949e; font-weight: 500; }
+  #panel td { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 11px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; }
+  .tag-pass { background: #1b3a2d; color: #3fb950; }
+  .tag-fail { background: #3a1b1b; color: #f85149; }
+  .tag-skip { background: #1b283a; color: #58a6ff; }
+  .status-bar { padding: 4px 12px; background: #161b22; border-top: 1px solid #30363d;
+    font-size: 11px; color: #8b949e; }
+  #skeletonTree { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tree-col { border: 1px solid #21262d; border-radius: 4px; padding: 8px; }
+  .tree-col h3 { margin: 0 0 6px; font-size: 12px; color: #8b949e; }
+  .tree-node { padding: 1px 0 1px 16px; font-size: 11px; cursor: pointer;
+    border-left: 2px solid transparent; }
+  .tree-node:hover { background: #161b22; border-left-color: #58a6ff; }
+  .tree-node.mapped { color: #3fb950; }
+  .tree-node.unmapped { color: #8b949e; }
+</style>
+<div id="app">
+  <div id="toolbar">
+    <label>Avatar</label>
+    <button id="loadAvatarBtn">Load VRM/GLB…</button>
+    <span id="avatarName" style="color:#8b949e;font-size:11px">none</span>
+
+    <label>Profile</label>
+    <select id="profileSel">
+      <option value="calibration-profiles/tai-embodiment-v3.json">Tai v3 (baseline)</option>
+    </select>
+    <button id="loadProfileBtn">Load…</button>
+
+    <label>Motion</label>
+    <select id="captureSel"></select>
+
+    <label>Mode</label>
+    <select id="modeSel">
+      <option value="profile">Profile-driven</option>
+      <option value="reference">Reference (hardcoded retargeter)</option>
+      <option value="compare" selected>Compare both</option>
+    </select>
+
+    <button id="validateBtn">Validate</button>
+    <span id="validationResult"></span>
+  </div>
+
+  <div id="main">
+    <div id="viewport"></div>
+    <div id="panel">
+      <h2>Status</h2>
+      <div id="status" style="color:#8b949e;margin-bottom:16px">ready</div>
+
+      <h2>Calibration Profile</h2>
+      <div id="profileInfo" style="font-size:11px;color:#8b949e;margin-bottom:16px">not loaded</div>
+
+      <h2>Skeleton Trees</h2>
+      <div id="skeletonTree">
+        <div class="tree-col">
+          <h3>Source (SOMA runtime)</h3>
+          <div id="sourceTree"></div>
+        </div>
+        <div class="tree-col">
+          <h3>Avatar bones</h3>
+          <div id="targetTree"></div>
+        </div>
+      </div>
+
+      <h2>Validation</h2>
+      <div id="validationTable"><div style="color:#8b949e;font-size:11px">run validation to compare profile-driven vs reference retarget</div></div>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar">ready</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "/api/hyrax/3d/node_modules/three/build/three.module.js",
+    "three/addons/": "/api/hyrax/3d/node_modules/three/examples/jsm/",
+    "@pixiv/three-vrm": "/api/hyrax/3d/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
+  }
+}
+</script>
+<script type="module" src="calibrate.js"></script>
+</html>

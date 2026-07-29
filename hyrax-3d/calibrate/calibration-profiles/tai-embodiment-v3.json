@@ -1,0 +1,108 @@
+{
+  "profile_version": "1.0",
+  "meta": {
+    "avatar_name": "Tai Embodiment",
+    "avatar_format": "vrm",
+    "asset_path": "/api/hyrax/assets/tai.embodiment.vrm",
+    "calibrator": "Mai (baseline extraction from SomaVrmRetargeter.js, 2026-07-29)",
+    "description": "Exact extraction of the current hardcoded retarget path. No reinterpretation.",
+    "validation_reference": "ardy debug page compare mode (SomaVrmRetargeter.js)"
+  },
+  "soma77_canonical": {
+    "description": "Full 77-joint hierarchy from Kimodo BVH. Joint names in BVH depth-first order.",
+    "joints": [
+      "Hips", "Spine1", "Spine2", "Chest", "Neck1", "Neck2", "Head", "HeadEnd",
+      "Jaw", "LeftEye", "RightEye",
+      "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand",
+      "LeftHandThumb1", "LeftHandThumb2", "LeftHandThumb3", "LeftHandThumbEnd",
+      "LeftHandIndex1", "LeftHandIndex2", "LeftHandIndex3", "LeftHandIndex4", "LeftHandIndexEnd",
+      "LeftHandMiddle1", "LeftHandMiddle2", "LeftHandMiddle3", "LeftHandMiddle4", "LeftHandMiddleEnd",
+      "LeftHandRing1", "LeftHandRing2", "LeftHandRing3", "LeftHandRing4", "LeftHandRingEnd",
+      "LeftHandPinky1", "LeftHandPinky2", "LeftHandPinky3", "LeftHandPinky4", "LeftHandPinkyEnd",
+      "RightShoulder", "RightArm", "RightForeArm", "RightHand",
+      "RightHandThumb1", "RightHandThumb2", "RightHandThumb3", "RightHandThumbEnd",
+      "RightHandIndex1", "RightHandIndex2", "RightHandIndex3", "RightHandIndex4", "RightHandIndexEnd",
+      "RightHandMiddle1", "RightHandMiddle2", "RightHandMiddle3", "RightHandMiddle4", "RightHandMiddleEnd",
+      "RightHandRing1", "RightHandRing2", "RightHandRing3", "RightHandRing4", "RightHandRingEnd",
+      "RightHandPinky1", "RightHandPinky2", "RightHandPinky3", "RightHandPinky4", "RightHandPinkyEnd",
+      "LeftLeg", "LeftShin", "LeftFoot", "LeftToeBase", "LeftToeEnd",
+      "RightLeg", "RightShin", "RightFoot", "RightToeBase", "RightToeEnd"
+    ]
+  },
+  "skeleton_maps": {
+    "description": "Skeleton key → runtime joint names used by the retargeter. somaskel77 is an alias for somaskel30.",
+    "somaskel30": {
+      "hips": "Hips", "spine": "Spine1", "chest": "Spine2", "upperChest": "Chest",
+      "neck": "Neck1", "head": "Head",
+      "leftShoulder": "LeftShoulder", "rightShoulder": "RightShoulder",
+      "leftUpperArm": "LeftArm", "rightUpperArm": "RightArm",
+      "leftLowerArm": "LeftForeArm", "rightLowerArm": "RightForeArm",
+      "leftHand": "LeftHand", "rightHand": "RightHand",
+      "leftUpperLeg": "LeftLeg", "rightUpperLeg": "RightLeg",
+      "leftLowerLeg": "LeftShin", "rightLowerLeg": "RightShin",
+      "leftFoot": "LeftFoot", "rightFoot": "RightFoot",
+      "leftToes": "LeftToeBase", "rightToes": "RightToeBase"
+    },
+    "cskel27": {
+      "hips": "Hips", "spine": "Spine", "chest": "Spine1", "upperChest": "Spine2",
+      "neck": "Neck", "head": "Head",
+      "leftShoulder": "LeftShoulder", "rightShoulder": "RightShoulder",
+      "leftUpperArm": "LeftArm", "rightUpperArm": "RightArm",
+      "leftLowerArm": "LeftForeArm", "rightLowerArm": "RightForeArm",
+      "leftHand": "LeftHand", "rightHand": "RightHand",
+      "leftUpperLeg": "LeftUpLeg", "rightUpperLeg": "RightUpLeg",
+      "leftLowerLeg": "LeftLeg", "rightLowerLeg": "RightLeg",
+      "leftFoot": "LeftFoot", "rightFoot": "RightFoot",
+      "leftToes": "LeftToeBase", "rightToes": "RightToeBase"
+    },
+    "somaskel77_alias": "somaskel30"
+  },
+  "solve_order": [
+    "hips", "spine", "chest", "upperChest", "neck", "head",
+    "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand",
+    "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand",
+    "leftUpperLeg", "leftLowerLeg", "leftFoot", "leftToes",
+    "rightUpperLeg", "rightLowerLeg", "rightFoot", "rightToes"
+  ],
+  "vrm_bone_parents": {
+    "spine": "hips", "chest": "spine", "upperChest": "chest", "neck": "upperChest",
+    "head": "neck",
+    "leftShoulder": "upperChest", "rightShoulder": "upperChest",
+    "leftUpperArm": "leftShoulder", "rightUpperArm": "rightShoulder",
+    "leftLowerArm": "leftUpperArm", "rightLowerArm": "rightUpperArm",
+    "leftHand": "leftLowerArm", "rightHand": "rightLowerArm",
+    "leftUpperLeg": "hips", "rightUpperLeg": "hips",
+    "leftLowerLeg": "leftUpperLeg", "rightLowerLeg": "rightUpperLeg",
+    "leftFoot": "leftLowerLeg", "rightFoot": "rightLowerLeg",
+    "leftToes": "leftFoot", "rightToes": "rightFoot"
+  },
+  "rest_pose": {
+    "default_src_hips_height_m": 0.954,
+    "description": "Core27 subject hip height at rest. SOMA captures will differ — should be measured per capture.",
+    "rest_frame_default": 0,
+    "rest_frame_recommended": {
+      "cskel27": 20,
+      "somaskel77": 0
+    }
+  },
+  "runtime_fk": {
+    "description": "source_rotation = srcWorldQuat(joint, frame) × offset[bone].invert(). offset is srcWorldQuat at restFrame, inverted — normalized rig rest is identity.",
+    "hips_root_offset_mode": "delta_from_frame_0",
+    "hips_scale_mode": "world_y_ratio",
+    "ground_contact": {
+      "enabled": true,
+      "channels": ["L-heel", "L-toe", "R-heel", "R-toe"],
+      "contact_threshold": 0.5,
+      "smoothing_factor": 0.4,
+      "foot_bones": ["leftFoot", "rightFoot"],
+      "contact_indices": {
+        "leftFoot": 1,
+        "rightFoot": 3
+      }
+    }
+  },
+  "ik": {
+    "enabled": false,
+    "description": "No IK solver in the current retargeter. Ground contact is handled by vertical offset only (no foot rotation IK)."
+  }
+}
