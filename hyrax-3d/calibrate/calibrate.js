@@ -45,7 +45,7 @@ function resize() {
 }
 window.addEventListener('resize', resize)
 
-// ── State ─────────────────────────────────────────────────────────────
+// State
 let profile = null
 let avatarVrm = null
 let avatarScene = null
@@ -59,6 +59,9 @@ let selectedBone = null  // 'source' | 'target' bone name
 let profileRetargeter = null
 let refRetargeter = null
 let profileCtx = null  // {map, offsets, jointIndex, hipsScale, ...}
+
+// Profile-driven snapshot (F-001 fix: independent comparison buffer)
+let profileSnapshot = { quat: {}, hipsPos: new THREE.Vector3() }
 
 // 3D skeleton visualization
 const srcSkelGroup = new THREE.Group()
@@ -530,6 +533,9 @@ function applyProfileFrame(f) {
   const world = {}
   const q = new THREE.Quaternion()
 
+  // Snapshot buffer: record profile-driven quat for F-001 comparison
+  profileSnapshot.quat = {}
+
   for (const bone of solveOrder) {
     const joint = map[bone]
     if (!joint || !offsets[bone]) continue
@@ -538,7 +544,10 @@ function applyProfileFrame(f) {
     const W = srcWorldQuat(motion, jointIndex, joint, f).multiply(offsets[bone]).clone()
     world[bone] = W
     const parentW = world[vrmParent[bone]]
-    node.quaternion.copy(parentW ? q.copy(parentW).invert().multiply(W) : W)
+    const localQ = parentW ? q.copy(parentW).invert().multiply(W) : W
+    node.quaternion.copy(localQ)
+    // Snapshot: the world-space quaternion after rest correction (F-001)
+    profileSnapshot.quat[bone] = W.clone()
   }
 
   const p = motion.root[f]
@@ -549,6 +558,7 @@ function applyProfileFrame(f) {
     hipsNode.userData.restY + (p[1] - p0[1]) * hipsScale,
     (p[2] - p0[2]) * hipsScale,
   )
+  profileSnapshot.hipsPos.copy(hipsNode.position)
   avatarVrm.humanoid.update()
 }
 
@@ -563,7 +573,13 @@ function buildRefRetargeter() {
     root_positions: motion.root,
     foot_contacts: motion.contacts,
   }
-  try { return new SomaVrmRetargeter(avatarVrm, m) }
+  // Forward UI parameters so both retargeters stay in sync (F-002)
+  try {
+    return new SomaVrmRetargeter(avatarVrm, m, {
+      srcHipsHeight: parseFloat($('hipHeightSlider').value),
+      restFrame: parseInt($('restFrameInput').value) || 0,
+    })
+  }
   catch (e) { console.warn('ref retargeter:', e); return null }
 }
 
@@ -575,15 +591,19 @@ function compareRetarget() {
   avatarVrm.scene.updateMatrixWorld(true)
   const qInv = new THREE.Quaternion()
   avatarVrm.scene.getWorldQuaternion(qInv).invert()
-  const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion()
+  const qRef = new THREE.Quaternion()
   const results = []
   for (const bone of profile.solve_order) {
     const node = avatarVrm.humanoid.getNormalizedBoneNode(bone)
     if (!node) continue
-    node.getWorldQuaternion(q1).premultiply(qInv)
-    node.getWorldQuaternion(q2).premultiply(qInv)
-    const dot = Math.abs(q1.dot(q2))
-    results.push({ bone, angleDeg: 2 * Math.acos(Math.min(1, dot)) * 180 / Math.PI })
+    // Profile-driven: from snapshot (F-001 fix — independent of VRM overwrite)
+    const snapQ = profileSnapshot.quat[bone]
+    if (!snapQ) continue
+    // Reference: read from the VRM bone as set by applyRefFrame
+    node.getWorldQuaternion(qRef).premultiply(qInv)
+    const dot = Math.abs(snapQ.dot(qRef))
+    const angleDeg = 2 * Math.acos(Math.min(1, dot)) * 180 / Math.PI
+    results.push({ bone, angleDeg })
   }
   return results
 }

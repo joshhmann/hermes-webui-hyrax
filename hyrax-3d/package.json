@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pixiv/three-vrm": "3.4.2",
+    "@pixiv/three-vrm": "^3.0.0",
     "gestalt-motion": "file:../../workspace/ardy-bridge/gestalt-motion",
-    "three": "0.170.0"
+    "three": "^0.160.0"
   },
   "devDependencies": {
     "@types/three": "0.170.0",
