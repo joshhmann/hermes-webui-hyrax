@@ -190,4 +190,110 @@ export class AvatarRetargeter {
     )
     return new THREE.Quaternion().setFromRotationMatrix(M)
   }
+
+  // ── IK: FABRIK foot locking ─────────────────────────────────────────
+
+  /**
+   * Optional IK pass: adjust leg chains to keep contacted feet planted.
+   * Call AFTER applyFrame().  Reads FK world positions, solves FABRIK for
+   * each leg whose foot contact confidence > 0.5, then writes adjusted
+   * local rotations back to the VRM bones.
+   *
+   * @param {number} frame  Frame index (used to read contact data)
+   * @param {object} opts
+   * @param {number} opts.maxIterations  FABRIK iterations (default 8)
+   * @param {number} opts.groundY  Ground plane Y (default 0)
+   */
+  solveFootIK(frame, opts = {}) {
+    const { maxIterations = 8, groundY = 0 } = opts
+    const contacts = this.motion.contacts?.[frame]
+    if (!contacts) return
+
+    const chains = [
+      { bones: ['leftUpperLeg', 'leftLowerLeg', 'leftFoot'], ci: 1,
+        hip: 'leftUpperLeg', knee: 'leftLowerLeg', foot: 'leftFoot' },
+      { bones: ['rightUpperLeg', 'rightLowerLeg', 'rightFoot'], ci: 3,
+        hip: 'rightUpperLeg', knee: 'rightLowerLeg', foot: 'rightFoot' },
+    ]
+
+    this.vrm.scene.updateMatrixWorld(true)
+
+    for (const ch of chains) {
+      if (contacts[ch.ci] <= 0.5) continue
+
+      // Read FK world positions of chain joints
+      const p = ch.bones.map(b => {
+        const v = new THREE.Vector3()
+        this.vrm.humanoid.getNormalizedBoneNode(b).getWorldPosition(v)
+        return v
+      })
+
+      // Segment lengths (from current FK pose — should be invariant)
+      const segLen = []
+      for (let i = 0; i < p.length - 1; i++) segLen.push(p[i].distanceTo(p[i + 1]))
+      if (segLen.some(l => l < 0.001)) continue  // degenerate chain
+
+      // Target: lock foot in place, clamp to ground
+      const target = p[p.length - 1].clone()
+      if (target.y < groundY) target.y = groundY
+      const origin = p[0].clone()
+
+      // FABRIK: forward (end→root) then backward (root→end)
+      for (let iter = 0; iter < maxIterations; iter++) {
+        // Forward
+        p[p.length - 1].copy(target)
+        for (let i = p.length - 2; i >= 0; i--) {
+          const d = new THREE.Vector3().subVectors(p[i], p[i + 1]).normalize()
+          p[i].copy(p[i + 1]).add(d.multiplyScalar(segLen[i]))
+        }
+        // Backward
+        p[0].copy(origin)
+        for (let i = 0; i < p.length - 1; i++) {
+          const d = new THREE.Vector3().subVectors(p[i + 1], p[i]).normalize()
+          p[i + 1].copy(p[i]).add(d.multiplyScalar(segLen[i]))
+        }
+      }
+
+      // Convert IK world positions → local rotations for each bone.
+      // Use the FK bone direction as reference and rotate to match the
+      // IK direction via setFromUnitVectors.
+      for (let i = 0; i < p.length - 1; i++) {
+        const boneNode = this.vrm.humanoid.getNormalizedBoneNode(ch.bones[i])
+        // FK direction: from bone to its child in world space
+        const fkChildPos = new THREE.Vector3()
+        this.vrm.humanoid.getNormalizedBoneNode(ch.bones[i + 1]).getWorldPosition(fkChildPos)
+        const bonePos = new THREE.Vector3()
+        boneNode.getWorldPosition(bonePos)
+        const fkDir = new THREE.Vector3().subVectors(fkChildPos, bonePos).normalize()
+
+        // IK direction: from bone pivot to child pivot
+        const ikDir = new THREE.Vector3().subVectors(p[i + 1], p[i]).normalize()
+
+        // Rotation delta: FK axis → IK axis
+        const deltaQ = new THREE.Quaternion().setFromUnitVectors(fkDir, ikDir)
+
+        // Current world rotation of this bone
+        const curWorldQ = new THREE.Quaternion()
+        boneNode.getWorldQuaternion(curWorldQ)
+
+        // New world = delta × current
+        const newWorldQ = deltaQ.clone().multiply(curWorldQ)
+
+        // Convert to local under parent
+        const parentKey = this.vrmParent[ch.bones[i]]
+        if (parentKey) {
+          const parentQ = new THREE.Quaternion()
+          const pn = this.vrm.humanoid.getNormalizedBoneNode(parentKey)
+          if (pn) {
+            pn.getWorldQuaternion(parentQ)
+            boneNode.quaternion.copy(parentQ.invert().multiply(newWorldQ))
+            continue
+          }
+        }
+        boneNode.quaternion.copy(newWorldQ)
+      }
+    }
+
+    this.vrm.humanoid.update()
+  }
 }

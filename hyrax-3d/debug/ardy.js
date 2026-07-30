@@ -10,6 +10,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm'
 import { SomaVrmRetargeter, BONE_MAPS } from '/api/hyrax/3d/REsearch/kimodo-vrm-pipeline/SomaVrmRetargeter.js'
+import { AvatarRetargeter } from '/api/hyrax/3d/calibrate/AvatarRetargeter.js'
 
 const $ = (id) => document.getElementById(id)
 const params = new URLSearchParams(location.search)
@@ -188,6 +189,8 @@ function buildTrajectory() {
 // ── retarget compare ─────────────────────────────────────────────────
 let vrm = null
 let retargeter = null
+let profile = null  // loaded calibration profile (optional — when set, use AvatarRetargeter)
+let profileAvatars = {}  // loaded VRM scenes keyed by profile name
 let vrmMarkers = null // InstancedMesh over mapped bones
 let mappedBones = []  // [{bone, joint, node, jointIdx}]
 let restClip = null   // parsed T-pose chunk JSON — the TRUE source rest reference
@@ -249,18 +252,27 @@ function rebuildRetargeter() {
   const rf = restFrameIndex()
   const played = motionJsonForRetargeter()
   cmpMotion = vrmYawFlip ? conjugateClipY180(played) : played
-  // Only use the T-pose rest clip when its skeleton matches the current
-  // capture (cskel27 vs somaskel30 have different joint hierarchies).
-  const sameSkel = restClip && restClip.skeleton === motion.skeleton
-  cmpRest = sameSkel ? (vrmYawFlip ? conjugateClipY180(restClip) : restClip) : null
-  _restJointIdx.clear()
-  if (cmpRest) {
-    retargeter = new SomaVrmRetargeter(vrm, cmpRest, { restFrame: rf })
-    retargeter.motion = cmpMotion
+
+  if (profile) {
+    // Profiled path: use AvatarRetargeter
+    const srcHipsHeight = profile.rest_pose?.default_src_hips_height_m ?? 0.954
+    retargeter = new AvatarRetargeter(vrm, profile, { restFrame: rf, srcHipsHeight })
+    retargeter.setMotion(cmpMotion)
   } else {
-    retargeter = new SomaVrmRetargeter(vrm, cmpMotion, { restFrame: rf })
+    // Hardcoded path: use SomaVrmRetargeter (existing behaviour)
+    const sameSkel = restClip && restClip.skeleton === motion.skeleton
+    cmpRest = sameSkel ? (vrmYawFlip ? conjugateClipY180(restClip) : restClip) : null
+    _restJointIdx.clear()
+    if (cmpRest) {
+      retargeter = new SomaVrmRetargeter(vrm, cmpRest, { restFrame: rf })
+      retargeter.motion = cmpMotion
+    } else {
+      retargeter = new SomaVrmRetargeter(vrm, cmpMotion, { restFrame: rf })
+    }
   }
-  const map = BONE_MAPS[motion.skeleton]
+
+  const map = profile ? Object.values(profile.skeleton_maps).find(v => typeof v === 'object')
+                       : BONE_MAPS[motion.skeleton]
   const jointIdx = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
   mappedBones = []
   for (const [bone, joint] of Object.entries(map)) {
@@ -560,6 +572,40 @@ async function boot() {
       restClip = await fetchJson(`data/${tpose.chunks[0]}`)
     } catch (e) {
       console.warn('[ardy-debug] no tpose rest clip; rest falls back to the played clip', e)
+    }
+  }
+
+  // Profile selector: populate from calibrate profiles dir
+  const profileSel = $('profileSel')
+  try {
+    const profileIndex = await fetchJson('/api/hyrax/3d/calibrate/calibration-profiles.json')
+    for (const p of profileIndex.profiles) {
+      const opt = document.createElement('option')
+      opt.value = p.path
+      opt.textContent = p.name
+      profileSel.appendChild(opt)
+    }
+  } catch (e) {
+    console.warn('[ardy-debug] no profile index; profile path disabled', e)
+    // Manual: populate with known profiles
+    const known = ['calibration-profiles/tai-embodiment-v3.json']
+    for (const k of known) {
+      const opt = document.createElement('option')
+      opt.value = k; opt.textContent = k.replace('calibration-profiles/', '').replace('.json', '')
+      profileSel.appendChild(opt)
+    }
+  }
+  profileSel.onchange = async () => {
+    const val = profileSel.value
+    if (!val) { profile = null; rebuildRetargeter(); setFrame(frame); return }
+    try {
+      profile = await fetchJson(`/api/hyrax/3d/calibrate/${val}`)
+      rebuildRetargeter()
+      setFrame(frame)
+      setStatus(`profile: ${profile.meta?.avatar_name ?? val}`)
+    } catch (e) {
+      profile = null
+      showErr(`profile load failed: ${val}`)
     }
   }
 

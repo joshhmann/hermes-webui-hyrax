@@ -1,0 +1,9 @@
+{
+  "profiles": [
+    {
+      "name": "Tai Embodiment v3 (baseline)",
+      "path": "calibration-profiles/tai-embodiment-v3.json",
+      "skeletons": ["cskel27", "somaskel30", "somaskel77"]
+    }
+  ]
+}
