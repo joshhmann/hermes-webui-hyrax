@@ -1,0 +1,193 @@
+// AvatarRetargeter.js — Profile-driven avatar retargeter.
+//
+// Replaces hardcoded SomaVrmRetargeter.js with a generic class that
+// reads its configuration from a calibration profile JSON.
+//
+// Usage:
+//   const ret = new AvatarRetargeter(vrm, profile, { srcHipsHeight: 0.954, restFrame: 0 })
+//   ret.setMotion(motionData)
+//   ret.applyFrame(42)
+//
+// No hardcoded skeleton knowledge. The profile supplies:
+//   skeleton_maps    — SOMA joint → VRM bone name
+//   solve_order      — topological bone order (parents before children)
+//   vrm_bone_parents — VRM bone parent hierarchy
+//   rest_pose        — default heights, rest frame recommendations
+
+import * as THREE from 'three'
+
+export class AvatarRetargeter {
+  /**
+   * @param {VRM} vrm  Loaded VRM 1.0 model (must have humanoid)
+   * @param {object} profile  Calibration profile JSON
+   * @param {object} opts
+   * @param {number} opts.srcHipsHeight  Source subject hip height (default from profile)
+   * @param {number} opts.restFrame  Frame to use for rest offset measurement
+   */
+  constructor(vrm, profile, opts = {}) {
+    /** @private */ this.vrm = vrm
+    /** @private */ this.profile = profile
+    this.solveOrder = profile.solve_order
+    this.vrmParent = profile.vrm_bone_parents
+    /** @private */ this.srcHipsHeight = opts.srcHipsHeight ?? profile.rest_pose.default_src_hips_height_m
+    /** @private */ this.restFrame = opts.restFrame ?? profile.rest_pose.rest_frame_default ?? 0
+
+    // Motion state — set via setMotion()
+    /** @private */ this.motion = null
+    /** @private */ this.jointIndex = null
+    /** @private */ this.boneMap = null
+    /** @private */ this.offsets = {}
+    /** @private */ this.hipsScale = 1.0
+    /** @private */ this.hipsNode = null
+    /** @private */ this._groundCorr = 0
+  }
+
+  /**
+   * Load motion data. Call before applyFrame().
+   * @param {object} motion  Parsed motion JSON with .joints, .rot, .root, .parentIdx, .offsets, .contacts, .skeleton
+   */
+  setMotion(motion) {
+    this.motion = motion
+    this.jointIndex = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
+
+    // Resolve skeleton map from profile
+    const skelKey = motion.skeleton
+    let map = this.profile.skeleton_maps[skelKey]
+    if (!map) {
+      const alias = this.profile.skeleton_maps[skelKey + '_alias']
+      if (alias) map = this.profile.skeleton_maps[alias]
+    }
+    this.boneMap = map
+
+    // Precompute rest offsets for every mapped bone
+    this.offsets = {}
+    if (map) {
+      for (const [bone, joint] of Object.entries(map)) {
+        const node = this.vrm.humanoid.getNormalizedBoneNode(bone)
+        if (!node) continue
+        const rest = this._srcWorldQuat(joint, this.restFrame)
+        this.offsets[bone] = rest.invert().clone()
+      }
+    }
+
+    // Hips scale
+    this.hipsNode = this.vrm.humanoid.getNormalizedBoneNode('hips')
+    const hipsWorldY = this.hipsNode.getWorldPosition(new THREE.Vector3()).y
+    this.hipsScale = hipsWorldY / this.srcHipsHeight
+
+    // Reset per-chunk state
+    this._groundCorr = 0
+  }
+
+  /**
+   * Retarget one frame.
+   * @param {number} frame  Frame index
+   * @param {object} opts
+   * @param {number} opts.groundY  Ground plane Y (default 0)
+   * @param {number} opts.contactSmoothing  Lowpass factor for ground correction (default 0.4)
+   * @returns {object}  Snapshot { quat: {bone: THREE.Quaternion}, hipsPos: THREE.Vector3 }
+   *                    for validation / inspection — not needed for normal use.
+   */
+  applyFrame(frame, opts = {}) {
+    const { groundY = 0, contactSmoothing = 0.4 } = opts
+    const map = this.boneMap
+    if (!map || !this.motion) return null
+
+    const snapshot = { quat: {}, hipsPos: new THREE.Vector3() }
+    const world = {}
+    const q = new THREE.Quaternion()
+
+    for (const bone of this.solveOrder) {
+      const joint = map[bone]
+      if (!joint || !this.offsets[bone]) continue
+      const node = this.vrm.humanoid.getNormalizedBoneNode(bone)
+      if (!node) continue
+      const W = this._srcWorldQuat(joint, frame).multiply(this.offsets[bone]).clone()
+      world[bone] = W
+      const parentW = world[this.vrmParent[bone]]
+      const localQ = parentW ? q.copy(parentW).invert().multiply(W) : W
+      node.quaternion.copy(localQ)
+      snapshot.quat[bone] = W.clone()
+    }
+
+    // Hips position: delta-from-frame-0 scaled
+    const p = this.motion.root[frame]
+    const p0 = this.motion.root[0]
+    this.hipsNode.userData.restY = this.hipsNode.userData.restY ?? this.hipsNode.position.y
+    this.hipsNode.position.set(
+      (p[0] - p0[0]) * this.hipsScale,
+      this.hipsNode.userData.restY + (p[1] - p0[1]) * this.hipsScale,
+      (p[2] - p0[2]) * this.hipsScale,
+    )
+    snapshot.hipsPos.copy(this.hipsNode.position)
+
+    // Ground contact
+    if (this.motion.contacts) {
+      this.vrm.scene.updateMatrixWorld(true)
+      let minY = Infinity
+      const c = this.motion.contacts[frame]
+      for (const [foot, ci] of [['leftFoot', 1], ['rightFoot', 3]]) {
+        if (c[ci] > 0.5) {
+          const y = this.vrm.humanoid.getNormalizedBoneNode(foot).getWorldPosition(new THREE.Vector3()).y
+          minY = Math.min(minY, y)
+        }
+      }
+      if (isFinite(minY)) {
+        const err = groundY - minY
+        this._groundCorr += (err - this._groundCorr) * contactSmoothing
+        this.hipsNode.position.y += this._groundCorr
+      }
+    }
+
+    this.vrm.humanoid.update()
+    return snapshot
+  }
+
+  /**
+   * Apply multiple frames. More efficient than per-frame calls if
+   * you don't need the snapshot for validation.
+   */
+  applyBatch(frameStart, frameCount) {
+    const end = Math.min(frameStart + frameCount, this.motion.T)
+    for (let f = frameStart; f < end; f++) {
+      this.applyFrame(f)
+    }
+  }
+
+  /** Signal chunk boundary — resets ground correction (streaming). */
+  onReset() { this._groundCorr = 0 }
+
+  /**
+   * Read back a bone's retargeted world-space quaternion.
+   * Call after applyFrame().
+   */
+  getBoneQuaternion(boneName) {
+    const node = this.vrm.humanoid.getNormalizedBoneNode(boneName)
+    if (!node) return null
+    this.vrm.scene.updateMatrixWorld(true)
+    const q = new THREE.Quaternion()
+    node.getWorldQuaternion(q)
+    return q
+  }
+
+  /** Read back the current hips world position. */
+  getHipsPosition() {
+    this.vrm.scene.updateMatrixWorld(true)
+    return this.hipsNode.getWorldPosition(new THREE.Vector3())
+  }
+
+  // ── Private helpers ─────────────────────────────────────────────────
+
+  /** @private */
+  _srcWorldQuat(jointName, frame) {
+    const m9 = this.motion.rot[frame]?.[this.jointIndex[jointName]]
+    if (!m9) return new THREE.Quaternion()
+    const M = new THREE.Matrix4().set(
+      m9[0], m9[1], m9[2], 0,
+      m9[3], m9[4], m9[5], 0,
+      m9[6], m9[7], m9[8], 0,
+      0, 0, 0, 1,
+    )
+    return new THREE.Quaternion().setFromRotationMatrix(M)
+  }
+}

@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm'
 import { SomaVrmRetargeter, BONE_MAPS } from '../REsearch/kimodo-vrm-pipeline/SomaVrmRetargeter.js'
+import { AvatarRetargeter } from './AvatarRetargeter.js'
 
 const $ = (id) => document.getElementById(id)
 const params = new URLSearchParams(location.search)
@@ -60,7 +61,6 @@ let selectedBone = null  // 'source' | 'target' bone name
 // Retargeters
 let profileRetargeter = null
 let refRetargeter = null
-let profileCtx = null  // {map, offsets, jointIndex, hipsScale, ...}
 
 // Profile-driven snapshot (F-001 fix: independent comparison buffer)
 let profileSnapshot = { quat: {}, hipsPos: new THREE.Vector3() }
@@ -503,65 +503,22 @@ $('restFrameInput').onchange = () => {
   // Profile rest frame updated on export or next retarget build
 }
 
-// ── Profile-driven retarget (from JSON) ───────────────────────────────
+// ── Profile-driven retarget (via AvatarRetargeter) ────────────────────
 function buildProfileRetargeter() {
   if (!profile || !avatarVrm || !motion) return null
-  const map = mapForSkeleton(motion.skeleton)
-  if (!map) return null
-
-  const jointIndex = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
-  const offsets = {}
-  const restFrame = parseInt($('restFrameInput').value) || 0
-  for (const [bone, joint] of Object.entries(map)) {
-    const node = avatarVrm.humanoid.getNormalizedBoneNode(bone)
-    if (!node) continue
-    const rest = srcWorldQuat(motion, jointIndex, joint, restFrame)
-    offsets[bone] = rest.invert().clone()
-  }
-  const hipsNode = avatarVrm.humanoid.getNormalizedBoneNode('hips')
-  const hipsWorldY = hipsNode.getWorldPosition(new THREE.Vector3()).y
   const srcHipsHeight = parseFloat($('hipHeightSlider').value)
-  const hipsScale = hipsWorldY / srcHipsHeight
-
-  profileCtx = { map, jointIndex, offsets, hipsScale, hipsNode }
-  return profileCtx
+  const restFrame = parseInt($('restFrameInput').value) || 0
+  const ret = new AvatarRetargeter(avatarVrm, profile, { srcHipsHeight, restFrame })
+  ret.setMotion(motion)
+  return ret
 }
 
 function applyProfileFrame(f) {
-  if (!profileCtx || !avatarVrm) return
-  const { map, jointIndex, offsets, hipsScale, hipsNode } = profileCtx
-  const solveOrder = profile.solve_order
-  const vrmParent = profile.vrm_bone_parents
-  const world = {}
-  const q = new THREE.Quaternion()
-
-  // Snapshot buffer: record profile-driven quat for F-001 comparison
-  profileSnapshot.quat = {}
-
-  for (const bone of solveOrder) {
-    const joint = map[bone]
-    if (!joint || !offsets[bone]) continue
-    const node = avatarVrm.humanoid.getNormalizedBoneNode(bone)
-    if (!node) continue
-    const W = srcWorldQuat(motion, jointIndex, joint, f).multiply(offsets[bone]).clone()
-    world[bone] = W
-    const parentW = world[vrmParent[bone]]
-    const localQ = parentW ? q.copy(parentW).invert().multiply(W) : W
-    node.quaternion.copy(localQ)
-    // Snapshot: the world-space quaternion after rest correction (F-001)
-    profileSnapshot.quat[bone] = W.clone()
-  }
-
-  const p = motion.root[f]
-  const p0 = motion.root[0]
-  hipsNode.userData.restY = hipsNode.userData.restY ?? hipsNode.position.y
-  hipsNode.position.set(
-    (p[0] - p0[0]) * hipsScale,
-    hipsNode.userData.restY + (p[1] - p0[1]) * hipsScale,
-    (p[2] - p0[2]) * hipsScale,
-  )
-  profileSnapshot.hipsPos.copy(hipsNode.position)
-  avatarVrm.humanoid.update()
+  if (!profileRetargeter) return
+  const snap = profileRetargeter.applyFrame(f)
+  if (!snap) { profileSnapshot.quat = {}; return }
+  profileSnapshot.quat = snap.quat
+  profileSnapshot.hipsPos.copy(snap.hipsPos)
 }
 
 // ── Reference retarget (hardcoded SomaVrmRetargeter) ──────────────────
@@ -589,7 +546,7 @@ function applyRefFrame(f) { refRetargeter?.applyFrame(f) }
 
 // ── Compare ───────────────────────────────────────────────────────────
 function compareRetarget() {
-  if (!profileCtx || !refRetargeter || !avatarVrm) return null
+  if (!profileRetargeter || !refRetargeter || !avatarVrm) return null
   avatarVrm.scene.updateMatrixWorld(true)
   const qInv = new THREE.Quaternion()
   avatarVrm.scene.getWorldQuaternion(qInv).invert()
@@ -670,13 +627,6 @@ async function exportProfile() {
 $('exportBtn').onclick = exportProfile
 
 // ── Helpers ───────────────────────────────────────────────────────────
-function srcWorldQuat(motion, jointIndex, jName, f) {
-  const m9 = motion.rot[f]?.[jointIndex[jName]]
-  if (!m9) return new THREE.Quaternion()
-  const M = new THREE.Matrix4().set(m9[0], m9[1], m9[2], 0, m9[3], m9[4], m9[5], 0, m9[6], m9[7], m9[8], 0, 0, 0, 0, 1)
-  return new THREE.Quaternion().setFromRotationMatrix(M)
-}
-
 async function fetchJson(url) {
   const r = await fetch(url)
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
