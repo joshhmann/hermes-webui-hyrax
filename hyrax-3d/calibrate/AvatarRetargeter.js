@@ -50,6 +50,12 @@ export class AvatarRetargeter {
     this.motion = motion
     this.jointIndex = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
 
+    // Normalize field names — accept both debug-page shape (global_rot_mats)
+    // and calibrate-page shape (rot).
+    if (!this.motion.rot && this.motion.global_rot_mats) this.motion.rot = this.motion.global_rot_mats
+    if (!this.motion.root && this.motion.root_positions) this.motion.root = this.motion.root_positions
+    if (!this.motion.contacts && this.motion.foot_contacts) this.motion.contacts = this.motion.foot_contacts
+
     // Resolve skeleton map from profile
     const skelKey = motion.skeleton
     let map = this.profile.skeleton_maps[skelKey]
