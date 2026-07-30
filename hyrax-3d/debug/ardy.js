@@ -271,8 +271,9 @@ function rebuildRetargeter() {
     }
   }
 
-  const map = profile ? Object.values(profile.skeleton_maps).find(v => typeof v === 'object')
-                       : BONE_MAPS[motion.skeleton]
+  const map = profile
+    ? (profile.skeleton_maps[motion.skeleton] || Object.values(profile.skeleton_maps).find(v => typeof v === 'object'))
+    : BONE_MAPS[motion.skeleton]
   const jointIdx = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
   mappedBones = []
   for (const [bone, joint] of Object.entries(map)) {
