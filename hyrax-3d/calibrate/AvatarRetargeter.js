@@ -56,6 +56,19 @@ export class AvatarRetargeter {
     if (!this.motion.root && this.motion.root_positions) this.motion.root = this.motion.root_positions
     if (!this.motion.contacts && this.motion.foot_contacts) this.motion.contacts = this.motion.foot_contacts
 
+    // Safety: verify motion data shape before proceeding
+    if (!this.motion.rot || !this.motion.rot[0]) {
+      console.error('[AvatarRetargeter] setMotion: no rotation data', this.motion.skeleton, Object.keys(this.motion))
+      this.boneMap = null
+      return
+    }
+    const frameJoints = this.motion.rot[0]
+    if (!Array.isArray(frameJoints)) {
+      console.error('[AvatarRetargeter] setMotion: rot[0] is not an array, type=', typeof frameJoints)
+      this.boneMap = null
+      return
+    }
+
     // Resolve skeleton map from profile
     const skelKey = motion.skeleton
     let map = this.profile.skeleton_maps[skelKey]
