@@ -597,13 +597,14 @@ async function boot() {
   }
   profileSel.onchange = async () => {
     const val = profileSel.value
-    if (!val) { profile = null; rebuildRetargeter(); setFrame(frame); return }
+    if (!val) { profile = null; if (vrm && motion) { rebuildRetargeter(); setFrame(frame); } return }
     try {
       profile = await fetchJson(val)
       rebuildRetargeter()
       setFrame(frame)
       setStatus(`profile: ${profile.meta?.avatar_name ?? val}`)
     } catch (e) {
+      console.error('[profile-onchange] Error:', e.message, e.stack?.split('\n').slice(0,6).join('\n'))
       profile = null
       showErr(`profile load failed: ${val} — ${e?.message ?? e}`)
     }
