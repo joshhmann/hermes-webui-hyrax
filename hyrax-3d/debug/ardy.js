@@ -578,20 +578,19 @@ async function boot() {
   // Profile selector: populate from calibrate profiles dir
   const profileSel = $('profileSel')
   try {
-    const profileIndex = await fetchJson('/api/hyrax/3d/calibrate/calibration-profiles.json')
+    const profileIndex = await fetchJson('../calibrate/calibration-profiles.json')
     for (const p of profileIndex.profiles) {
       const opt = document.createElement('option')
-      opt.value = p.path
+      opt.value = `../calibrate/${p.path}`
       opt.textContent = p.name
       profileSel.appendChild(opt)
     }
   } catch (e) {
-    console.warn('[ardy-debug] no profile index; profile path disabled', e)
-    // Manual: populate with known profiles
-    const known = ['calibration-profiles/tai-embodiment-v3.json']
+    console.warn('[ardy-debug] no profile index; fallback to hardcoded', e)
+    const known = ['../calibrate/calibration-profiles/tai-embodiment-v3.json']
     for (const k of known) {
       const opt = document.createElement('option')
-      opt.value = k; opt.textContent = k.replace('calibration-profiles/', '').replace('.json', '')
+      opt.value = k; opt.textContent = 'Tai Embodiment v3 (baseline)'
       profileSel.appendChild(opt)
     }
   }
@@ -599,13 +598,13 @@ async function boot() {
     const val = profileSel.value
     if (!val) { profile = null; rebuildRetargeter(); setFrame(frame); return }
     try {
-      profile = await fetchJson(`/api/hyrax/3d/calibrate/${val}`)
+      profile = await fetchJson(val)
       rebuildRetargeter()
       setFrame(frame)
       setStatus(`profile: ${profile.meta?.avatar_name ?? val}`)
     } catch (e) {
       profile = null
-      showErr(`profile load failed: ${val}`)
+      showErr(`profile load failed: ${val} — ${e?.message ?? e}`)
     }
   }
 
