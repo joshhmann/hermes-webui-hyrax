@@ -1,0 +1,168 @@
+{
+  "schema": "soma.avatar-calibration",
+  "schema_version": "1.0.0",
+  "profile_id": "avatar-9042366629077953442-soma77-v1",
+  "status": "draft",
+  "soma_contract": {
+    "id": "soma77",
+    "version": "1.0.0",
+    "signature": "sha256:42255b0d2e05dee3ced6656cc64191d5a549cb2def3d7e4d960f4b2508dca34f"
+  },
+  "avatar": {
+    "format": "vrm",
+    "asset_signature": "sha256:823520c8e7dd45e8b224ef79c0d91366ba4a300fc5dfc5343d5797782786df90",
+    "rig_signature": "sha256:a899b408e8c7880b20836d562b105a93e2e9fcad425f166cc69b4a440b5aa47c"
+  },
+  "mapping": [
+    {
+      "semantic": "hips",
+      "soma_joint": "Hips",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+      "target_parent_semantic": null
+    },
+    {
+      "semantic": "spine",
+      "soma_joint": "Spine1",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]",
+      "target_parent_semantic": "hips"
+    },
+    {
+      "semantic": "chest",
+      "soma_joint": "Spine2",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]",
+      "target_parent_semantic": "spine"
+    },
+    {
+      "semantic": "upperChest",
+      "soma_joint": "Chest",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]",
+      "target_parent_semantic": "chest"
+    },
+    {
+      "semantic": "neck",
+      "soma_joint": "Neck1",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]",
+      "target_parent_semantic": "upperChest"
+    },
+    {
+      "semantic": "head",
+      "soma_joint": "Head",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]/Normalized_J_Bip_C_Head[0]",
+      "target_parent_semantic": "neck"
+    },
+    {
+      "semantic": "leftShoulder",
+      "soma_joint": "LeftShoulder",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]",
+      "target_parent_semantic": "upperChest"
+    },
+    {
+      "semantic": "leftUpperArm",
+      "soma_joint": "LeftArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]",
+      "target_parent_semantic": "leftShoulder"
+    },
+    {
+      "semantic": "leftLowerArm",
+      "soma_joint": "LeftForeArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]",
+      "target_parent_semantic": "leftUpperArm"
+    },
+    {
+      "semantic": "leftHand",
+      "soma_joint": "LeftHand",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]/Normalized_J_Bip_L_Hand[0]",
+      "target_parent_semantic": "leftLowerArm"
+    },
+    {
+      "semantic": "rightShoulder",
+      "soma_joint": "RightShoulder",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]",
+      "target_parent_semantic": "upperChest"
+    },
+    {
+      "semantic": "rightUpperArm",
+      "soma_joint": "RightArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]",
+      "target_parent_semantic": "rightShoulder"
+    },
+    {
+      "semantic": "rightLowerArm",
+      "soma_joint": "RightForeArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]",
+      "target_parent_semantic": "rightUpperArm"
+    },
+    {
+      "semantic": "rightHand",
+      "soma_joint": "RightHand",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]/Normalized_J_Bip_R_Hand[0]",
+      "target_parent_semantic": "rightLowerArm"
+    },
+    {
+      "semantic": "leftUpperLeg",
+      "soma_joint": "LeftLeg",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]",
+      "target_parent_semantic": "hips"
+    },
+    {
+      "semantic": "leftLowerLeg",
+      "soma_joint": "LeftShin",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]",
+      "target_parent_semantic": "leftUpperLeg"
+    },
+    {
+      "semantic": "leftFoot",
+      "soma_joint": "LeftFoot",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]",
+      "target_parent_semantic": "leftLowerLeg"
+    },
+    {
+      "semantic": "leftToes",
+      "soma_joint": "LeftToeBase",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]/Normalized_J_Bip_L_ToeBase[0]",
+      "target_parent_semantic": "leftFoot"
+    },
+    {
+      "semantic": "rightUpperLeg",
+      "soma_joint": "RightLeg",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]",
+      "target_parent_semantic": "hips"
+    },
+    {
+      "semantic": "rightLowerLeg",
+      "soma_joint": "RightShin",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]",
+      "target_parent_semantic": "rightUpperLeg"
+    },
+    {
+      "semantic": "rightFoot",
+      "soma_joint": "RightFoot",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]",
+      "target_parent_semantic": "rightLowerLeg"
+    },
+    {
+      "semantic": "rightToes",
+      "soma_joint": "RightToeBase",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]/Normalized_J_Bip_R_ToeBase[0]",
+      "target_parent_semantic": "rightFoot"
+    }
+  ],
+  "rest_calibration": {
+    "rotation_model": "unresolved",
+    "per_bone": {}
+  },
+  "root_calibration": {
+    "status": "unresolved"
+  },
+  "scale_calibration": {
+    "status": "unresolved"
+  },
+  "ik": {
+    "enabled": false,
+    "targets": {}
+  },
+  "validation": null,
+  "authoring": {
+    "mapping_provenance": "Exact SOMA body mapping from the frozen hardcoded Tai reference path; no offset reinterpretation."
+  }
+}

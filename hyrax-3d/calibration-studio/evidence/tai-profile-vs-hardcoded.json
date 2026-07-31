@@ -1,0 +1,48 @@
+{
+  "schema": "soma.profile-hardcoded-comparison",
+  "schema_version": "1.0.0",
+  "passed": false,
+  "migration_authorized": false,
+  "reason": "profile consumer does not yet reproduce the hardcoded Tai baseline",
+  "profile_result_signature": "sha256:6989171c627554aaccee3f000198ba31d9cd109fc611476b1e18078419f7c023",
+  "hardcoded_result_signature": "sha256:71722081311d41313d737c62898db53e5c301dbc24d64da63b6f21a95483ca4b",
+  "frames": [
+    0,
+    37,
+    74,
+    111,
+    149
+  ],
+  "driven_bones": 22,
+  "tolerance": {
+    "position_m": 0.000001,
+    "angular_rad": 0.000001
+  },
+  "metrics": {
+    "local_position_m": {
+      "max": 0.10857437547962448,
+      "mean": 0.004228583305772228,
+      "worst_frame": 37,
+      "worst_semantic": "hips"
+    },
+    "local_angular_rad": {
+      "max": 5.16191365590357e-8,
+      "mean": 1.0570700075147037e-8,
+      "worst_frame": 74,
+      "worst_semantic": "leftFoot"
+    },
+    "world_position_m": {
+      "max": 0.1085743761995491,
+      "mean": 0.09302883274229728,
+      "worst_frame": 37,
+      "worst_semantic": "rightUpperArm"
+    },
+    "world_angular_rad": {
+      "max": 2.0647654623614288e-7,
+      "mean": 2.0082912618221463e-8,
+      "worst_frame": 37,
+      "worst_semantic": "head"
+    }
+  },
+  "comparison_signature": "sha256:d5968512761378ccd4b3284917c077b0a35c80a2460e1b732b05f1cbcaba2412"
+}

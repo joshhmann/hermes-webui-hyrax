@@ -1,0 +1,36 @@
+{
+  "schema": "soma.hardcoded-baseline-suite",
+  "schema_version": "1.0.0",
+  "clips": [
+    {
+      "id": "rest-pose",
+      "purpose": "rest pose",
+      "path": "debug/data/capture-tpose-chunk_000.json",
+      "frames": [0, 20, 39]
+    },
+    {
+      "id": "known-good-cskel27",
+      "purpose": "known-good cskel27",
+      "path": "debug/data/capture-idle-chunk_000.json",
+      "frames": [0, 20, 39]
+    },
+    {
+      "id": "corrected-kimodo-soma77",
+      "purpose": "corrected 150-frame Kimodo SOMA",
+      "path": "calibration-studio/evidence/kimodo-150.soma77.json",
+      "frames": [0, 37, 74, 111, 149]
+    },
+    {
+      "id": "locomotion-turn",
+      "purpose": "locomotion/root and yaw proxy",
+      "path": "debug/data/capture-turn-chunk_000.json",
+      "frames": [0, 20, 39]
+    },
+    {
+      "id": "torso-arm-crouch",
+      "purpose": "torso and arm-heavy proxy",
+      "path": "debug/data/capture-crouch-chunk_000.json",
+      "frames": [0, 20, 39]
+    }
+  ]
+}

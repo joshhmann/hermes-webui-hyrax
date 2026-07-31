@@ -7,7 +7,7 @@
     "build": "vite build",
     "build:test": "vite build --mode test",
     "check": "npm run typecheck && npm run build && npm test",
-    "test": "node --test tests/contracts.test.mjs tests/ardy_motion.test.mjs",
+    "test": "node --test tests/contracts.test.mjs tests/ardy_motion.test.mjs calibration-studio/tests/contracts.test.mjs calibration-studio/tests/calibration.test.mjs calibration-studio/tests/validation.test.mjs calibration-studio/tests/ik.test.mjs",
     "test:lifecycle": "vite build --mode test && node --test tests/lifecycle.test.mjs",
     "typecheck": "tsc --noEmit"
   },

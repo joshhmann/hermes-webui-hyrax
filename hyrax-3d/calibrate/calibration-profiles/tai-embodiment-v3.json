@@ -30,7 +30,7 @@
     ]
   },
   "skeleton_maps": {
-    "description": "Skeleton key → runtime joint names used by the retargeter. somaskel77 is an alias for somaskel30.",
+    "description": "Skeleton key → runtime joint names used by the retargeter. Full soma77 and legacy somaskel77 captures use the somaskel30 body map; unlisted finger joints remain available to richer profiles.",
     "somaskel30": {
       "hips": "Hips", "spine": "Spine1", "chest": "Spine2", "upperChest": "Chest",
       "neck": "Neck1", "head": "Head",
@@ -55,6 +55,7 @@
       "leftFoot": "LeftFoot", "rightFoot": "RightFoot",
       "leftToes": "LeftToeBase", "rightToes": "RightToeBase"
     },
+    "soma77_alias": "somaskel30",
     "somaskel77_alias": "somaskel30"
   },
   "solve_order": [
@@ -82,6 +83,7 @@
     "rest_frame_default": 0,
     "rest_frame_recommended": {
       "cskel27": 20,
+      "soma77": 0,
       "somaskel77": 0
     }
   },

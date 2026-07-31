@@ -78,6 +78,7 @@ import importlib.util
 modules = [
     "cryptography",
     "mcp",
+    "numpy",
     "pytest",
     "pytest_asyncio",
     "pytest_shard",

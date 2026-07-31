@@ -15,11 +15,16 @@ Currently, retargeting knowledge is split across two places:
 | VRM parent hierarchy | `SomaVrmRetargeter.js` hardcoded |
 | Rest offsets | computed per-frame in `SomaVrmRetargeter.js` |
 | Ground contact params | hardcoded in `SomaVrmRetargeter.js` |
-| SOMA77 canonical | nowhere — lost |
+| SOMA77 canonical | profile declaration + lossless converter output |
 | Avatar calibration | `calibration-profiles/tai-embodiment-v3.json` |
 | Profile-driven retarget logic | duplicated in `calibrate.js` (Phase 2) |
 
 **Phase 3 consolidates**: one `AvatarRetargeter` class, one calibration profile per avatar, zero hardcoded skeleton knowledge.
+
+Current implementation note (2026-07-29): `AvatarRetargeter.js` is extracted
+and used by the studio and optional debug-page profile path. Kimodo conversion
+now emits the full `soma77` world-space hierarchy; the body-only map is selected
+by the profile rather than destructively created during conversion.
 
 ## Architecture
 

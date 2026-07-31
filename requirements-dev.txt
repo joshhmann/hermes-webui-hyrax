@@ -9,6 +9,8 @@ pytest-asyncio
 pytest-shard
 ruff
 mcp
+# Motion-capture converter and its SOMA/Core contract tests.
+numpy
 # Optional Office parsers — runtime-optional (commented in requirements.txt), but
 # installed here so the workspace Office-preview tests (tests/test_issue540_*.py)
 # run under the documented ./scripts/test.sh entry point. These files

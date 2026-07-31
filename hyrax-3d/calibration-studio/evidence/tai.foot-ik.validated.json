@@ -1,0 +1,1083 @@
+{
+  "schema": "soma.avatar-calibration",
+  "schema_version": "1.0.0",
+  "profile_id": "tai-soma77-calibration-v1:foot-ik-v1",
+  "status": "validated",
+  "soma_contract": {
+    "id": "soma77",
+    "version": "1.0.0",
+    "signature": "sha256:42255b0d2e05dee3ced6656cc64191d5a549cb2def3d7e4d960f4b2508dca34f"
+  },
+  "avatar": {
+    "format": "vrm",
+    "asset_signature": "sha256:c94075ebc079fd5f010277f213d4ec4a299df46c9c44290562bb2189e4a16b46",
+    "rig_signature": "sha256:b3d0cd4a7cf4616d649701f420c888757680d12533494a4d35765e345caf2ae8"
+  },
+  "mapping": [
+    {
+      "semantic": "hips",
+      "soma_joint": "Hips",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+      "target_parent_semantic": null
+    },
+    {
+      "semantic": "spine",
+      "soma_joint": "Spine1",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]",
+      "target_parent_semantic": "hips"
+    },
+    {
+      "semantic": "chest",
+      "soma_joint": "Spine2",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]",
+      "target_parent_semantic": "spine"
+    },
+    {
+      "semantic": "upperChest",
+      "soma_joint": "Chest",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]",
+      "target_parent_semantic": "chest"
+    },
+    {
+      "semantic": "neck",
+      "soma_joint": "Neck1",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]",
+      "target_parent_semantic": "upperChest"
+    },
+    {
+      "semantic": "head",
+      "soma_joint": "Head",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]/Normalized_J_Bip_C_Head[0]",
+      "target_parent_semantic": "neck"
+    },
+    {
+      "semantic": "leftShoulder",
+      "soma_joint": "LeftShoulder",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]",
+      "target_parent_semantic": "upperChest"
+    },
+    {
+      "semantic": "leftUpperArm",
+      "soma_joint": "LeftArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]",
+      "target_parent_semantic": "leftShoulder"
+    },
+    {
+      "semantic": "leftLowerArm",
+      "soma_joint": "LeftForeArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]",
+      "target_parent_semantic": "leftUpperArm"
+    },
+    {
+      "semantic": "leftHand",
+      "soma_joint": "LeftHand",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]/Normalized_J_Bip_L_Hand[0]",
+      "target_parent_semantic": "leftLowerArm"
+    },
+    {
+      "semantic": "rightShoulder",
+      "soma_joint": "RightShoulder",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]",
+      "target_parent_semantic": "upperChest"
+    },
+    {
+      "semantic": "rightUpperArm",
+      "soma_joint": "RightArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]",
+      "target_parent_semantic": "rightShoulder"
+    },
+    {
+      "semantic": "rightLowerArm",
+      "soma_joint": "RightForeArm",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]",
+      "target_parent_semantic": "rightUpperArm"
+    },
+    {
+      "semantic": "rightHand",
+      "soma_joint": "RightHand",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]/Normalized_J_Bip_R_Hand[0]",
+      "target_parent_semantic": "rightLowerArm"
+    },
+    {
+      "semantic": "leftUpperLeg",
+      "soma_joint": "LeftLeg",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]",
+      "target_parent_semantic": "hips"
+    },
+    {
+      "semantic": "leftLowerLeg",
+      "soma_joint": "LeftShin",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]",
+      "target_parent_semantic": "leftUpperLeg"
+    },
+    {
+      "semantic": "leftFoot",
+      "soma_joint": "LeftFoot",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]",
+      "target_parent_semantic": "leftLowerLeg"
+    },
+    {
+      "semantic": "leftToes",
+      "soma_joint": "LeftToeBase",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]/Normalized_J_Bip_L_ToeBase[0]",
+      "target_parent_semantic": "leftFoot"
+    },
+    {
+      "semantic": "rightUpperLeg",
+      "soma_joint": "RightLeg",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]",
+      "target_parent_semantic": "hips"
+    },
+    {
+      "semantic": "rightLowerLeg",
+      "soma_joint": "RightShin",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]",
+      "target_parent_semantic": "rightUpperLeg"
+    },
+    {
+      "semantic": "rightFoot",
+      "soma_joint": "RightFoot",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]",
+      "target_parent_semantic": "rightLowerLeg"
+    },
+    {
+      "semantic": "rightToes",
+      "soma_joint": "RightToeBase",
+      "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]/Normalized_J_Bip_R_ToeBase[0]",
+      "target_parent_semantic": "rightFoot"
+    }
+  ],
+  "rest_calibration": {
+    "rotation_model": "target-rest-world * source-world * inverse(source-rest-world) * user-offset",
+    "source_motion_signature": "sha256:d50a387f7f3b346f83f69d45ab619b3d348eed6c1dcdac331f297c49bbc643be",
+    "source_frame": 0,
+    "per_bone": {
+      "hips": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.014633276409619008,
+          -0.005011430308981352,
+          0.0037601355726274623,
+          0.9998732990575623
+        ],
+        "source_rest_inverse_quaternion": [
+          0.014633276409619008,
+          0.005011430308981352,
+          -0.0037601355726274623,
+          0.9998732990575623
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0,
+          0,
+          0
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "spine": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.05586582094681081,
+          -0.005614968736214136,
+          -0.0024577968897476956,
+          0.9984194716703391
+        ],
+        "source_rest_inverse_quaternion": [
+          0.05586582094681081,
+          0.005614968736214136,
+          0.0024577968897476956,
+          0.9984194716703391
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -4.379416776229303e-19,
+          0.9430415,
+          0.003576065180000001
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "chest": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.11182041799290467,
+          -0.009114825776096052,
+          -0.006749529388610223,
+          0.9936637046425696
+        ],
+        "source_rest_inverse_quaternion": [
+          0.11182041799290467,
+          0.009114825776096052,
+          0.006749529388610223,
+          0.9936637046425696
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -1.956608219923549e-18,
+          0.9946274722999999,
+          0.01597691858
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "upperChest": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.0019589920043097584,
+          -0.02725857529643061,
+          0.007162450266721342,
+          0.9996008361987861
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.0019589920043097584,
+          0.02725857529643061,
+          -0.007162450266721342,
+          0.9996008361987861
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          1.8683492669351065e-17,
+          1.1065880022999999,
+          0.01899836371
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "neck": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.05801936771665792,
+          -0.012910313909566694,
+          0.03652351414242794,
+          0.9975635867849245
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.05801936771665792,
+          0.012910313909566694,
+          -0.03652351414242794,
+          0.9975635867849245
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -9.865492460161068e-18,
+          1.2132295332999998,
+          0.004488128010000002
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "head": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.04302665828174488,
+          -0.06701182987101724,
+          0.04430971056537316,
+          0.9958387273469819
+        ],
+        "source_rest_inverse_quaternion": [
+          0.04302665828174488,
+          0.06701182987101724,
+          -0.04430971056537316,
+          0.9958387273469819
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -1.0038547777785541e-16,
+          1.3442858423,
+          -0.033510987889999996
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftShoulder": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.12788115331407177,
+          -0.13121074758895482,
+          -0.20765166092664505,
+          0.9608907003705551
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.1278811533140718,
+          0.13121074758895485,
+          0.20765166092664508,
+          0.9608907003705552
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -1.0408340855860843e-17,
+          1.2132295332999998,
+          0.004488128009999998
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftUpperArm": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.2246378559380124,
+          -0.1272541891222516,
+          -0.6036348328492182,
+          0.754300466393537
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.2246378559380124,
+          0.1272541891222516,
+          0.6036348328492182,
+          0.754300466393537
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0.021697046199999986,
+          1.3179316482999999,
+          -0.025201698090000002
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftLowerArm": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.05577360891110031,
+          -0.32309225592055985,
+          -0.6403265878307989,
+          0.6946096455061372
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.05577360891110031,
+          0.32309225592055985,
+          0.6403265878307989,
+          0.6946096455061372
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0.09599606129999999,
+          1.3071204383,
+          -0.02520170554058099
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftHand": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.07269792802808238,
+          -0.3057314701184642,
+          -0.6579770536155569,
+          0.6843314082774637
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.07269792802808238,
+          0.3057314701184642,
+          0.6579770536155569,
+          0.6843314082774637
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0.3391792863,
+          1.3071204383,
+          -0.02520170554058096
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightShoulder": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.09828317599444783,
+          0.11208840860590111,
+          0.16780110829525938,
+          0.9744841681769508
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.09828317599444784,
+          -0.11208840860590112,
+          -0.1678011082952594,
+          0.9744841681769509
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -1.0408340855860843e-17,
+          1.2132295332999998,
+          0.004488128009999998
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightUpperArm": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.23244840150800683,
+          0.127466235553022,
+          0.6113618929197511,
+          0.7456250634976621
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.23244840150800683,
+          -0.127466235553022,
+          -0.6113618929197511,
+          0.7456250634976621
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -0.021697046200000014,
+          1.3179316482999999,
+          -0.02520169809000001
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightLowerArm": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.05791342013164932,
+          0.3263937555902098,
+          0.6543235208447215,
+          0.679686605833704
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.05791342013164932,
+          -0.3263937555902098,
+          -0.6543235208447215,
+          0.679686605833704
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -0.09599606130000002,
+          1.3071204383,
+          -0.02520170554058102
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightHand": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.1160247535727622,
+          0.37198899280512543,
+          0.6254115678798817,
+          0.6760346267405511
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.1160247535727622,
+          -0.37198899280512543,
+          -0.6254115678798817,
+          0.6760346267405511
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -0.33917928630000005,
+          1.3071204383,
+          -0.02520170554058105
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftUpperLeg": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.011248524994127438,
+          0.10195004619520442,
+          0.044907486215543996,
+          0.9937117169723082
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.011248524994127438,
+          -0.10195004619520442,
+          -0.044907486215543996,
+          0.9937117169723082
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0,
+          0.9430415,
+          0.00357606518
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftLowerLeg": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.06420488082039535,
+          0.10013603329571091,
+          0.03926445032952813,
+          0.9921233849955152
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.06420488082039535,
+          -0.10013603329571091,
+          -0.03926445032952813,
+          0.9921233849955152
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0.07475008,
+          0.9036377038,
+          -0.00004612211999998998
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftFoot": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.003361705422457511,
+          0.11390235175073918,
+          0.0009274305936200355,
+          0.9934858293276243
+        ],
+        "source_rest_inverse_quaternion": [
+          0.003361705422457511,
+          -0.11390235175073918,
+          -0.0009274305936200355,
+          0.9934858293276243
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0.0747500650988388,
+          0.5311807358,
+          -0.008884662119999987
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "leftToes": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.00150759974318796,
+          0.09736979700604892,
+          0.01531609562858257,
+          0.9951292714962773
+        ],
+        "source_rest_inverse_quaternion": [
+          0.00150759974318796,
+          -0.09736979700604892,
+          -0.01531609562858257,
+          0.9951292714962773
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0.0747500650988388,
+          0.10225349280000001,
+          -0.03368895811999999
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightUpperLeg": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.02804129535279733,
+          -0.11417863870948998,
+          -0.041228726917682666,
+          0.9922082020897288
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.02804129535279733,
+          0.11417863870948998,
+          0.041228726917682666,
+          0.9922082020897288
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          0,
+          0.9430415,
+          0.00357606518
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightLowerLeg": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          0.06961907560796375,
+          -0.11312868761745654,
+          -0.03602738789537847,
+          0.9904832717774088
+        ],
+        "source_rest_inverse_quaternion": [
+          -0.06961907560796377,
+          0.11312868761745655,
+          0.036027387895378474,
+          0.9904832717774089
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -0.07475008,
+          0.9036377038,
+          -0.000046122120000009065
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightFoot": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.004181234712016461,
+          -0.1270695539650966,
+          0.004299127273558572,
+          0.9918756793248237
+        ],
+        "source_rest_inverse_quaternion": [
+          0.004181234712016461,
+          0.1270695539650966,
+          -0.004299127273558572,
+          0.9918756793248237
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -0.0747500650988388,
+          0.5311807358,
+          -0.008884662120000008
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "rightToes": {
+        "status": "captured",
+        "source_rest_world_quaternion": [
+          -0.0002325664123581724,
+          -0.11906229659909036,
+          -0.007721457453011126,
+          0.992856734144567
+        ],
+        "source_rest_inverse_quaternion": [
+          0.0002325664123581724,
+          0.11906229659909036,
+          0.007721457453011126,
+          0.992856734144567
+        ],
+        "target_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "target_parent_rest_world_position": [
+          -0.0747500650988388,
+          0.10225349280000001,
+          -0.033688958120000015
+        ],
+        "user_offset_quaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    }
+  },
+  "root_calibration": {
+    "status": "calibrated",
+    "source_joint": "Hips",
+    "target_bone_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+    "source_rest_position_m": [
+      0.002807407174259424,
+      0.9954967498779297,
+      0.017896754667162895
+    ],
+    "target_rest_world_position_m": [
+      -4.379416776229304e-19,
+      0.9430415,
+      0.00357606518
+    ],
+    "translation_mode": "delta-from-calibration-frame",
+    "rotation_mode": "mapped-hips",
+    "enabled_axes": [
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "scale_calibration": {
+    "status": "calibrated",
+    "method": "mean-mapped-hips-to-feet-rest-distance",
+    "translation_scale": 0.8955767654558204,
+    "samples": [
+      {
+        "semantic": "leftFoot",
+        "source_length_m": 0.9436254313231505,
+        "target_length_m": 0.8449264626256994,
+        "ratio": 0.8954045054094658
+      },
+      {
+        "semantic": "rightFoot",
+        "source_length_m": 0.9432624971621,
+        "target_length_m": 0.8449264626256994,
+        "ratio": 0.8957490255021752
+      }
+    ]
+  },
+  "ik": {
+    "enabled": true,
+    "targets": {
+      "leftFoot": {
+        "chain": [
+          "leftUpperLeg",
+          "leftLowerLeg",
+          "leftFoot"
+        ],
+        "contact_channel": 1,
+        "contact_threshold": 0.5,
+        "ground_y": 0.10225349280000001,
+        "lock_horizontal": false,
+        "max_iterations": 8,
+        "tolerance_m": 0.01
+      },
+      "rightFoot": {
+        "chain": [
+          "rightUpperLeg",
+          "rightLowerLeg",
+          "rightFoot"
+        ],
+        "contact_channel": 3,
+        "contact_threshold": 0.5,
+        "ground_y": 0.10225349280000001,
+        "lock_horizontal": false,
+        "max_iterations": 8,
+        "tolerance_m": 0.01
+      }
+    }
+  },
+  "validation": {
+    "suite_signature": "sha256:524c2db2ce6ce331c74bfde601e6a2bfd332fad72f1448406239452791ab045a",
+    "result_signature": "sha256:f195877bcd5a9f4bbe5950bf3e8e3b7e310d0edddc4bff2650f08a3b0d311213",
+    "motion_signature": "sha256:d50a387f7f3b346f83f69d45ab619b3d348eed6c1dcdac331f297c49bbc643be",
+    "profile_input_signature": "sha256:acdfb1debc25ecfe9c33406472e26ded1b1e182cf1b1ccd0cc0c0cb6685ddc34",
+    "frames": [
+      0,
+      37,
+      74,
+      111,
+      149
+    ],
+    "deterministic_runs": 2,
+    "repeat_canonical_delta": 0
+  },
+  "authoring": {
+    "mapping_provenance": "Exact SOMA body mapping from the frozen hardcoded Tai reference path; no offset reinterpretation."
+  }
+}

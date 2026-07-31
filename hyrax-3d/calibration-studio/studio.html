@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SOMA Avatar Calibration Studio</title>
+  <link rel="stylesheet" href="studio.css?v=9">
+</head>
+<body>
+  <div class="studio-shell">
+    <header class="studio-toolbar">
+      <div class="studio-brand">
+        <span class="studio-brand-mark" aria-hidden="true">S</span>
+        <span>
+          <strong>SOMA Calibration Studio</strong>
+          <small id="contractLabel">loading contract…</small>
+        </span>
+      </div>
+
+      <nav class="studio-stages" aria-label="Calibration workflow">
+        <button class="stage-tab is-active" data-stage="import" type="button">1 Import</button>
+        <button class="stage-tab" data-stage="inspect" type="button" disabled>2 Inspect</button>
+        <button class="stage-tab" data-stage="map" type="button" disabled>3 Map</button>
+        <button class="stage-tab" data-stage="calibrate" type="button" disabled>4 Calibrate</button>
+        <button class="stage-tab" data-stage="validate" type="button" disabled>5 Validate</button>
+      </nav>
+
+      <div class="studio-actions">
+        <button id="loadTaiBtn" class="button-secondary" type="button">Load Tai sample</button>
+        <label class="button-secondary" for="avatarFile">Import avatar…</label>
+        <input id="avatarFile" type="file" accept=".vrm,.glb,.gltf,.fbx" hidden>
+        <label class="button-secondary" for="profileFile">Load profile…</label>
+        <input id="profileFile" type="file" accept=".json" hidden>
+        <button id="exportDraftBtn" class="button-primary" type="button" disabled>Export draft</button>
+      </div>
+    </header>
+
+    <main class="studio-main">
+      <section class="studio-viewport" aria-label="Avatar preview">
+        <div id="viewport" class="viewport-canvas"></div>
+        <div class="viewport-overlay">
+          <span id="avatarBadge">No avatar</span>
+          <span id="rigBadge">Rig not inspected</span>
+        </div>
+        <div class="reference-controls" role="group" aria-label="Calibration references">
+          <label for="referenceMode">
+            Reference
+            <select id="referenceMode">
+              <option value="soma">SOMA77 skeleton</option>
+              <option value="legacy">Legacy Tai · 22 body</option>
+              <option value="both">Both references</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label for="referenceLayout">
+            Layout
+            <select id="referenceLayout">
+              <option value="side-by-side">Side by side</option>
+              <option value="overlay">Overlay</option>
+            </select>
+          </label>
+          <span id="referenceStatus">Load motion to show SOMA77.</span>
+        </div>
+        <div class="viewport-help">Drag to orbit · wheel to zoom</div>
+      </section>
+
+      <aside class="studio-panel" aria-live="polite">
+        <section class="stage-panel is-active" data-panel="import">
+          <p class="eyebrow">Import</p>
+          <h1>Choose an already-rigged avatar</h1>
+          <p class="section-copy">
+            The importer records the avatar hierarchy and rest transforms. It does
+            not infer calibration or change the runtime.
+          </p>
+          <div class="import-options">
+            <button id="panelLoadTaiBtn" class="import-card" type="button">
+              <strong>Tai reference avatar</strong>
+              <span>Tracked VRM 0 sample · golden baseline target</span>
+            </button>
+            <label class="import-card" for="panelAvatarFile">
+              <strong>Local VRM, GLB, or FBX</strong>
+              <span>Files stay in this browser session · FBX basis requires confirmation</span>
+            </label>
+            <input id="panelAvatarFile" type="file" accept=".vrm,.glb,.gltf,.fbx" hidden>
+          </div>
+          <div id="importStatus" class="status-box" data-state="idle">
+            Waiting for an avatar.
+          </div>
+        </section>
+
+        <section class="stage-panel" data-panel="inspect" hidden>
+          <p class="eyebrow">Inspect</p>
+          <h1>Verify the imported skeleton</h1>
+          <p class="section-copy">
+            Select a bone to inspect immutable local and world rest transforms.
+          </p>
+          <div class="rig-summary" id="rigSummary"></div>
+          <div id="fbxBasisGate" class="basis-gate" hidden>
+            <strong>Declare the FBX coordinate basis</strong>
+            <p>
+              FBX metadata is not trusted implicitly. Confirm its unit scale and
+              source facing before mapping or calibration can begin.
+            </p>
+            <label class="field-row" for="fbxUnitScale">
+              <span>UnitScaleFactor (cm)</span>
+              <input id="fbxUnitScale" type="number" min="0.000001" step="any" placeholder="e.g. 1 or 100">
+            </label>
+            <label class="field-row" for="fbxFacing">
+              <span>Avatar faces</span>
+              <select id="fbxFacing">
+                <option value="">Choose explicitly…</option>
+                <option value="+Z">+Z</option>
+                <option value="-Z">−Z</option>
+              </select>
+            </label>
+            <button id="confirmFbxBasisBtn" class="button-primary button-wide" type="button">
+              Confirm and normalize FBX
+            </button>
+            <div id="fbxBasisStatus" class="status-box" data-state="idle">
+              Mapping remains locked until both values are declared.
+            </div>
+          </div>
+          <div class="inspect-layout">
+            <div id="boneTree" class="bone-tree" aria-label="Imported bone hierarchy"></div>
+            <pre id="boneTransform" class="transform-readout">Select a bone.</pre>
+          </div>
+        </section>
+
+        <section class="stage-panel" data-panel="map" hidden>
+          <p class="eyebrow">Map</p>
+          <h1>Map SOMA roles to avatar bones</h1>
+          <p class="section-copy">
+            VRM semantics are proposed automatically. Every row remains editable
+            and unresolved mappings keep the profile in draft state.
+          </p>
+          <div class="mapping-header">
+            <span id="mappingProgress">0 of 0 mapped</span>
+            <button id="clearMappingsBtn" class="button-quiet" type="button">Clear mappings</button>
+          </div>
+          <div id="mappingPickStatus" class="mapping-pick-status">
+            Select a mapping row, then click a bone point on the avatar.
+          </div>
+          <div id="mappingEditor" class="mapping-editor"></div>
+          <div id="draftStatus" class="status-box" data-state="idle">
+            Map at least one semantic role to create a draft.
+          </div>
+        </section>
+
+        <section class="stage-panel" data-panel="calibrate" hidden>
+          <p class="eyebrow">Calibrate</p>
+          <h1>Rest, basis, root, and scale</h1>
+          <p class="section-copy">
+            Load canonical SOMA77 motion, choose an explicit reference frame,
+            then capture rest, root, and measured body scale into the draft.
+          </p>
+          <div class="calibration-actions">
+            <button id="loadKimodoBtn" class="button-secondary" type="button">
+              Load Kimodo 150-frame reference
+            </button>
+            <label class="button-secondary" for="motionFile">Import SOMA motion…</label>
+            <input id="motionFile" type="file" accept=".json" hidden>
+          </div>
+          <div id="motionStatus" class="status-box" data-state="idle">
+            Waiting for a canonical SOMA77 motion.
+          </div>
+          <label class="field-row" for="restFrame">
+            <span>Reference frame</span>
+            <input id="restFrame" type="number" min="0" value="0" disabled>
+          </label>
+          <button id="captureCalibrationBtn" class="button-primary button-wide" type="button" disabled>
+            Capture rest, root, and scale
+          </button>
+          <section class="auto-tune-panel" aria-labelledby="autoTuneHeading">
+            <div>
+              <strong id="autoTuneHeading">Automatic reference fit</strong>
+              <small>Aligns mapped bone directions to this SOMA frame. One-child bones keep twist unresolved for manual refinement.</small>
+            </div>
+            <button id="autoTuneBtn" class="button-secondary button-wide" type="button" disabled>
+              Preview automatic pose fit
+            </button>
+            <div id="autoTuneStatus" class="status-box" data-state="idle">
+              Capture calibration first.
+            </div>
+            <div id="autoTuneActions" class="auto-tune-actions" hidden>
+              <button id="acceptAutoTuneBtn" class="button-primary" type="button">
+                Accept auto-fit
+              </button>
+              <button id="revertAutoTuneBtn" class="button-quiet" type="button">
+                Revert auto-fit offsets
+              </button>
+            </div>
+          </section>
+          <label class="field-row" for="previewFrame">
+            <span>Motion preview frame</span>
+            <input id="previewFrame" type="range" min="0" max="0" value="0" disabled>
+          </label>
+          <div class="playback-controls">
+            <button
+              id="togglePlaybackBtn"
+              class="button-secondary"
+              type="button"
+              aria-pressed="false"
+              disabled
+            >Play motion</button>
+            <output id="previewFrameValue" for="previewFrame">0 / 0</output>
+          </div>
+          <div class="calibration-summary" id="calibrationSummary">
+            <div><span>Rest alignment</span><strong>Unresolved</strong></div>
+            <div><span>Root policy</span><strong>Unresolved</strong></div>
+            <div><span>Scale</span><strong>Unresolved</strong></div>
+          </div>
+          <fieldset id="offsetEditor" class="offset-editor" disabled>
+            <legend>Per-bone rotation offset</legend>
+            <label class="field-row" for="offsetSemantic">
+              <span>Mapped bone</span>
+              <select id="offsetSemantic"></select>
+            </label>
+            <div class="offset-angles" role="group" aria-label="Euler offset in degrees">
+              <label class="offset-axis offset-axis-x" for="offsetXRange">
+                <span>X</span>
+                <input id="offsetXRange" type="range" min="-180" max="180" step="0.1" value="0">
+                <input id="offsetX" type="number" min="-180" max="180" step="0.1" value="0" aria-label="X rotation degrees">
+              </label>
+              <label class="offset-axis offset-axis-y" for="offsetYRange">
+                <span>Y</span>
+                <input id="offsetYRange" type="range" min="-180" max="180" step="0.1" value="0">
+                <input id="offsetY" type="number" min="-180" max="180" step="0.1" value="0" aria-label="Y rotation degrees">
+              </label>
+              <label class="offset-axis offset-axis-z" for="offsetZRange">
+                <span>Z</span>
+                <input id="offsetZRange" type="range" min="-180" max="180" step="0.1" value="0">
+                <input id="offsetZ" type="number" min="-180" max="180" step="0.1" value="0" aria-label="Z rotation degrees">
+              </label>
+            </div>
+            <div class="offset-actions">
+              <button id="applyOffsetBtn" class="button-secondary" type="button">Apply offset</button>
+              <button id="resetOffsetBtn" class="button-quiet" type="button">Reset to identity</button>
+            </div>
+            <div class="offset-actions offset-history-actions">
+              <button id="undoOffsetBtn" class="button-quiet" type="button" disabled>Undo</button>
+              <button id="redoOffsetBtn" class="button-quiet" type="button" disabled>Redo</button>
+              <button id="copyOffsetBtn" class="button-quiet" type="button">Copy to pair</button>
+              <button id="mirrorOffsetBtn" class="button-quiet" type="button">Mirror to pair</button>
+            </div>
+            <small>Drag the local X/Y/Z rings on the selected point or use the sliders. Offsets are explicit profile data and require revalidation.</small>
+          </fieldset>
+          <fieldset id="ikCalibration" class="ik-calibration" disabled>
+            <legend>Foot IK calibration</legend>
+            <label class="ik-toggle" for="enableFootIk">
+              <span>
+                <strong>Enable contact-aware foot IK</strong>
+                <small>Runs after FK. A planted target is held in world X/Z and blended on acquire/release.</small>
+              </span>
+              <input id="enableFootIk" type="checkbox">
+            </label>
+            <div class="ik-grid">
+              <label for="ikGroundY">
+                <span>Ground plane Y</span>
+                <input id="ikGroundY" type="number" step="0.001" value="0">
+              </label>
+              <label for="ikContactThreshold">
+                <span>Contact threshold</span>
+                <input id="ikContactThreshold" type="number" min="0" max="1" step="0.05" value="0.5">
+              </label>
+              <label for="ikLeftSoleOffset">
+                <span>Left ankle height</span>
+                <input id="ikLeftSoleOffset" type="number" step="0.001" value="0">
+              </label>
+              <label for="ikRightSoleOffset">
+                <span>Right ankle height</span>
+                <input id="ikRightSoleOffset" type="number" step="0.001" value="0">
+              </label>
+              <label for="ikBlendFrames">
+                <span>Lock blend frames</span>
+                <input id="ikBlendFrames" type="number" min="1" max="30" step="1" value="4">
+              </label>
+              <label for="ikPelvisMax">
+                <span>Maximum pelvis lowering</span>
+                <input id="ikPelvisMax" type="number" min="0" max="0.25" step="0.005" value="0.08">
+              </label>
+            </div>
+            <label class="ik-option" for="ikLockHorizontal">
+              <input id="ikLockHorizontal" type="checkbox" checked>
+              <span>Lock planted feet in world X/Z</span>
+            </label>
+            <label class="ik-option" for="ikLockOrientation">
+              <input id="ikLockOrientation" type="checkbox" checked>
+              <span>Keep planted feet level and lock their heading</span>
+            </label>
+            <label class="ik-option" for="ikPelvisCompensation">
+              <input id="ikPelvisCompensation" type="checkbox" checked>
+              <span>Lower pelvis when a planted foot is out of reach</span>
+            </label>
+            <label class="ik-option" for="ikUsePoles">
+              <input id="ikUsePoles" type="checkbox" checked>
+              <span>Preserve rest-pose knee bend directions</span>
+            </label>
+            <button id="applyIkCalibrationBtn" class="button-secondary button-wide" type="button">
+              Apply IK calibration
+            </button>
+            <div id="ikCalibrationStatus" class="status-box" data-state="idle">
+              Capture calibration and load motion to inspect contact quality.
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="stage-panel" data-panel="validate" hidden>
+          <p class="eyebrow">Validate</p>
+          <h1>Prove the calibration</h1>
+          <p class="section-copy">
+            A technical PASS requires exact signed inputs, complete core
+            mapping, finite transforms, and byte-identical repeat runs. When
+            temporal IK is enabled, the clip must also exercise planted and
+            released frames within target tolerance. Visual motion acceptance
+            remains a separate human review.
+          </p>
+          <div class="calibration-actions">
+            <button id="loadQualificationBtn" class="button-secondary" type="button">
+              Load .96 turn qualification
+            </button>
+          </div>
+          <div id="qualificationStatus" class="status-box" data-state="idle">
+            Temporal IK will use the original three-part Core27 turn capture.
+          </div>
+          <button id="runValidationBtn" class="button-primary button-wide" type="button" disabled>
+            Run fixed-frame validation twice
+          </button>
+          <div id="validationStatus" class="status-box" data-state="idle">
+            Runtime trust gate closed.
+          </div>
+          <div class="calibration-summary" id="validationSummary">
+            <div><span>Frames</span><strong>Not run</strong></div>
+            <div><span>Driven bones</span><strong>Not run</strong></div>
+            <div><span>Repeat delta</span><strong>Not run</strong></div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="studio-statusbar">
+      <span id="globalStatus">Studio ready</span>
+      <span id="profileStatus">No draft profile</span>
+    </footer>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/api/hyrax/3d/node_modules/three/build/three.module.js",
+      "three/addons/": "/api/hyrax/3d/node_modules/three/examples/jsm/",
+      "@pixiv/three-vrm": "/api/hyrax/3d/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="studio.js?v=29"></script>
+</body>
+</html>

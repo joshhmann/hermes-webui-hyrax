@@ -1,0 +1,35 @@
+{
+  "converter": {
+    "commit": "3413d7966c6db935be16eeb4aae4582529fb9281",
+    "source_signature": "sha256:f7a63eac5e136cba06d242caf5318d807d0d28971956775f76b943e17f4c16fc",
+    "version": "soma77-lossless-v1"
+  },
+  "failure": {
+    "frame": null,
+    "joint": null,
+    "metric": null
+  },
+  "metrics": {
+    "retained_joint_angular_error_rad": {
+      "max": 7.598131170262078e-08,
+      "mean": 1.4268780090212345e-08,
+      "tolerance": 1e-06
+    },
+    "retained_joint_position_error_mm": {
+      "max": 0.0004791598078850963,
+      "mean": 0.00011430109806965356,
+      "tolerance": 1.0
+    }
+  },
+  "passed": true,
+  "retained_contract_signature": "sha256:704a335bfeb1463df0f8d9dfe86b33639ac3b381bfbe4837baa4b775dda51b1f",
+  "schema": "soma77.converter-evidence",
+  "schema_version": "1.0.0",
+  "source": {
+    "bvh_signature": "sha256:6670a843535b279484d5a9622cbb4412a8b121c299c0d689878d2026a0f83cbe",
+    "frame_count": 150,
+    "joint_count": 77,
+    "npz_signature": "sha256:e9b816f2841df2aaa5cfa49ffb5786da8a075a3a4fa1e2e00e26b6094c021e86",
+    "skeleton_signature": "sha256:fdaaf47d8a3f0b5eeff292cad10cffc2289649b17cd7a8360174c3b814a9b17a"
+  }
+}

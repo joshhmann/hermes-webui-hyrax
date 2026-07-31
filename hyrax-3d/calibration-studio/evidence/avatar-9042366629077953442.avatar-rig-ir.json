@@ -1,0 +1,948 @@
+{
+  "schema": "soma.avatar-rig-ir",
+  "schema_version": "1.0.0",
+  "rig_id": "vrm:9042366629077953442.vrm:823520c8e7dd",
+  "rig_signature": "sha256:a899b408e8c7880b20836d562b105a93e2e9fcad425f166cc69b4a440b5aa47c",
+  "source": {
+    "format": "vrm",
+    "format_version": "0",
+    "asset_signature": "sha256:823520c8e7dd45e8b224ef79c0d91366ba4a300fc5dfc5343d5797782786df90",
+    "importer": "@pixiv/three-vrm",
+    "importer_version": "3.0.0",
+    "rig_space": "normalized",
+    "basis_correction": "VRMUtils.rotateVRM0(scene-yaw-180)"
+  },
+  "coordinate_system": {
+    "status": "declared",
+    "handedness": "right",
+    "up_axis": "+Y",
+    "forward_axis": "-Z-scene-local-after-normalization",
+    "linear_unit": "meter"
+  },
+  "bones": [
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+      "name": "Normalized_J_Bip_C_Hips",
+      "parent_id": null,
+      "semantic": "hips",
+      "rest_local": {
+        "position": [
+          0,
+          0.920278251,
+          -0.00357606518
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -4.379416776229304e-19,
+          0.920278251,
+          0.00357606518
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]",
+      "name": "Normalized_J_Bip_C_Spine",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+      "semantic": "spine",
+      "rest_local": {
+        "position": [
+          6.402521e-32,
+          0.0520709157,
+          -0.012517427099999999
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -1.970884380780528e-18,
+          0.9723491667,
+          0.01609349228
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]",
+      "name": "Normalized_J_Bip_C_Chest",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]",
+      "semantic": "chest",
+      "rest_local": {
+        "position": [
+          -2.16863662e-17,
+          0.1130130290000001,
+          -0.0030498485999999984
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          1.9341983086632068e-17,
+          1.0853621957000001,
+          0.019143340879999998
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]",
+      "name": "Normalized_J_Bip_C_UpperChest",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]",
+      "semantic": "upperChest",
+      "rest_local": {
+        "position": [
+          3.13020662e-17,
+          0.10764396200000004,
+          0.014646641
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -1.0166386911476892e-17,
+          1.1930061577000002,
+          0.004496699879999998
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]",
+      "name": "Normalized_J_Bip_C_Neck",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]",
+      "semantic": "neck",
+      "rest_local": {
+        "position": [
+          9.82368563e-17,
+          0.1322883370000001,
+          0.0383563265
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -1.037059479639493e-16,
+          1.3252944947000003,
+          -0.033859626620000007
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]/Normalized_J_Bip_C_Head[0]",
+      "name": "Normalized_J_Bip_C_Head",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_C_Neck[0]",
+      "semantic": "head",
+      "rest_local": {
+        "position": [
+          -1.57650851e-10,
+          0.0731743600000001,
+          -0.009148589999999998
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          1.5765074617367287e-10,
+          1.3984688547000004,
+          -0.02471103662000001
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]",
+      "name": "Normalized_J_Bip_L_Shoulder",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]",
+      "semantic": "leftShoulder",
+      "rest_local": {
+        "position": [
+          -0.0223954022,
+          0.10568630700000003,
+          0.029968924799999998
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.022395402199999994,
+          1.2986924647000002,
+          -0.025472224919999994
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]",
+      "name": "Normalized_J_Bip_L_UpperArm",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]",
+      "semantic": "leftUpperArm",
+      "rest_local": {
+        "position": [
+          -0.08616047999999998,
+          -0.012260317800000031,
+          -7.450580999379675e-9
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.10855588219999998,
+          1.2864321469000002,
+          -0.025472217469418985
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]",
+      "name": "Normalized_J_Bip_L_LowerArm",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]",
+      "semantic": "leftLowerArm",
+      "rest_local": {
+        "position": [
+          -0.21985274599999996,
+          0,
+          0
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.32840862819999994,
+          1.2864321469000002,
+          -0.025472217469418957
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]/Normalized_J_Bip_L_Hand[0]",
+      "name": "Normalized_J_Bip_L_Hand",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_L_Shoulder[0]/Normalized_J_Bip_L_UpperArm[0]/Normalized_J_Bip_L_LowerArm[0]",
+      "semantic": "leftHand",
+      "rest_local": {
+        "position": [
+          -0.21468496299999995,
+          0.000002384185789905402,
+          -0.00037596374799999874
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.5430935911999999,
+          1.28643453108579,
+          -0.02509625372141893
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]",
+      "name": "Normalized_J_Bip_R_Shoulder",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]",
+      "semantic": "rightShoulder",
+      "rest_local": {
+        "position": [
+          0.0223954022,
+          0.10568630700000003,
+          0.029968924799999998
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.022395402200000008,
+          1.2986924647000002,
+          -0.02547222492
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]",
+      "name": "Normalized_J_Bip_R_UpperArm",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]",
+      "semantic": "rightUpperArm",
+      "rest_local": {
+        "position": [
+          0.08616048,
+          -0.012260317800000031,
+          -7.450580999379675e-9
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.10855588220000001,
+          1.2864321469000002,
+          -0.025472217469419012
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]",
+      "name": "Normalized_J_Bip_R_LowerArm",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]",
+      "semantic": "rightLowerArm",
+      "rest_local": {
+        "position": [
+          0.219852746,
+          0,
+          0
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.3284086282,
+          1.2864321469000002,
+          -0.02547221746941904
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]/Normalized_J_Bip_R_Hand[0]",
+      "name": "Normalized_J_Bip_R_Hand",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_C_Spine[0]/Normalized_J_Bip_C_Chest[0]/Normalized_J_Bip_C_UpperChest[0]/Normalized_J_Bip_R_Shoulder[0]/Normalized_J_Bip_R_UpperArm[0]/Normalized_J_Bip_R_LowerArm[0]",
+      "semantic": "rightHand",
+      "rest_local": {
+        "position": [
+          0.214684963,
+          0.000002384185789905402,
+          -0.00037596374799999874
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.5430935912,
+          1.28643453108579,
+          -0.02509625372141907
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]",
+      "name": "Normalized_J_Bip_L_UpperLeg",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+      "semantic": "leftUpperLeg",
+      "rest_local": {
+        "position": [
+          -0.07715603,
+          -0.03977417999999999,
+          0.00365623739
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.07715603,
+          0.880504071,
+          -0.00008017220999999037
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]",
+      "name": "Normalized_J_Bip_L_LowerLeg",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]",
+      "semantic": "leftLowerLeg",
+      "rest_local": {
+        "position": [
+          1.4901161193847656e-8,
+          -0.35290592900000006,
+          0.00738526229
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.0771560150988388,
+          0.527598142,
+          -0.00746543449999999
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]",
+      "name": "Normalized_J_Bip_L_Foot",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]",
+      "semantic": "leftFoot",
+      "rest_local": {
+        "position": [
+          0,
+          -0.414744735,
+          0.024937644599999996
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.0771560150988388,
+          0.11285340700000002,
+          -0.03240307909999999
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]/Normalized_J_Bip_L_ToeBase[0]",
+      "name": "Normalized_J_Bip_L_ToeBase",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_L_UpperLeg[0]/Normalized_J_Bip_L_LowerLeg[0]/Normalized_J_Bip_L_Foot[0]",
+      "semantic": "leftToes",
+      "rest_local": {
+        "position": [
+          0,
+          -0.06305516,
+          -0.11068929
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          0.07715601509883879,
+          0.04979824700000002,
+          0.07828621090000001
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]",
+      "name": "Normalized_J_Bip_R_UpperLeg",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]",
+      "semantic": "rightUpperLeg",
+      "rest_local": {
+        "position": [
+          0.07715603,
+          -0.03977417999999999,
+          0.00365623739
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.07715603,
+          0.880504071,
+          -0.00008017221000000945
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]",
+      "name": "Normalized_J_Bip_R_LowerLeg",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]",
+      "semantic": "rightLowerLeg",
+      "rest_local": {
+        "position": [
+          -1.4901161193847656e-8,
+          -0.35290592900000006,
+          0.00738526229
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.0771560150988388,
+          0.527598142,
+          -0.007465434500000009
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]",
+      "name": "Normalized_J_Bip_R_Foot",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]",
+      "semantic": "rightFoot",
+      "rest_local": {
+        "position": [
+          0,
+          -0.414744735,
+          0.024937644599999996
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.0771560150988388,
+          0.11285340700000002,
+          -0.0324030791
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]/Normalized_J_Bip_R_ToeBase[0]",
+      "name": "Normalized_J_Bip_R_ToeBase",
+      "parent_id": "three:/Group[0]/VRMHumanoidRig[0]/Normalized_J_Bip_C_Hips[0]/Normalized_J_Bip_R_UpperLeg[0]/Normalized_J_Bip_R_LowerLeg[0]/Normalized_J_Bip_R_Foot[0]",
+      "semantic": "rightToes",
+      "rest_local": {
+        "position": [
+          0,
+          -0.06305516,
+          -0.11068929
+        ],
+        "quaternion": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rest_world": {
+        "position": [
+          -0.07715601509883882,
+          0.04979824700000002,
+          0.07828621089999999
+        ],
+        "quaternion": [
+          0,
+          1,
+          0,
+          6.123233995736766e-17
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  ]
+}

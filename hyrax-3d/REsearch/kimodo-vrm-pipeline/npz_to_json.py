@@ -1,5 +1,5 @@
 # npz_to_json.py — convert Kimodo/ARDY NPZ output to compact JSON for the JS retargeter.
-# Handles somaskel30, somaskel77 (truncated to body joints), and ARDY cskel27.
+# Handles somaskel30, lossless SOMA77, and ARDY cskel27.
 #
 # ARDY cskel27 schema (validated 2026-07-28 against real captures, see
 # PIPELINE_VALIDATION_2026-07-28.md): the NPZ carries NO rotation matrices.
@@ -16,8 +16,10 @@
 # Global rotations are derived by FK: R_j = R_parent @ L_j, root = root_quat.
 # FK convention proven to 0.0005 mm against posed_joints.
 import json
+import hashlib
 import os
 import re
+import subprocess
 import sys
 
 import numpy as np
@@ -33,6 +35,37 @@ SOMA30 = [
     ("RightHand", "RightForeArm"), ("RightHandThumbEnd", "RightHand"), ("RightHandMiddleEnd", "RightHand"),
     ("LeftLeg", "Hips"), ("LeftShin", "LeftLeg"), ("LeftFoot", "LeftShin"), ("LeftToeBase", "LeftFoot"),
     ("RightLeg", "Hips"), ("RightShin", "RightLeg"), ("RightFoot", "RightShin"), ("RightToeBase", "RightFoot"),
+]
+
+
+def _finger_joints(side: str) -> list[str]:
+    joints = []
+    for finger, segment_count in (
+        ("Thumb", 3),
+        ("Index", 4),
+        ("Middle", 4),
+        ("Ring", 4),
+        ("Pinky", 4),
+    ):
+        joints.extend(
+            f"{side}Hand{finger}{segment}"
+            for segment in range(1, segment_count + 1)
+        )
+        joints.append(f"{side}Hand{finger}End")
+    return joints
+
+
+# Canonical adapter order from Kimodo's 77-joint BVH export. Keep this
+# independent of avatar profiles: source identity is an ingress contract.
+SOMA77_JOINTS = [
+    "Hips", "Spine1", "Spine2", "Chest", "Neck1", "Neck2", "Head",
+    "HeadEnd", "Jaw", "LeftEye", "RightEye",
+    "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand",
+    *_finger_joints("Left"),
+    "RightShoulder", "RightArm", "RightForeArm", "RightHand",
+    *_finger_joints("Right"),
+    "LeftLeg", "LeftShin", "LeftFoot", "LeftToeBase", "LeftToeEnd",
+    "RightLeg", "RightShin", "RightFoot", "RightToeBase", "RightToeEnd",
 ]
 
 # ARDY Core27 embedded contract — copy of the skeleton_contract.json shipped
@@ -220,6 +253,7 @@ def convert_cskel27(d, npz_path: str, out_path: str, contract_path: str | None =
 
     out = {
         "skeleton": "cskel27",
+        "rotation_space": "global",
         "fps": int(fps) if float(fps).is_integer() else fps,
         "joints": list(names),
         "parents": [None if p < 0 else names[p] for p in parents_idx],
@@ -288,9 +322,8 @@ def _parse_bvh_hierarchy(bvh_path: str) -> tuple[list[str] | None, list[int] | N
 _BVH_JOINT_RE = re.compile(r"^\s*(?:ROOT|JOINT)\s+(\S+)")
 
 
-def _legacy_rest_offsets(d, n, layout, rot):
-    """Fallback rest-offset computation when BVH is unavailable (direct
-    first-n truncation path).  Estimates from posed_joints at frame 0."""
+def _rest_offsets_from_positions(d, n, layout, rot):
+    """Estimate parent-local rest offsets from frame-0 world positions."""
     rest = np.zeros((n, 3), dtype=np.float64)
     if "posed_joints" not in d:
         return rest
@@ -309,6 +342,50 @@ def _legacy_rest_offsets(d, n, layout, rot):
     return rest
 
 
+def _require_soma77_hierarchy(bvh_path: str, src_count: int):
+    bvh_joints, bvh_parents = _parse_bvh_hierarchy(bvh_path)
+    if bvh_joints is None or bvh_parents is None:
+        raise ValueError(
+            "SOMA77 conversion requires a readable sibling BVH hierarchy"
+        )
+    if len(bvh_joints) != src_count:
+        raise ValueError(
+            "SOMA77 BVH joint count does not match global_rot_mats: "
+            f"{len(bvh_joints)} != {src_count}"
+        )
+    if bvh_joints != SOMA77_JOINTS:
+        mismatch = next(
+            (
+                index
+                for index, (actual, expected) in enumerate(
+                    zip(bvh_joints, SOMA77_JOINTS, strict=True)
+                )
+                if actual != expected
+            ),
+            min(len(bvh_joints), len(SOMA77_JOINTS)),
+        )
+        actual = bvh_joints[mismatch] if mismatch < len(bvh_joints) else "<missing>"
+        expected = (
+            SOMA77_JOINTS[mismatch]
+            if mismatch < len(SOMA77_JOINTS)
+            else "<none>"
+        )
+        raise ValueError(
+            "SOMA77 BVH does not match the canonical joint order at "
+            f"{mismatch}: {actual!r} != {expected!r}"
+        )
+    if len(set(bvh_joints)) != len(bvh_joints):
+        raise ValueError("SOMA77 BVH contains duplicate joint names")
+    for joint, parent in enumerate(bvh_parents):
+        if joint == 0 and parent != -1:
+            raise ValueError("SOMA77 BVH root must not have a parent")
+        if joint > 0 and not 0 <= parent < joint:
+            raise ValueError(
+                f"SOMA77 BVH parent for joint {joint} is not earlier in the hierarchy"
+            )
+    return bvh_joints, bvh_parents
+
+
 def convert(npz_path: str, out_path: str, contract_path: str | None = None):
     d = np.load(npz_path)
     skeleton = detect_skeleton(d)
@@ -316,79 +393,48 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
         convert_cskel27(d, npz_path, out_path, contract_path)
         return
 
-    # Kimodo path (somaskel30/77, or a cskel27 export that carries matrices):
-    # the NPZ already has global rotations and per-channel contacts.
-    # For 77-joint captures, parse the sibling BVH to get the true joint
-    # order (depth-first), then map SOMA30 names to their actual indices.
-    layout = CORE27_LAYOUT if skeleton == "cskel27" else SOMA30
-    n = len(layout)
-
-    # Build index map from sibling BVH (or fall back to first-n truncation)
+    # Kimodo path (somaskel30/77, or a cskel27 export that carries matrices).
+    # The source arrays are already world rotations. Preserve that space and,
+    # for SOMA77, preserve every joint; consumers select their runtime subset.
     bvh_path = os.path.splitext(npz_path)[0] + ".bvh"
-    bvh_joints, bvh_parents = _parse_bvh_hierarchy(bvh_path)
     full_world = np.asarray(d["global_rot_mats"], dtype=np.float64)
     src_count = full_world.shape[1]
 
-    # SOMA30 parent indices (name → index under the collapsed hierarchy)
-    name_in_layout = {name: i for i, (name, _) in enumerate(layout)}
-    layout_parent_idx = [None if p is None else name_in_layout[p]
-                         for _, p in layout]
-
-    if bvh_joints and len(bvh_joints) == src_count:
-        # Map each SOMA30 name to its position in the 77-joint BVH order
-        src_idx = {name: i for i, name in enumerate(bvh_joints)}
-        idx_map = [src_idx.get(name) for name, _ in layout]
-        if None not in idx_map:
-            # ── World-space collapse: extract world transforms for the 30
-            # retained joints, then derive new local rotations under the
-            # collapsed SOMA30 hierarchy. ──
-            sel_world = full_world[:, idx_map]          # [T, 30, 3, 3]
-
-            # R_local[j] = R_local[root] for j=0, else
-            # R_local[j] = R_world[parent_select]^T @ R_world[j]
-            T = sel_world.shape[0]
-            reduced_local = np.zeros_like(sel_world)    # [T, 30, 3, 3]
-            reduced_local[:, 0] = sel_world[:, 0]       # root keeps world
-            for j in range(1, n):
-                p = layout_parent_idx[j]
-                # Batched per-frame: R_p^T @ R_j
-                reduced_local[:, j] = np.matmul(
-                    np.transpose(sel_world[:, p], (0, 2, 1)),
-                    sel_world[:, j],
-                )
-            rot = reduced_local
-
-            # Rest offsets from world positions at frame 0.
-            # offset[j] = R_world[parent]^T @ (world_j - world_parent)
-            if "posed_joints" in d:
-                posed = np.asarray(d["posed_joints"], dtype=np.float64)
-                sel_pos = posed[:, idx_map]             # [T, 30, 3]
-                rest_offsets = np.zeros((n, 3), dtype=np.float64)
-                for j in range(1, n):
-                    p = layout_parent_idx[j]
-                    delta = sel_pos[0, j] - sel_pos[0, p]
-                    R_p = sel_world[0, p]
-                    rest_offsets[j] = R_p.T @ delta
-            else:
-                rest_offsets = np.zeros((n, 3), dtype=np.float64)
-
-            skeleton_label = "somaskel77"
-        else:
-            print(f"warning: {os.path.basename(npz_path)}: "
-                  f"{sum(1 for i in idx_map if i is None)} SOMA30 joints "
-                  f"not in BVH; falling back to legacy truncation",
-                  file=sys.stderr)
-            rot = full_world[:, :n]
-            skeleton_label = detect_skeleton(d)
-            rest_offsets = _legacy_rest_offsets(d, n, layout, rot)
+    if skeleton == "somaskel77":
+        bvh_joints, bvh_parents = _require_soma77_hierarchy(
+            bvh_path, src_count
+        )
+        layout = [
+            (
+                name,
+                None if parent < 0 else bvh_joints[parent],
+            )
+            for name, parent in zip(bvh_joints, bvh_parents, strict=True)
+        ]
+        n = len(layout)
+        rot = full_world
+        skeleton_label = "soma77"
+        source_skeleton = "somaskel77"
+        runtime_subset = [name for name, _ in SOMA30]
     else:
+        layout = CORE27_LAYOUT if skeleton == "cskel27" else SOMA30
+        n = len(layout)
+        if src_count != n:
+            raise ValueError(
+                f"{skeleton} has {src_count} joints, expected {n}"
+            )
         rot = full_world[:, :n]
-        skeleton_label = detect_skeleton(d)
-        rest_offsets = _legacy_rest_offsets(d, n, layout, rot)
+        skeleton_label = skeleton
+        source_skeleton = skeleton
+        runtime_subset = None
+
+    rest_offsets = _rest_offsets_from_positions(d, n, layout, rot)
     T = rot.shape[0]
 
     out = {
         "skeleton": skeleton_label,
+        "source_skeleton": source_skeleton,
+        "rotation_space": "global",
         "fps": int(d["fps"]) if "fps" in d else 30,
         "joints": [name for name, _ in layout],
         "parents": [p for _, p in layout],
@@ -397,6 +443,8 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
         "rest_offsets_m": rest_offsets.tolist(),           # FK ground truth
         "foot_contacts": decode_contacts(d, T).tolist(),  # [T, 4] L-heel, L-toe, R-heel, R-toe
     }
+    if runtime_subset is not None:
+        out["runtime_subset"] = runtime_subset
     # Kimodo only: keep the smoothed root for path logic (ARDY aliases it — do not rely on it).
     if "smooth_root_pos" in d and not np.array_equal(d["smooth_root_pos"], d["root_positions"]):
         out["smooth_root_pos"] = d["smooth_root_pos"].tolist()
@@ -409,7 +457,8 @@ def convert(npz_path: str, out_path: str, contract_path: str | None = None):
 # right-first order as the real ARDY contract.
 CORE27_LAYOUT = [(name, None if p < 0 else CORE27_CONTRACT["joint_names"][p])
                  for name, p in zip(CORE27_CONTRACT["joint_names"],
-                                    CORE27_CONTRACT["parent_indices"])]
+                                    CORE27_CONTRACT["parent_indices"],
+                                    strict=True)]
 
 
 def validate_cskel27(json_path: str, npz_path: str, contract_path: str | None = None,
@@ -445,14 +494,9 @@ def validate_cskel27(json_path: str, npz_path: str, contract_path: str | None = 
     return ok
 
 
-def validate_77to30(json_path: str, npz_path: str,
+def validate_soma77(json_path: str, npz_path: str,
                     tolerance_mm: float = 1.0) -> bool:
-    """Round-trip validation: collapse 77→30, FK the collapsed output, and
-    compare retained-joint world positions against the source NPZ.
-
-    If the collapse is mathematically correct, every retained joint's world
-    position should match to within tolerance_mm.
-    """
+    """FK-validate lossless SOMA77 world rotations against source positions."""
     with open(json_path) as f:
         m = json.load(f)
     d = np.load(npz_path)
@@ -468,14 +512,18 @@ def validate_77to30(json_path: str, npz_path: str,
     src_idx = {name: i for i, name in enumerate(bvh_joints)}
     idx_map = [src_idx.get(name) for name in m["joints"]]
     if None in idx_map:
-        print(f"SKIP {json_path}: SOMA30 joints missing from BVH")
+        print(f"SKIP {json_path}: declared motion joints missing from BVH")
         return True
 
-    # Source world positions of retained joints
-    posed = np.asarray(d["posed_joints"], dtype=np.float64)
-    ref_world = posed[:, idx_map]  # [T, 30, 3]
+    if m.get("rotation_space") != "global":
+        print(f"FAIL {json_path}: rotation_space is not global")
+        return False
 
-    # FK the collapsed hierarchy
+    # Source world positions in the JSON's declared joint order.
+    posed = np.asarray(d["posed_joints"], dtype=np.float64)
+    ref_world = posed[:, idx_map]
+
+    # FK using the declared world rotations and parent-local rest offsets.
     J = len(m["joints"])
     rot = np.asarray(m["global_rot_mats"], dtype=np.float64).reshape(-1, J, 3, 3)
     offsets = np.asarray(m["rest_offsets_m"], dtype=np.float64)
@@ -486,13 +534,9 @@ def validate_77to30(json_path: str, npz_path: str,
     pos = np.zeros((T, J, 3), dtype=np.float64)
     for t in range(T):
         pos[t, 0] = root[t]
-        # Compute world rotations from collapsed local rotations
-        wrot = np.zeros((J, 3, 3), dtype=np.float64)
-        wrot[0] = rot[t, 0]
         for j in range(1, J):
             p = parents[j]
-            wrot[j] = wrot[p] @ rot[t, j]
-            pos[t, j] = pos[t, p] + wrot[p] @ offsets[j]
+            pos[t, j] = pos[t, p] + rot[t, p] @ offsets[j]
 
     err_mm = np.linalg.norm(pos - ref_world[:T], axis=2) * 1000.0
     ok = bool(err_mm.max() < tolerance_mm)
@@ -501,6 +545,170 @@ def validate_77to30(json_path: str, npz_path: str,
           f"max={err_mm.max():.4f} mm  mean={err_mm.mean():.4f} mm "
           f"(T={T}, n={J}, tol={tolerance_mm} mm)")
     return ok
+
+
+def _sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _canonical_signature(value) -> str:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def write_soma77_evidence(
+    json_path: str,
+    npz_path: str,
+    out_path: str,
+    position_tolerance_mm: float = 1.0,
+    angular_tolerance_rad: float = 1e-6,
+) -> bool:
+    """Write stable machine-readable evidence for the lossless converter."""
+    with open(json_path) as handle:
+        motion = json.load(handle)
+    source = np.load(npz_path)
+    bvh_path = os.path.splitext(npz_path)[0] + ".bvh"
+    source_joints, source_parents = _require_soma77_hierarchy(
+        bvh_path, source["global_rot_mats"].shape[1]
+    )
+    source_parent_names = [
+        None if parent < 0 else source_joints[parent]
+        for parent in source_parents
+    ]
+    source_index = {name: index for index, name in enumerate(source_joints)}
+    index_map = [source_index[name] for name in motion["joints"]]
+
+    source_rot = np.asarray(source["global_rot_mats"], dtype=np.float64)[:, index_map]
+    retained_rot = np.asarray(
+        motion["global_rot_mats"], dtype=np.float64
+    ).reshape(source_rot.shape)
+    # Generator matrices are float32 and may be very slightly non-orthogonal.
+    # Project both sides to SO(3) before measuring geodesic angular error so
+    # identical retained matrices correctly report zero rather than measuring
+    # source quantization as converter drift.
+    source_u, _, source_vh = np.linalg.svd(source_rot)
+    retained_u, _, retained_vh = np.linalg.svd(retained_rot)
+    source_orthogonal = np.matmul(source_u, source_vh)
+    retained_orthogonal = np.matmul(retained_u, retained_vh)
+    relative = np.einsum(
+        "...ji,...jk->...ik", retained_orthogonal, source_orthogonal
+    )
+    cos_angle = np.clip(
+        (np.trace(relative, axis1=-2, axis2=-1) - 1.0) / 2.0,
+        -1.0,
+        1.0,
+    )
+    angular_error = np.arccos(cos_angle)
+
+    offsets = np.asarray(motion["rest_offsets_m"], dtype=np.float64)
+    roots = np.asarray(motion["root_positions"], dtype=np.float64)
+    parent_indices = [
+        -1 if parent is None else motion["joints"].index(parent)
+        for parent in motion["parents"]
+    ]
+    positions = np.zeros_like(np.asarray(source["posed_joints"])[:, index_map])
+    positions[:, 0] = roots
+    for joint in range(1, len(parent_indices)):
+        parent = parent_indices[joint]
+        positions[:, joint] = (
+            positions[:, parent]
+            + np.einsum("tij,j->ti", retained_rot[:, parent], offsets[joint])
+        )
+    reference_positions = np.asarray(source["posed_joints"], dtype=np.float64)[:, index_map]
+    position_error_mm = np.linalg.norm(
+        positions - reference_positions, axis=2
+    ) * 1000.0
+
+    position_failure = np.argwhere(position_error_mm >= position_tolerance_mm)
+    angular_failure = np.argwhere(angular_error > angular_tolerance_rad)
+    first_failure = None
+    failure_metric = None
+    if position_failure.size:
+        first_failure = position_failure[0]
+        failure_metric = "position"
+    elif angular_failure.size:
+        first_failure = angular_failure[0]
+        failure_metric = "angular"
+
+    try:
+        converter_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        converter_commit = "unknown"
+
+    evidence = {
+        "schema": "soma77.converter-evidence",
+        "schema_version": "1.0.0",
+        "passed": first_failure is None,
+        "converter": {
+            "version": "soma77-lossless-v1",
+            "commit": converter_commit,
+            "source_signature": _sha256_file(__file__),
+        },
+        "source": {
+            "npz_signature": _sha256_file(npz_path),
+            "bvh_signature": _sha256_file(bvh_path),
+            "skeleton_signature": _canonical_signature({
+                "joints": source_joints,
+                "parents": source_parent_names,
+            }),
+            "frame_count": int(source_rot.shape[0]),
+            "joint_count": int(source_rot.shape[1]),
+        },
+        "retained_contract_signature": _canonical_signature({
+            "skeleton": motion["skeleton"],
+            "rotation_space": motion["rotation_space"],
+            "joints": motion["joints"],
+            "parents": motion["parents"],
+            "root_field": "root_positions",
+        }),
+        "metrics": {
+            "retained_joint_position_error_mm": {
+                "max": float(position_error_mm.max()),
+                "mean": float(position_error_mm.mean()),
+                "tolerance": position_tolerance_mm,
+            },
+            "retained_joint_angular_error_rad": {
+                "max": float(angular_error.max()),
+                "mean": float(angular_error.mean()),
+                "tolerance": angular_tolerance_rad,
+            },
+        },
+        "failure": {
+            "frame": None if first_failure is None else int(first_failure[0]),
+            "joint": (
+                None
+                if first_failure is None
+                else motion["joints"][int(first_failure[1])]
+            ),
+            "metric": failure_metric,
+        },
+    }
+    with open(out_path, "w") as handle:
+        json.dump(evidence, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    verdict = "PASS" if evidence["passed"] else "FAIL"
+    print(
+        f"{verdict} wrote {out_path}: "
+        f"position_max={position_error_mm.max():.6f} mm "
+        f"angular_max={angular_error.max():.9f} rad"
+    )
+    return bool(evidence["passed"])
+
+
+def validate_77to30(json_path: str, npz_path: str,
+                    tolerance_mm: float = 1.0) -> bool:
+    """Backward-compatible CLI alias for the lossless SOMA77 validator."""
+    return validate_soma77(json_path, npz_path, tolerance_mm)
 
 
 if __name__ == "__main__":
@@ -513,8 +721,17 @@ if __name__ == "__main__":
     if args and args[0] == "--validate":
         ok = validate_cskel27(args[1], args[2], contract)
         sys.exit(0 if ok else 1)
-    if args and args[0] == "--validate-77to30":
-        ok = validate_77to30(args[1], args[2],
+    if args and args[0] in ("--validate-soma77", "--validate-77to30"):
+        ok = validate_soma77(args[1], args[2],
                              float(args[3]) if len(args) > 3 else 1.0)
+        sys.exit(0 if ok else 1)
+    if args and args[0] == "--evidence-soma77":
+        ok = write_soma77_evidence(
+            args[1],
+            args[2],
+            args[3],
+            float(args[4]) if len(args) > 4 else 1.0,
+            float(args[5]) if len(args) > 5 else 1e-6,
+        )
         sys.exit(0 if ok else 1)
     convert(args[0], args[1], contract)

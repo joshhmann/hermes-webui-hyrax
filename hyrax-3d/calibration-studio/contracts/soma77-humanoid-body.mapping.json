@@ -1,0 +1,27 @@
+{
+  "provenance": "Canonical SOMA77 humanoid-body semantic proposal. Every target remains user-editable in the Studio.",
+  "mapping": [
+    {"semantic": "hips", "soma_joint": "Hips", "target_semantic": "hips"},
+    {"semantic": "spine", "soma_joint": "Spine1", "target_semantic": "spine"},
+    {"semantic": "chest", "soma_joint": "Spine2", "target_semantic": "chest"},
+    {"semantic": "upperChest", "soma_joint": "Chest", "target_semantic": "upperChest"},
+    {"semantic": "neck", "soma_joint": "Neck1", "target_semantic": "neck"},
+    {"semantic": "head", "soma_joint": "Head", "target_semantic": "head"},
+    {"semantic": "leftShoulder", "soma_joint": "LeftShoulder", "target_semantic": "leftShoulder"},
+    {"semantic": "leftUpperArm", "soma_joint": "LeftArm", "target_semantic": "leftUpperArm"},
+    {"semantic": "leftLowerArm", "soma_joint": "LeftForeArm", "target_semantic": "leftLowerArm"},
+    {"semantic": "leftHand", "soma_joint": "LeftHand", "target_semantic": "leftHand"},
+    {"semantic": "rightShoulder", "soma_joint": "RightShoulder", "target_semantic": "rightShoulder"},
+    {"semantic": "rightUpperArm", "soma_joint": "RightArm", "target_semantic": "rightUpperArm"},
+    {"semantic": "rightLowerArm", "soma_joint": "RightForeArm", "target_semantic": "rightLowerArm"},
+    {"semantic": "rightHand", "soma_joint": "RightHand", "target_semantic": "rightHand"},
+    {"semantic": "leftUpperLeg", "soma_joint": "LeftLeg", "target_semantic": "leftUpperLeg"},
+    {"semantic": "leftLowerLeg", "soma_joint": "LeftShin", "target_semantic": "leftLowerLeg"},
+    {"semantic": "leftFoot", "soma_joint": "LeftFoot", "target_semantic": "leftFoot"},
+    {"semantic": "leftToes", "soma_joint": "LeftToeBase", "target_semantic": "leftToes"},
+    {"semantic": "rightUpperLeg", "soma_joint": "RightLeg", "target_semantic": "rightUpperLeg"},
+    {"semantic": "rightLowerLeg", "soma_joint": "RightShin", "target_semantic": "rightLowerLeg"},
+    {"semantic": "rightFoot", "soma_joint": "RightFoot", "target_semantic": "rightFoot"},
+    {"semantic": "rightToes", "soma_joint": "RightToeBase", "target_semantic": "rightToes"}
+  ]
+}

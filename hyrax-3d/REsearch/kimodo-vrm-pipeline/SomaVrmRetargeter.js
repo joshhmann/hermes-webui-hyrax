@@ -1,3 +1,5 @@
+// DEPRECATED compatibility/reference path. New runtime work belongs in
+// calibrate/AvatarRetargeter.js with an avatar calibration profile.
 // SomaVrmRetargeter.js — retarget Kimodo/ARDY global rotations onto a VRM
 // through the normalized rig. three >= 0.160, @pixiv/three-vrm v3.
 // Corrections vs. naive version: both skeleton maps, measured source rest pose,
@@ -32,6 +34,7 @@ export const BONE_MAPS = {
   },
 };
 BONE_MAPS.somaskel77 = BONE_MAPS.somaskel30;
+BONE_MAPS.soma77 = BONE_MAPS.somaskel30;
 
 // Explicit topological order — never rely on object insertion order.
 const SOLVE_ORDER = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head',
