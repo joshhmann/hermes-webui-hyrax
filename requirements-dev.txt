@@ -8,7 +8,7 @@ pytest-timeout
 pytest-asyncio
 pytest-shard
 ruff
-mcp
+mcp<2
 # Motion-capture converter and its SOMA/Core contract tests.
 numpy
 # Optional Office parsers — runtime-optional (commented in requirements.txt), but
