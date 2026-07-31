@@ -1,7 +1,7 @@
 {
   "profiles": [
     {
-      "name": "Tai Embodiment v3 (baseline)",
+      "name": "Tai Embodiment v3 (legacy reference — reproduces old hardcoded behavior)",
       "path": "calibration-profiles/tai-embodiment-v3.json",
       "skeletons": ["cskel27", "somaskel30", "soma77", "somaskel77"]
     }

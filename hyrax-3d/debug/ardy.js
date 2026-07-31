@@ -105,7 +105,7 @@ function concatChunks(chunks, sources) {
 async function loadCapture(entry) {
   setStatus(`loading ${entry.id}…`)
   const chunks = []
-  for (const f of entry.chunks) chunks.push(await fetchJson(`data/${f}`))
+  for (const f of entry.chunks) chunks.push(await fetchJson(f.startsWith('../') ? f : `data/${f}`))
   motion = concatChunks(chunks, entry.chunks)
   await afterMotionLoad(`${entry.id} — ${entry.prompt ?? ''}`)
 }

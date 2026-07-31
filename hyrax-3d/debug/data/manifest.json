@@ -79,6 +79,12 @@
    "prompt": "Kimodo-generated: jerking motion, 60 frames",
    "fps": 30.0,
    "chunks": ["kimodo_9ead5ef20fa9_1783917428.json"]
+  },
+  {
+   "id": "kmd-lossless-150",
+   "prompt": "Kimodo walk-carry 150f — lossless SOMA77 carrier (77 joints, measured hands/eyes)",
+   "fps": 30.0,
+   "chunks": ["../calibration-studio/evidence/kimodo-150.soma77.json"]
   }
  ]
 }
