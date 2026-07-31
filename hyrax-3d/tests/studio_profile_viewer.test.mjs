@@ -132,3 +132,60 @@ test('a kimodo somaskel77 capture loads under the validated Studio profile (regr
   const replayed = structuredClone(retargeter.applyFrame(37))
   assert.deepEqual(replayed, posed)
 })
+
+test('the lossless SOMA77 carrier (kmd-lossless-150) loads under the validated Studio profile (t_44d64179)', async () => {
+  const [profile, avatarRig, canonicalSkeleton, lossless] = await Promise.all([
+    readJson('../calibration-studio/evidence/tai.humanoid54.foot-ik.validated.json'),
+    readJson('../calibration-studio/evidence/tai.humanoid54.avatar-rig-ir.json'),
+    readJson('../calibration-studio/contracts/soma77.skeleton.json'),
+    readJson('../calibration-studio/evidence/kimodo-150.soma77.json'),
+  ])
+  assert.equal(lossless.skeleton, 'soma77')
+  assert.equal(lossless.joints.length, 77)
+
+  // Debug-page shape: concatChunks → viewerMotionJson → adaptMotionJson
+  // (viewerMotionJson is exercised through adaptViewerMotion, the same call
+  // the debug page makes; strict lossless pass-through via the converter).
+  const motion = await adaptViewerMotion(concatenate([lossless]), canonicalSkeleton)
+  assert.equal(motion.skeleton_id, 'soma77')
+  assert.equal(motion.joints.length, 77)
+  assert.equal(motion.frame_count, 150)
+  assert.equal(motion.source.adapter, 'lossless-converter-json')
+
+  // Measured hands/eyes survive the pass-through (studio-identical joints).
+  const meanSqDev = (name) => {
+    const i = motion.joints.indexOf(name)
+    assert.ok(i >= 0, `lossless IR retains ${name}`)
+    const m0 = motion.global_rot_mats[0][i]
+    let acc = 0
+    for (let f = 1; f < motion.global_rot_mats.length; f += 1) {
+      const m = motion.global_rot_mats[f][i]
+      for (let k = 0; k < 9; k += 1) acc += (m[k] - m0[k]) ** 2
+    }
+    return acc / (motion.global_rot_mats.length - 1)
+  }
+  for (const name of ['LeftEye', 'RightEye', 'Jaw', 'LeftHandIndex1', 'LeftHandPinky3']) {
+    assert.ok(meanSqDev(name) > 1e-3, `${name} retains non-degenerate motion`)
+  }
+
+  const objectByRigId = new Map(profile.mapping.map((mapping) => [
+    mapping.target_bone_id,
+    new Object3D(),
+  ]))
+  const retargeter = createStudioViewerRetargeter({
+    profile,
+    avatarRig,
+    motion,
+    canonicalSkeleton,
+    objectByRigId,
+  })
+  retargeter.applyFrame(0)
+  const posed = structuredClone(retargeter.applyFrame(37))
+  for (const object of objectByRigId.values()) {
+    assert.equal(object.position.toArray().every(Number.isFinite), true)
+    assert.equal(object.quaternion.toArray().every(Number.isFinite), true)
+  }
+  retargeter.onReset()
+  const replayed = structuredClone(retargeter.applyFrame(37))
+  assert.deepEqual(replayed, posed)
+})

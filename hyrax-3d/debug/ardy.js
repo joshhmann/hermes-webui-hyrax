@@ -60,6 +60,12 @@ new ResizeObserver(resize).observe(view)
 // ── capture data model ───────────────────────────────────────────────
 // Concatenated from one or more chunk JSONs (npz_to_json.py cskel27 output).
 let motion = null // {fps,joints,parentIdx,offsets,rot,root,contacts,timestamps,T,chunkBounds,meta,sources}
+let viewMotion = null // skeleton reference actually rendered (studioMotion view when a Studio profile is active)
+
+// The skeleton reference rendered by buildSkeleton()/setFrame()/fkPositions():
+// the raw capture by default, the adapted canonical carrier when a Studio
+// profile is active (so the stick figure matches what the retargeter consumes).
+const skelMotion = () => viewMotion ?? motion
 let frame = 0
 let playing = false
 let playTime = 0
@@ -135,9 +141,10 @@ async function afterMotionLoad(label) {
 // Same convention the converter was validated against (posed_joints < 0.002 mm).
 let _pos = null
 function fkPositions(f) {
-  const J = motion.joints.length
+  const src = skelMotion()
+  const J = src.joints.length
   if (!_pos || _pos.length < J * 3) _pos = new Float32Array(J * 3)
-  const { parentIdx, offsets, rot, root } = motion
+  const { parentIdx, offsets, rot, root } = src
   _pos[0] = root[f][0]; _pos[1] = root[f][1]; _pos[2] = root[f][2]
   for (let j = 1; j < parentIdx.length; j += 1) {
     const p = parentIdx[j]
@@ -151,6 +158,32 @@ function fkPositions(f) {
   return _pos
 }
 
+// The source reference shown is the raw capture by default; when a Studio
+// profile is active the retargeter consumes the ADAPTED canonical carrier
+// (studioMotion), so the reference must render that same motion or the
+// skeleton visibly disagrees with the pose (e.g. kimodo 30-joint payloads
+// show sparse hands vs the 77-joint canonical contract).
+function studioMotionView() {
+  const nameIdx = new Map(studioMotion.joints.map((n, i) => [n, i]))
+  return {
+    skeleton: studioMotion.skeleton_id,
+    sourceSkeleton: studioMotion.source?.source_skeleton ?? studioMotion.skeleton_id,
+    rotationSpace: studioMotion.rotation_space ?? 'global',
+    fps: studioMotion.fps,
+    joints: studioMotion.joints,
+    parentIdx: studioMotion.parents.map((p) => (p === null ? -1 : nameIdx.get(p))),
+    offsets: studioMotion.rest_offsets_m,
+    rot: studioMotion.global_rot_mats,
+    root: studioMotion.root_positions,
+    contacts: studioMotion.foot_contacts,
+    timestamps: [],
+    chunkBounds: [0, studioMotion.frame_count],
+    meta: studioMotion.source ?? {},
+    sources: [],
+    T: studioMotion.frame_count,
+  }
+}
+
 // ── stick skeleton (bones = colored line segments, joints = instanced spheres)
 const skelGroup = new THREE.Group()
 scene.add(skelGroup)
@@ -159,8 +192,12 @@ let jointSpheres = null
 let boneJoint = [] // joint index per bone segment
 
 function buildSkeleton() {
-  skelGroup.clear()
-  const J = motion.joints.length
+  // Remove + dispose only the skeleton children; the trajectory lives in
+  // skelGroup too and must survive profile-switch rebuilds.
+  if (boneLines) { skelGroup.remove(boneLines); boneLines.geometry.dispose(); boneLines.material.dispose() }
+  if (jointSpheres) { skelGroup.remove(jointSpheres); jointSpheres.geometry.dispose(); jointSpheres.material.dispose() }
+  const src = skelMotion()
+  const J = src.joints.length
   boneJoint = []
   for (let j = 1; j < J; j += 1) boneJoint.push(j)
   const geo = new THREE.BufferGeometry()
@@ -317,6 +354,7 @@ async function rebuildRetargeter() {
   retargeter = null
   studioMotion = null
   studioRig = null
+  viewMotion = null
   // Profile switching can happen after another retargeter has already posed
   // the normalized rig. Always re-establish the signed import rest state
   // before measuring or verifying a new runtime.
@@ -331,6 +369,7 @@ async function rebuildRetargeter() {
       throw new Error('Studio contracts are not loaded')
     }
     studioMotion = await adaptViewerMotion(motion, canonicalSkeleton)
+    viewMotion = studioMotionView()
     studioRig = await resolveStudioVrmRig({
       vrm,
       avatarBytes: vrmAssetBytes,
@@ -400,6 +439,11 @@ async function rebuildRetargeter() {
     new THREE.MeshBasicMaterial({ color: 0xffffff }), mappedBones.length)
   vrmMarkers.frustumCulled = false
   scene.add(vrmMarkers)
+
+  // Rebuild the reference skeleton: viewMotion may have changed with the
+  // profile (raw capture → adapted canonical carrier and back), and the
+  // bone/joint buffers are sized per source joint count.
+  buildSkeleton()
 }
 
 // SomaVrmRetargeter consumes the single-chunk JSON shape; hand it a view of
@@ -472,6 +516,7 @@ function setFrame(f) {
   frame = Math.min(Math.max(0, f), motion.T - 1)
   playTime = frame / motion.fps
   const compare = $('modeSel').value === 'compare' && retargeter
+  const src = skelMotion()
 
   const pos = fkPositions(frame)
   const pAttr = boneLines.geometry.getAttribute('position')
@@ -487,20 +532,20 @@ function setFrame(f) {
   const m4 = new THREE.Matrix4()
   for (let i = 0; i < boneJoint.length; i += 1) {
     const j = boneJoint[i]
-    const p = motion.parentIdx[j]
+    const p = src.parentIdx[j]
     pAttr.setXYZ(i * 2, pos[p * 3], pos[p * 3 + 1], pos[p * 3 + 2])
     pAttr.setXYZ(i * 2 + 1, pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2])
-    const name = motion.joints[j]
+    const name = src.joints[j]
     const col = compare && errs.has(name) ? errColor(errs.get(name)) : COL_IDLE
     cAttr.setXYZ(i * 2, col.r, col.g, col.b)
     cAttr.setXYZ(i * 2 + 1, col.r, col.g, col.b)
   }
   pAttr.needsUpdate = true
   cAttr.needsUpdate = true
-  for (let j = 0; j < motion.joints.length; j += 1) {
+  for (let j = 0; j < src.joints.length; j += 1) {
     m4.makeTranslation(pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2])
     jointSpheres.setMatrixAt(j, m4)
-    const name = motion.joints[j]
+    const name = src.joints[j]
     jointSpheres.setColorAt(j, compare && errs.has(name) ? errColor(errs.get(name)) : COL_IDLE)
   }
   jointSpheres.instanceMatrix.needsUpdate = true
@@ -662,6 +707,7 @@ $('profileFile').onchange = async (event) => {
     retargeter = null
     studioMotion = null
     studioRig = null
+    viewMotion = null
     showErr(`config import failed: ${error?.message ?? error}`)
   } finally {
     event.target.value = ''
@@ -787,6 +833,7 @@ async function boot() {
       retargeter = null
       studioMotion = null
       studioRig = null
+      viewMotion = null
       showErr(`profile load failed: ${val} — ${e?.message ?? e}`)
     }
   }
