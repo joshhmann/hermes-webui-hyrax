@@ -11,6 +11,30 @@ the same deterministic browser-local SHA-256 implementation when
 `crypto.subtle` is unavailable. Imported model bytes remain in the browser and
 are never sent to a hashing endpoint.
 
+## Use an exported config in the normal viewer
+
+Open
+`/api/hyrax/3d/debug/ardy.html?capture=capture-turn&mode=compare&profile=studio`
+for the qualified Tai path, or open `/api/hyrax/3d/debug/ardy.html`, switch to
+`compare (vs VRM)`, then either:
+
+- choose `Tai 54 · grounded Studio ✓` from `profile`; or
+- use the `config` file picker to import a validated
+  `soma.avatar-calibration` JSON exported by the Studio.
+
+Load the same avatar file that was calibrated with the `VRM` picker when the
+viewer cannot reach its built-in asset URL. The runtime hashes those bytes and
+re-extracts the normalized rig before it will animate. Draft profiles, changed
+avatar bytes, renamed source files that alter the signed rig identity,
+unsupported motion skeletons, and rig-signature mismatches fail closed with a
+visible error. The older profile dropdown entries and hardcoded Tai reference
+path remain available for comparison.
+
+Core27 captures are expanded through the explicit qualification adapter before
+the profile is consumed. Lossless SOMA77 converter output is consumed directly.
+Stateful ground-contact and IK corrections are replayed from frame zero after a
+seek, so scrubbing and sequential playback produce the same pose.
+
 ## Product boundary
 
 ```text

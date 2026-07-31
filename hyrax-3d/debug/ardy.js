@@ -8,9 +8,15 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm'
+import { VRMHumanoidLoaderPlugin, VRMUtils } from '@pixiv/three-vrm'
 import { SomaVrmRetargeter, BONE_MAPS } from '/api/hyrax/3d/REsearch/kimodo-vrm-pipeline/SomaVrmRetargeter.js'
 import { AvatarRetargeter } from '/api/hyrax/3d/calibrate/AvatarRetargeter.js'
+import {
+  adaptViewerMotion,
+  createStudioViewerRetargeter,
+  isStudioCalibrationProfile,
+  resolveStudioVrmRig,
+} from './StudioProfileRuntime.js?v=1'
 
 const $ = (id) => document.getElementById(id)
 const params = new URLSearchParams(location.search)
@@ -73,6 +79,8 @@ function concatChunks(chunks, sources) {
   const parentIdx = c0.parents.map((p) => (p === null ? -1 : nameIdx[p]))
   const out = {
     skeleton: c0.skeleton,
+    sourceSkeleton: c0.source_skeleton ?? c0.skeleton,
+    rotationSpace: c0.rotation_space ?? 'global',
     fps: c0.fps,
     joints: c0.joints,
     parentIdx,
@@ -99,17 +107,17 @@ async function loadCapture(entry) {
   const chunks = []
   for (const f of entry.chunks) chunks.push(await fetchJson(`data/${f}`))
   motion = concatChunks(chunks, entry.chunks)
-  afterMotionLoad(`${entry.id} — ${entry.prompt ?? ''}`)
+  await afterMotionLoad(`${entry.id} — ${entry.prompt ?? ''}`)
 }
 
 async function loadMotionFiles(files) {
   const chunks = []
   for (const f of files) chunks.push(JSON.parse(await f.text()))
   motion = concatChunks(chunks, files.map((f) => f.name))
-  afterMotionLoad(`file: ${files.map((f) => f.name).join(', ')}`)
+  await afterMotionLoad(`file: ${files.map((f) => f.name).join(', ')}`)
 }
 
-function afterMotionLoad(label) {
+async function afterMotionLoad(label) {
   frame = 0
   playTime = 0
   playing = false
@@ -118,7 +126,7 @@ function afterMotionLoad(label) {
   buildSkeleton()
   buildTrajectory()
   fillInspector(label)
-  if (vrm) rebuildRetargeter()
+  if (vrm) await rebuildRetargeter()
   setFrame(0)
   setStatus(`${label} | T=${motion.T} fps=${motion.fps} (${(motion.T / motion.fps).toFixed(2)} s)`)
 }
@@ -188,9 +196,14 @@ function buildTrajectory() {
 
 // ── retarget compare ─────────────────────────────────────────────────
 let vrm = null
+let vrmAssetBytes = null
+let vrmFilename = null
 let retargeter = null
 let profile = null  // loaded calibration profile (optional — when set, use AvatarRetargeter)
-let profileAvatars = {}  // loaded VRM scenes keyed by profile name
+let canonicalSkeleton = null
+let roleCatalog = null
+let studioMotion = null
+let studioRig = null
 let vrmMarkers = null // InstancedMesh over mapped bones
 let mappedBones = []  // [{bone, joint, node, jointIdx}]
 let restClip = null   // parsed T-pose chunk JSON — the TRUE source rest reference
@@ -218,22 +231,74 @@ function conjugateClipY180(m) {
   }
 }
 
+function inspectVrmGlb(arrayBuffer) {
+  const view = new DataView(arrayBuffer)
+  if (view.byteLength < 20 || view.getUint32(0, true) !== 0x46546c67) {
+    throw new Error('VRM input is not a binary glTF file')
+  }
+  const jsonLength = view.getUint32(12, true)
+  const jsonType = view.getUint32(16, true)
+  if (jsonType !== 0x4e4f534a || 20 + jsonLength > view.byteLength) {
+    throw new Error('VRM input has no valid JSON chunk')
+  }
+  const json = JSON.parse(
+    new TextDecoder()
+      .decode(new Uint8Array(arrayBuffer, 20, jsonLength))
+      .replace(/\0+$/u, '')
+      .trimEnd(),
+  )
+  if (json.extensions?.VRM) {
+    return {
+      version: '0',
+      name: json.extensions.VRM.meta?.title ?? null,
+    }
+  }
+  if (json.extensions?.VRMC_vrm) {
+    return {
+      version: String(json.extensions.VRMC_vrm.specVersion ?? '1'),
+      name: json.extensions.VRMC_vrm.meta?.name ?? null,
+    }
+  }
+  throw new Error('asset has no VRM extension')
+}
+
 async function loadVrm(urlOrFile) {
   setStatus('loading VRM…')
   const loader = new GLTFLoader()
-  loader.register((parser) => new VRMLoaderPlugin(parser))
-  const gltf = urlOrFile instanceof File
-    ? await loader.parseAsync(await urlOrFile.arrayBuffer(), '')
-    : await loader.loadAsync(urlOrFile)
-  const loaded = gltf.userData.vrm
-  if (!loaded) throw new Error('not a VRM file')
-  if (loaded.meta?.metaVersion === '0') VRMUtils.rotateVRM0(loaded)
+  loader.register((parser) => new VRMHumanoidLoaderPlugin(parser))
+  let bytes
+  let baseUrl = ''
+  if (urlOrFile instanceof File) {
+    bytes = await urlOrFile.arrayBuffer()
+  } else {
+    const response = await fetch(urlOrFile)
+    if (!response.ok) throw new Error(`${urlOrFile}: HTTP ${response.status}`)
+    bytes = await response.arrayBuffer()
+    baseUrl = new URL('.', new URL(urlOrFile, location.href)).href
+  }
+  const metadata = inspectVrmGlb(bytes)
+  const gltf = await loader.parseAsync(bytes, baseUrl)
+  const humanoid = gltf.userData.vrmHumanoid
+  if (!humanoid) throw new Error('VRM contains no humanoid rig')
+  const loaded = {
+    scene: gltf.scene,
+    humanoid,
+    meta: {
+      metaVersion: metadata.version,
+      name: metadata.name,
+    },
+  }
+  if (metadata.version === '0') VRMUtils.rotateVRM0(loaded)
   if (vrm) scene.remove(vrm.scene)
   vrm = loaded
+  vrmAssetBytes = bytes
+  vrmFilename = urlOrFile instanceof File
+    ? urlOrFile.name
+    : decodeURIComponent(new URL(urlOrFile, location.href).pathname.split('/').pop())
   vrmYawFlip = loaded.meta?.metaVersion === '0'
   vrm.scene.position.x = COMPARE_DX
   scene.add(vrm.scene)
-  if (motion) rebuildRetargeter()
+  if (motion) await rebuildRetargeter()
   setStatus(`VRM loaded: ${loaded.meta?.name ?? urlOrFile} (metaVersion ${loaded.meta?.metaVersion ?? '?'})`)
 }
 
@@ -248,18 +313,50 @@ function restFrameIndex() {
   return Math.min(Math.max(0, n), max)
 }
 
-function rebuildRetargeter() {
+async function rebuildRetargeter() {
+  retargeter = null
+  studioMotion = null
+  studioRig = null
+  // Profile switching can happen after another retargeter has already posed
+  // the normalized rig. Always re-establish the signed import rest state
+  // before measuring or verifying a new runtime.
+  vrm.humanoid.resetNormalizedPose()
+  vrm.humanoid.update()
+  vrm.scene.updateMatrixWorld(true)
   const rf = restFrameIndex()
   const played = motionJsonForRetargeter()
-  cmpMotion = vrmYawFlip ? conjugateClipY180(played) : played
 
-  if (profile) {
+  if (isStudioCalibrationProfile(profile)) {
+    if (!canonicalSkeleton || !roleCatalog) {
+      throw new Error('Studio contracts are not loaded')
+    }
+    studioMotion = await adaptViewerMotion(motion, canonicalSkeleton)
+    studioRig = await resolveStudioVrmRig({
+      vrm,
+      avatarBytes: vrmAssetBytes,
+      avatarFilename: vrmFilename,
+      profile,
+      roleCatalog,
+    })
+    retargeter = createStudioViewerRetargeter({
+      profile,
+      avatarRig: studioRig.avatarRig,
+      motion: studioMotion,
+      canonicalSkeleton,
+      objectByRigId: studioRig.objectByRigId,
+      commitPose: () => vrm.humanoid.update(),
+    })
+    cmpMotion = null
+    cmpRest = null
+  } else if (profile) {
     // Profiled path: use AvatarRetargeter
+    cmpMotion = vrmYawFlip ? conjugateClipY180(played) : played
     const srcHipsHeight = profile.rest_pose?.default_src_hips_height_m ?? 0.954
     retargeter = new AvatarRetargeter(vrm, profile, { restFrame: rf, srcHipsHeight })
     retargeter.setMotion(cmpMotion)
   } else {
     // Hardcoded path: use SomaVrmRetargeter (existing behaviour)
+    cmpMotion = vrmYawFlip ? conjugateClipY180(played) : played
     const sameSkel = restClip && restClip.skeleton === motion.skeleton
     cmpRest = sameSkel ? (vrmYawFlip ? conjugateClipY180(restClip) : restClip) : null
     _restJointIdx.clear()
@@ -271,14 +368,31 @@ function rebuildRetargeter() {
     }
   }
 
-  const map = profile
-    ? (profile.skeleton_maps[motion.skeleton] || Object.values(profile.skeleton_maps).find(v => typeof v === 'object'))
-    : BONE_MAPS[motion.skeleton]
-  const jointIdx = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
   mappedBones = []
-  for (const [bone, joint] of Object.entries(map)) {
-    const node = vrm.humanoid.getNormalizedBoneNode(bone)
-    if (node) mappedBones.push({ bone, joint, node, jointIdx: jointIdx[joint] })
+  if (studioRig) {
+    const jointIdx = Object.fromEntries(studioMotion.joints.map((name, index) => [name, index]))
+    for (const mapping of profile.mapping) {
+      const node = studioRig.objectByRigId.get(mapping.target_bone_id)
+      if (node) {
+        mappedBones.push({
+          bone: mapping.semantic,
+          joint: mapping.soma_joint,
+          node,
+          jointIdx: jointIdx[mapping.soma_joint],
+        })
+      }
+    }
+  } else {
+    const map = profile
+      ? (profile.skeleton_maps[motion.skeleton]
+        || Object.values(profile.skeleton_maps).find((value) => typeof value === 'object'))
+      : BONE_MAPS[motion.skeleton]
+    if (!map) throw new Error(`no legacy retarget map for skeleton "${motion.skeleton}"`)
+    const jointIdx = Object.fromEntries(motion.joints.map((name, index) => [name, index]))
+    for (const [bone, joint] of Object.entries(map)) {
+      const node = vrm.humanoid.getNormalizedBoneNode(bone)
+      if (node) mappedBones.push({ bone, joint, node, jointIdx: jointIdx[joint] })
+    }
   }
   if (vrmMarkers) scene.remove(vrmMarkers)
   vrmMarkers = new THREE.InstancedMesh(
@@ -366,7 +480,7 @@ function setFrame(f) {
   let errs = null
   if (compare) {
     retargeter.applyFrame(frame)
-    errs = computeErrors(frame)
+    errs = studioRig ? new Map() : computeErrors(frame)
   }
 
   // skeleton bones + joints, colored by mode
@@ -431,7 +545,15 @@ function updateReadout(errs) {
     if (f >= motion.chunkBounds[i] && f < motion.chunkBounds[i + 1]) chunk = i
   }
   let errHtml = ''
-  if (errs) {
+  if (studioRig) {
+    const correction = profile.runtime_corrections?.ground_contact?.enabled
+      ? 'ground contact + IK'
+      : (profile.ik?.enabled ? 'IK' : 'profile only')
+    errHtml = `<h2>Studio runtime</h2>` +
+      `<div>validated · ${profile.mapping.length} mapped controls</div>` +
+      `<div>${correction} · signed avatar + rig match</div>` +
+      `<div>${profile.profile_id}</div>`
+  } else if (errs) {
     const vals = mappedBones.map((mb) => mb.err ?? 0)
     const max = Math.max(...vals)
     const mean = vals.reduce((a, b) => a + b, 0) / vals.length
@@ -504,12 +626,46 @@ $('scrub').oninput = () => {
   setFrame(Number($('scrub').value))
 }
 $('modeSel').onchange = () => setFrame(frame)
-$('restFrame').onchange = () => { if (vrm && motion) { rebuildRetargeter(); setFrame(frame) } }
+$('restFrame').onchange = async () => {
+  if (vrm && motion) {
+    try {
+      await rebuildRetargeter()
+      setFrame(frame)
+    } catch (error) {
+      showErr(error)
+    }
+  }
+}
 $('motionFile').onchange = (e) => {
   if (e.target.files.length) loadMotionFiles([...e.target.files]).catch(showErr)
 }
 $('vrmFile').onchange = (e) => {
   if (e.target.files[0]) loadVrm(e.target.files[0]).catch(showErr)
+}
+$('profileFile').onchange = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  try {
+    const loadedProfile = JSON.parse(await file.text())
+    if (!isStudioCalibrationProfile(loadedProfile)) {
+      throw new Error('config is not a Studio avatar calibration profile')
+    }
+    profile = loadedProfile
+    $('profileSel').value = ''
+    if (vrm && motion) {
+      await rebuildRetargeter()
+      setFrame(frame)
+    }
+    setStatus(`Studio config imported: ${profile.profile_id}`)
+  } catch (error) {
+    profile = null
+    retargeter = null
+    studioMotion = null
+    studioRig = null
+    showErr(`config import failed: ${error?.message ?? error}`)
+  } finally {
+    event.target.value = ''
+  }
 }
 
 let lastT = performance.now()
@@ -542,6 +698,9 @@ function showErr(e) {
 window.__ardyDebug = {
   get vrm() { return vrm },
   get motion() { return motion },
+  get profile() { return profile },
+  get studioMotion() { return studioMotion },
+  get studioRig() { return studioRig },
   get retargeter() { return retargeter },
   get frame() { return frame },
   setFrame,
@@ -550,7 +709,13 @@ window.__ardyDebug = {
 async function boot() {
   resize()
   requestAnimationFrame(tick)
-  const manifest = await fetchJson('data/manifest.json')
+  const [manifest, loadedSkeleton, loadedRoleCatalog] = await Promise.all([
+    fetchJson('data/manifest.json'),
+    fetchJson('../calibration-studio/contracts/soma77.skeleton.json'),
+    fetchJson('../calibration-studio/contracts/humanoid54.authoring.json'),
+  ])
+  canonicalSkeleton = loadedSkeleton
+  roleCatalog = loadedRoleCatalog
   const sel = $('captureSel')
   for (const c of manifest.captures) {
     const opt = document.createElement('option')
@@ -595,19 +760,39 @@ async function boot() {
       profileSel.appendChild(opt)
     }
   }
+  const qualifiedOption = document.createElement('option')
+  qualifiedOption.value = '../calibration-studio/evidence/tai.humanoid54.foot-ik.validated.json'
+  qualifiedOption.textContent = 'Tai 54 · grounded Studio ✓'
+  profileSel.appendChild(qualifiedOption)
   profileSel.onchange = async () => {
     const val = profileSel.value
-    if (!val) { profile = null; if (vrm && motion) { rebuildRetargeter(); setFrame(frame); } return }
+    if (!val) {
+      profile = null
+      if (vrm && motion) {
+        await rebuildRetargeter()
+        setFrame(frame)
+      }
+      return
+    }
     try {
       profile = await fetchJson(val)
-      rebuildRetargeter()
-      setFrame(frame)
-      setStatus(`profile: ${profile.meta?.avatar_name ?? val}`)
+      if (vrm && motion) {
+        await rebuildRetargeter()
+        setFrame(frame)
+      }
+      setStatus(`profile: ${profile.profile_id ?? profile.meta?.avatar_name ?? val}`)
     } catch (e) {
       console.error('[profile-onchange] Error:', e.message, e.stack?.split('\n').slice(0,6).join('\n'))
       profile = null
+      retargeter = null
+      studioMotion = null
+      studioRig = null
       showErr(`profile load failed: ${val} — ${e?.message ?? e}`)
     }
+  }
+  if (params.get('profile') === 'studio') {
+    profileSel.value = qualifiedOption.value
+    profile = await fetchJson(qualifiedOption.value)
   }
 
   await loadCapture(manifest.captures.find((c) => c.id === want) ?? manifest.captures[0])

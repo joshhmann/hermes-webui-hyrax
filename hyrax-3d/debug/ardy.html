@@ -7,6 +7,7 @@
   ARDY debug view (no build step). Accessible via the WebUI at:
       /api/hyrax/3d/debug/ardy.html
   Optional query params: ?capture=capture-turn  ?vrm=<url>  ?mode=compare
+                         ?profile=studio
 -->
 <style>
   html, body { margin: 0; height: 100%; background: #0d1117; color: #c9d1d9;
@@ -61,6 +62,7 @@
     <label>profile <select id="profileSel">
       <option value="">(none — hardcoded)</option>
     </select></label>
+    <label>config <input id="profileFile" type="file" accept=".json,application/json"></label>
     <button id="playBtn">▶ play</button>
     <button id="prevBtn">−1f</button>
     <button id="nextBtn">+1f</button>
