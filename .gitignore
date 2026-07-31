@@ -84,3 +84,10 @@ docs/ui-ux/review-shots/
 # Local WebUI runtime data and credentials
 .webui_password
 attachments/
+
+# Hyrax binary assets — untracked by design (GitHub fork LFS restriction, 2026-07-31).
+# Served from local disk via /api/hyrax/assets/*; metadata files stay tracked.
+hyrax-assets/embodiment/*.vrm
+hyrax-assets/vn/**/*.png
+hyrax-assets/essence/frames/*-emotion-*.png
+hyrax-assets/essence/frames/thumbs/*.webp

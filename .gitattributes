@@ -1,11 +1,10 @@
-# VRM 3D model files — stored via Git LFS
-*.vrm filter=lfs diff=lfs merge=lfs -text
-
-# Reviewed SFW Hyrax VN/HQ image package — keep binary artwork out of Git objects.
-hyrax-assets/vn/**/*.png filter=lfs diff=lfs merge=lfs -text
-
-# VNCCS emotion sprite suite — large binary artwork via Git LFS
-hyrax-assets/essence/frames/*-emotion-*.png filter=lfs diff=lfs merge=lfs -text
-
-# Compressed WebP thumbnails of the sprite suite — binary artwork via Git LFS
-hyrax-assets/essence/frames/thumbs/*.webp filter=lfs diff=lfs merge=lfs -text
+# Git LFS is intentionally NOT used in this repository.
+#
+# 2026-07-31: GitHub refuses LFS object uploads to forks of public
+# repositories (https://docs.github.com/en/repositories/working-with-files/managing-large-files).
+# joshhmann/hermes-webui-hyrax is a public fork of nesquena/hermes-webui, so the
+# fork's LFS endpoint rejects every batch upload. The binary assets
+# (hyrax-assets/embodiment/*.vrm, hyrax-assets/vn/**, hyrax-assets/essence/frames/**)
+# are therefore untracked and served from local disk via the authenticated
+# allowlist route (/api/hyrax/assets/*). Text metadata (ASSET_MANIFEST.json,
+# SOURCE_SNAPSHOT.json, PROVENANCE.md, frames.registry.json) remains tracked.
