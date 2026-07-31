@@ -1,7 +1,4 @@
-import {
-  adaptConverterMotionJson,
-  adaptCskel27MotionJson,
-} from '../calibration-studio/adapters/soma-motion-json.js?v=4'
+import { adaptMotionJson } from '../calibration-studio/adapters/soma-motion-json.js?v=4'
 import {
   extractThreeVrmAvatarRigVariants,
 } from '../calibration-studio/adapters/three-vrm-avatar-rig.js?v=3'
@@ -38,17 +35,10 @@ export function viewerMotionJson(motion) {
 
 export async function adaptViewerMotion(motion, canonicalSkeleton) {
   const source = viewerMotionJson(motion)
-  if (source.skeleton === 'cskel27') {
-    return adaptCskel27MotionJson(source, canonicalSkeleton)
-  }
-  if (source.skeleton === canonicalSkeleton.id
-      || canonicalSkeleton.compatibility_aliases?.[source.skeleton]) {
-    return adaptConverterMotionJson(source, canonicalSkeleton)
-  }
-  throw new Error(
-    `Studio profiles require cskel27 or lossless ${canonicalSkeleton.id} motion; `
-    + `"${source.skeleton}" is not a supported canonical carrier`,
-  )
+  // Shape-aware carrier dispatch (payload joint count, not skeleton id alone):
+  // somaskel30/somaskel77 with a 30-joint payload expands via the soma30
+  // adapter; a true lossless 77-joint carrier keeps the strict pass-through.
+  return adaptMotionJson(source, canonicalSkeleton)
 }
 
 export async function resolveStudioVrmRig({

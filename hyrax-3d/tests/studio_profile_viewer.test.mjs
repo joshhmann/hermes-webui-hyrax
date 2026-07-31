@@ -94,3 +94,41 @@ test('normal viewer refuses a draft Studio profile at runtime', async () => {
     /runtime profile must have status "validated"|requires a validated profile/,
   )
 })
+
+test('a kimodo somaskel77 capture loads under the validated Studio profile (regression t_983e0f42)', async () => {
+  const [profile, avatarRig, canonicalSkeleton, kimodo] = await Promise.all([
+    readJson('../calibration-studio/evidence/tai.humanoid54.foot-ik.validated.json'),
+    readJson('../calibration-studio/evidence/tai.humanoid54.avatar-rig-ir.json'),
+    readJson('../calibration-studio/contracts/soma77.skeleton.json'),
+    readJson('../debug/data/kimodo_05f37604cdc2_1783916923.json'),
+  ])
+  assert.equal(kimodo.skeleton, 'somaskel77')
+  assert.equal(kimodo.joints.length, 30)
+
+  const motion = await adaptViewerMotion(concatenate([kimodo]), canonicalSkeleton)
+  assert.equal(motion.skeleton_id, 'soma77')
+  assert.equal(motion.joints.length, 77)
+  assert.equal(motion.frame_count, 150)
+  assert.equal(motion.source.adapter, 'soma30-to-soma77-qualification')
+
+  const objectByRigId = new Map(profile.mapping.map((mapping) => [
+    mapping.target_bone_id,
+    new Object3D(),
+  ]))
+  const retargeter = createStudioViewerRetargeter({
+    profile,
+    avatarRig,
+    motion,
+    canonicalSkeleton,
+    objectByRigId,
+  })
+  retargeter.applyFrame(0)
+  const posed = structuredClone(retargeter.applyFrame(37))
+  for (const object of objectByRigId.values()) {
+    assert.equal(object.position.toArray().every(Number.isFinite), true)
+    assert.equal(object.quaternion.toArray().every(Number.isFinite), true)
+  }
+  retargeter.onReset()
+  const replayed = structuredClone(retargeter.applyFrame(37))
+  assert.deepEqual(replayed, posed)
+})

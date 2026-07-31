@@ -17,8 +17,11 @@ import {
   extractThreeVrmAvatarRigVariants,
 } from '../adapters/three-vrm-avatar-rig.js'
 import {
+  SOMA30_TO_SOMA77,
   adaptConverterMotionJson,
   adaptCskel27MotionJson,
+  adaptMotionJson,
+  adaptSoma30MotionJson,
 } from '../adapters/soma-motion-json.js'
 import { sha256Hex, sha256Signature } from '../core/sha256.js'
 import {
@@ -53,6 +56,32 @@ const fbxFixtureUrl = new URL(
 const soma77 = JSON.parse(await readFile(contractUrl, 'utf8'))
 const humanoid54 = JSON.parse(await readFile(humanoidCatalogUrl, 'utf8'))
 const IDENTITY_MAT3 = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+
+// Repo FK convention (see somaWorldPositions in core/authoring.js):
+// pos_j = pos_parent + R_posed(parent) @ rest_offset_j, root anchored to
+// root_positions. Used to prove the soma30 expansion preserves source geometry.
+function fkPositions(motion, frame) {
+  const indexByName = new Map(motion.joints.map((name, index) => [name, index]))
+  const positions = []
+  for (let index = 0; index < motion.joints.length; index += 1) {
+    const parent = motion.parents[index]
+    if (parent === null) {
+      positions.push([...motion.root_positions[frame]])
+      continue
+    }
+    const matrix = motion.global_rot_mats[frame][indexByName.get(parent)]
+    const offset = motion.rest_offsets_m[index]
+    const rotated = [
+      matrix[0] * offset[0] + matrix[1] * offset[1] + matrix[2] * offset[2],
+      matrix[3] * offset[0] + matrix[4] * offset[1] + matrix[5] * offset[2],
+      matrix[6] * offset[0] + matrix[7] * offset[1] + matrix[8] * offset[2],
+    ]
+    positions.push(positions[indexByName.get(parent)].map(
+      (value, axis) => value + rotated[axis],
+    ))
+  }
+  return positions
+}
 
 function validSomaMotion() {
   const joints = soma77.joints.map((joint) => joint.name)
@@ -256,6 +285,138 @@ test('the captured Core27 turn suite becomes a signed SOMA77 qualification carri
     assert(active.some((value) => !value))
     assert(active.slice(1).some((value, index) => value !== active[index]))
   }
+})
+
+test('the soma30 payload expands to a signed SOMA77 carrier with exact FK consistency', async () => {
+  const kimodo = JSON.parse(await readFile(new URL(
+    '../../debug/data/kimodo_05f37604cdc2_1783916923.json',
+    import.meta.url,
+  )))
+  assert.equal(kimodo.skeleton, 'somaskel77')
+  assert.equal(kimodo.joints.length, 30)
+
+  const expanded = await adaptSoma30MotionJson(kimodo, soma77)
+  assert.equal(expanded.skeleton_id, 'soma77')
+  assert.equal(expanded.frame_count, 150)
+  assert.equal(expanded.fps, 30)
+  assert.equal(expanded.rotation_space, 'global')
+  assert.deepEqual(expanded.joints, soma77.joints.map((joint) => joint.name))
+  assert.deepEqual(expanded.parents, soma77.joints.map((joint) => joint.parent))
+  assert.equal(expanded.source.adapter, 'soma30-to-soma77-qualification')
+  assert.equal(expanded.source.source_skeleton, 'somaskel77')
+  assert.equal(expanded.source.source_chunk_count, 1)
+  assert.equal(expanded.source.inherited_joint_count, 47)
+  assert.deepEqual(expanded.root_positions, kimodo.root_positions)
+  assert.deepEqual(expanded.foot_contacts, kimodo.foot_contacts)
+  assert.match(expanded.motion_signature, /^sha256:[0-9a-f]{64}$/)
+
+  // Inherited joints copy their measured source rotation exactly, every frame.
+  const sourceIndex = new Map(kimodo.joints.map((name, index) => [name, index]))
+  const expandedIndex = new Map(expanded.joints.map((name, index) => [name, index]))
+  for (const frame of [0, 37, 74, 149]) {
+    for (const joint of expanded.joints) {
+      assert.deepEqual(
+        expanded.global_rot_mats[frame][expandedIndex.get(joint)],
+        kimodo.global_rot_mats[frame][sourceIndex.get(SOMA30_TO_SOMA77[joint])],
+        `${joint} frame ${frame} must inherit its measured source mat3`,
+      )
+    }
+  }
+
+  // Posed FK of the expanded 77-joint carrier reproduces every source world
+  // position exactly (max error is float noise) — the cskel27-style world-space
+  // re-derivation is geometry-preserving.
+  const sourceFK = fkPositions(kimodo, 74)
+  const expandedFK = fkPositions(expanded, 74)
+  let maxError = 0
+  for (const [joint, sourcePos] of sourceFK.entries()) {
+    const name = kimodo.joints[joint]
+    const expandedPos = expandedFK[expandedIndex.get(SOMA30_TO_SOMA77[name])]
+    maxError = Math.max(maxError, Math.hypot(
+      expandedPos[0] - sourcePos[0],
+      expandedPos[1] - sourcePos[1],
+      expandedPos[2] - sourcePos[2],
+    ))
+  }
+  assert.ok(maxError < 1e-9, `posed FK max error must be ~0, got ${maxError} m`)
+})
+
+test('the soma30 adapter fails closed on shape, order, and hierarchy drift', async () => {
+  const kimodo = JSON.parse(await readFile(new URL(
+    '../../debug/data/kimodo_05f37604cdc2_1783916923.json',
+    import.meta.url,
+  )))
+
+  const reordered = structuredClone(kimodo)
+  ;[reordered.joints[22], reordered.joints[26]] = [reordered.joints[26], reordered.joints[22]]
+  await assert.rejects(
+    adaptSoma30MotionJson(reordered, soma77),
+    /SOMASkeleton30 order/,
+  )
+
+  const badParent = structuredClone(kimodo)
+  badParent.parents[1] = 'Head'
+  await assert.rejects(
+    adaptSoma30MotionJson(badParent, soma77),
+    /collapse hierarchy/,
+  )
+
+  const truncated = structuredClone(kimodo)
+  truncated.joints = truncated.joints.slice(0, 29)
+  truncated.parents = truncated.parents.slice(0, 29)
+  truncated.rest_offsets_m = truncated.rest_offsets_m.slice(0, 29)
+  truncated.global_rot_mats = truncated.global_rot_mats.map(
+    (frame) => frame.slice(0, 29),
+  )
+  await assert.rejects(adaptSoma30MotionJson(truncated, soma77))
+
+  const wrongSkeleton = structuredClone(kimodo)
+  wrongSkeleton.skeleton = 'soma77'
+  await assert.rejects(
+    adaptSoma30MotionJson(wrongSkeleton, soma77),
+    /only accepts somaskel30\/somaskel77/,
+  )
+
+  await assert.rejects(
+    adaptSoma30MotionJson({ skeleton: 'cskel27', joints: [] }, soma77),
+    /only accepts somaskel30\/somaskel77/,
+  )
+})
+
+test('carrier dispatch is payload-shape aware and keeps lossless soma77 strict', async () => {
+  const kimodo = JSON.parse(await readFile(new URL(
+    '../../debug/data/kimodo_05f37604cdc2_1783916923.json',
+    import.meta.url,
+  )))
+  const expanded = await adaptMotionJson(kimodo, soma77)
+  assert.equal(expanded.source.adapter, 'soma30-to-soma77-qualification')
+  assert.equal(expanded.joints.length, 77)
+
+  const lossless = JSON.parse(await readFile(new URL(
+    '../evidence/kimodo-150.soma77.json',
+    import.meta.url,
+  )))
+  assert.equal(lossless.joints.length, 77)
+  const carried = await adaptMotionJson(lossless, soma77)
+  assert.equal(carried.source.adapter, 'lossless-converter-json')
+
+  // A true 77-joint carrier under the somaskel77 alias must keep the strict
+  // pass-through rather than the soma30 expansion.
+  const aliased = { ...structuredClone(lossless), skeleton: 'somaskel77' }
+  const aliasedCarried = await adaptMotionJson(aliased, soma77)
+  assert.equal(aliasedCarried.skeleton_id, 'soma77')
+  assert.equal(aliasedCarried.source.adapter, 'lossless-converter-json')
+
+  // A collapsed payload claiming the canonical id still fails closed.
+  const collapsed = structuredClone(kimodo)
+  collapsed.skeleton = 'soma77'
+  await assert.rejects(adaptMotionJson(collapsed, soma77), /no adapter for carrier/)
+
+  // Unknown carriers list every supported shape in the error.
+  await assert.rejects(
+    adaptMotionJson({ skeleton: 'omni', joints: new Array(44), global_rot_mats: [] }, soma77),
+    /cskel27.*somaskel30\/somaskel77.*lossless soma77/,
+  )
 })
 
 test('Three.js adapter emits deterministic local/world rest transforms and stable IDs', async () => {

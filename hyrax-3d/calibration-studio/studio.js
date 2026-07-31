@@ -19,8 +19,7 @@ import {
   setBoneUserOffset,
 } from './core/calibration.js?v=10'
 import {
-  adaptConverterMotionJson,
-  adaptCskel27MotionJson,
+  adaptMotionJson,
 } from './adapters/soma-motion-json.js?v=9'
 import {
   extractThreeAvatarRig,
@@ -1685,7 +1684,7 @@ rotationControls.addEventListener('objectChange', () => {
 async function acceptMotionJson(input, label) {
   stopPlayback()
   try {
-    state.motion = await adaptConverterMotionJson(input, state.somaContract)
+    state.motion = await adaptMotionJson(input, state.somaContract)
     $('restFrame').disabled = false
     $('restFrame').max = String(state.motion.frame_count - 1)
     $('restFrame').value = '0'
@@ -1742,7 +1741,7 @@ async function loadQualificationMotion() {
       }
       return response.json()
     }))
-    state.qualificationMotion = await adaptCskel27MotionJson(
+    state.qualificationMotion = await adaptMotionJson(
       chunks,
       state.somaContract,
     )
