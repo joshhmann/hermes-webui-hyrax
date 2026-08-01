@@ -30,7 +30,7 @@ import {
   ProceduralLocomotion,
   type ProceduralTuning,
 } from './locomotion/ProceduralLocomotion'
-import { ArdyMotionSource, type ArdyMotionState } from './motion/ArdyMotionSource'
+import { ArdyMotionSource, type ArdyMotionState, type ArdyTelemetry } from './motion/ArdyMotionSource'
 import { RoomNavigation } from './navigation/RoomNavigation'
 import { AvatarRig } from './rig/AvatarRig'
 import roomManifest from './room/roomObjects.json'
@@ -200,6 +200,11 @@ export class TaiRoomScene {
 
   getArdyState(): ArdyMotionState {
     return this.ardySource?.state ?? 'offline'
+  }
+
+  /** EMB-1: latency/buffer/reconnect telemetry for the debug overlay. */
+  getArdyTelemetry(): ArdyTelemetry | null {
+    return this.ardySource?.getTelemetry() ?? null
   }
 
   /** Hips bone world-space Y (ARDY E2E probe; null when no rig/bone). */

@@ -28,6 +28,14 @@
  * profiles without source_rest fall back to measuring settled stream frame 20.
  * When the profile fetch/init fails the source falls back to the gestalt-motion
  * CanonicalRetargeter (previous behavior) rather than breaking the loft.
+ *
+ * Sanity gate (fail-closed): long autoregressive generations drift — the
+ * source itself starts emitting a progressive hips lean, then joint garbage.
+ * Implausible frames (lean > 45°, root height out of bounds) are never
+ * written; sustained drift (lean EMA > 12° while upright) releases the pose
+ * to ProceduralLocomotion via the stale crossfade and requests one hard
+ * stream reset; ownership is reclaimed after sustained sanity or a new user
+ * prompt. See the policy block at the gate constants.
  */
 import { Quaternion, Vector3 } from 'three'
 
@@ -42,7 +50,7 @@ import { createCanonicalRetargeter } from 'gestalt-motion/CanonicalRetargeter.ts
 import type { CanonicalRetargeter } from 'gestalt-motion/CanonicalRetargeter.ts'
 import { RootMotionAdapter } from 'gestalt-motion/RootMotionAdapter.ts'
 import type { NavDelta, NavigationInterface } from 'gestalt-motion/RootMotionAdapter.ts'
-import { selectAdapter } from 'gestalt-motion/adapters/registry.ts'
+import { selectAdapter, SUPPORTED_CONTRACT_VERSION_MAJOR } from 'gestalt-motion/adapters/registry.ts'
 import { loadProfile } from 'gestalt-motion/profile.ts'
 import type { SkeletonContract, Vec3 } from 'gestalt-motion/canonical.ts'
 import { qmul, qnormalize, qyaw } from 'gestalt-motion/quat.ts'
@@ -56,13 +64,84 @@ import type { RoomNavigation } from '../navigation/RoomNavigation'
 
 export type ArdyMotionState = 'connecting' | 'live' | 'stale' | 'offline'
 
+/**
+ * EMB-1 backoff policy — one pinned config block (spec §hardening 3).
+ * Exponential with ±JITTER randomization; after MAX_ATTEMPTS consecutive
+ * failed reconnect attempts the source gives up: state `offline` with a
+ * journaled reason (never spins forever).
+ */
+export const ARDY_BACKOFF = {
+  INITIAL_MS: 1000,
+  MAX_MS: 10000,
+  JITTER: 0.25,
+  MAX_ATTEMPTS: 8,
+} as const
+
+export interface ArdyTelemetry {
+  state: ArdyMotionState
+  /** Chunks currently buffered. */
+  bufferChunks: number
+  /** Frames currently buffered. */
+  bufferFrames: number
+  /** Playback head behind the newest buffered frame, ms (null pre-anchor). */
+  bufferDepthMs: number | null
+  /** Wall time since the newest buffered frame was expected, ms (null pre-anchor). */
+  stalenessMs: number | null
+  /** Estimated glass-to-bone latency of the last sampled frame, ms (null pre-anchor). */
+  latencyMs: number | null
+  /** Successful session opens after the first (i.e. actual reconnects). */
+  reconnectCount: number
+  /** Reconnect attempts made (backoff steps fired). */
+  reconnectAttempts: number
+  /** Update ticks that hit SampleState.STALE (frames the consumer had to skip). */
+  framesDropped: number
+  /** Journaled offline reason (give-up, contract rejection, close) or null. */
+  lastReason: string | null
+  /** contract_version from the last skeleton handshake, or null. */
+  contractVersion: string | null
+}
+
 const DEFAULT_ARDY_PATH = '/api/hyrax/ardy/ws'
 const DEFAULT_PROFILE_PATH = '/api/hyrax/3d/calibrate/calibration-profiles/tai-embodiment-v3.json'
 const DEFAULT_INITIAL_PROMPT = 'a person stands idle'
 const CROSSFADE_SECONDS = 0.3
-const INITIAL_BACKOFF_MS = 1000
-const MAX_BACKOFF_MS = 10000
 const RESET_COOLDOWN_MS = 2000
+
+/**
+ * Stream sanity gate (fail-closed). Long autoregressive generations drift:
+ * the SOURCE itself starts emitting a progressive lean, then joint garbage
+ * (verified on the live stream: hips lean-from-vertical grows past 25-50°
+ * while the root stays at standing height; a hard reset recovers sanity for
+ * only a few seconds). Policy:
+ *  - a single implausible frame (lean > HARD_LEAN_REJECT_DEG, or root height
+ *    outside [ROOT_Y_REJECT_MIN, ROOT_Y_REJECT_MAX]) is NEVER written to the
+ *    rig — the last plausible sample is held instead;
+ *  - sustained drift (lean EMA > DRIFT_LEAN_DEG while upright — rootY EMA >
+ *    DRIFT_ROOT_Y_MIN, which protects crouches: a crouch leans but sits low)
+ *    releases the pose to ProceduralLocomotion (crossfade via the stale
+ *    ramp) and requests ONE hard stream reset (drops the service's drifted
+ *    conditioning history);
+ *  - ownership is reclaimed after RECOVER_LEAN_DEG sanity holds for
+ *    RECOVER_HOLD_MS, or when the user sends a new prompt (which also gets a
+ *    hard reset so the command starts a fresh rollout).
+ * Lean is yaw-invariant: a 180° turn reads 0°, only pitch/roll count.
+ */
+const HARD_LEAN_REJECT_DEG = 45
+const ROOT_Y_REJECT_MIN = 0.4
+const ROOT_Y_REJECT_MAX = 1.3
+const DRIFT_LEAN_DEG = 12
+const DRIFT_ROOT_Y_MIN = 0.75
+const RECOVER_LEAN_DEG = 8
+const LEAN_EMA_RATE = 1.5
+const INSANE_HOLD_MS = 2000
+const RECOVER_HOLD_MS = 3000
+
+/** Yaw-invariant lean of a w-first unit quaternion: angle between the rotated
+ * +Y axis and world +Y, degrees. */
+function quatLeanDeg(q: [number, number, number, number]): number {
+  const vy = 1 - 2 * (q[1] * q[1] + q[3] * q[3])
+  return (Math.acos(Math.max(-1, Math.min(1, vy))) * 180) / Math.PI
+}
 
 /**
  * Profile fetch cache (one profile for the whole loft lifetime; shared across
@@ -173,6 +252,11 @@ export interface ArdyMotionSourceOptions {
   profileUrl?: string | null
   /** Test seam: profile fetch override. Resolve null or reject → gestalt fallback. */
   profileFetcher?: (url: string) => Promise<unknown>
+  /**
+   * EMB-1 backoff override (tests). Defaults to the pinned ARDY_BACKOFF
+   * constants; only the fields present are overridden.
+   */
+  backoff?: Partial<typeof ARDY_BACKOFF>
 }
 
 function defaultUrl(): string {
@@ -207,7 +291,13 @@ export class ArdyMotionSource {
   private lastSample: SampledPose | null = null
   private everOpened = false
   private disposed = false
-  private backoffMs = INITIAL_BACKOFF_MS
+  private readonly backoff: typeof ARDY_BACKOFF
+  private backoffMs: number
+  private reconnectAttempts = 0
+  private reconnectCount = 0
+  private framesDropped = 0
+  private lastReason: string | null = null
+  private lastLatencyMs: number | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private suppressNextClose = false
   private lastResetSentAtMs = -Infinity
@@ -216,6 +306,12 @@ export class ArdyMotionSource {
   private readonly profileReady: Promise<unknown | null>
   private buildSeq = 0
   private currentState: ArdyMotionState = 'connecting'
+  // Stream sanity gate state (see the policy block above the constants).
+  private leanEma = 0
+  private rootYEma = 0.954
+  private insaneSinceMs: number | null = null
+  private recoveredSinceMs: number | null = null
+  private sanityHold = false
   private readonly slerpFrom = new Quaternion()
   private readonly slerpTo = new Quaternion()
 
@@ -224,6 +320,8 @@ export class ArdyMotionSource {
     this.url = options.url ?? defaultUrl()
     this.nowMs = options.nowMs ?? (() => performance.now())
     this.initialPrompt = options.initialPrompt ?? DEFAULT_INITIAL_PROMPT
+    this.backoff = { ...ARDY_BACKOFF, ...options.backoff }
+    this.backoffMs = this.backoff.INITIAL_MS
     this.clock = new PlaybackClock({ nowMs: this.nowMs })
     this.approval = new RoomNavigationApproval(options.navigation)
     this.vrmLikeFactory = options.vrmLikeFactory ?? (() => {
@@ -245,8 +343,14 @@ export class ArdyMotionSource {
 
     const callbacks: ArdyClientCallbacks = {
       onOpen: () => {
+        if (this.everOpened) {
+          // A session opened after a prior one: that is a real reconnect.
+          this.reconnectCount += 1
+        }
         this.everOpened = true
-        this.backoffMs = INITIAL_BACKOFF_MS
+        this.reconnectAttempts = 0
+        this.lastReason = null
+        this.backoffMs = this.backoff.INITIAL_MS
         this.currentState = 'connecting'
       },
       onClose: (reason) => {
@@ -255,6 +359,7 @@ export class ArdyMotionSource {
           this.suppressNextClose = false
           return
         }
+        this.lastReason = reason || 'connection closed'
         console.warn(`[ardy] connection closed: ${reason}`)
         this.clock.notifyReset()
         this.currentState = 'offline'
@@ -291,6 +396,43 @@ export class ArdyMotionSource {
     return this.currentState
   }
 
+  /**
+   * EMB-1 telemetry (spec §hardening 2): latency/buffer/reconnect counters
+   * for the loft debug overlay and window.__ardy. Latency is estimated from
+   * the PlaybackClock anchor: expected wall time of stream time t is
+   * anchorWallMs + (t − anchorStreamS)·1000, so glass-to-bone latency of the
+   * last sampled frame ≈ now − expectedWall(frameA.timeS).
+   */
+  getTelemetry(): ArdyTelemetry {
+    const buffer = this.client.buffer
+    const anchorWall = this.clock.anchorWallMs
+    const anchorStream = this.clock.anchorStreamS
+    const lastTime = buffer.lastTimeS()
+    const nowMs = this.nowMs()
+    let bufferDepthMs: number | null = null
+    let stalenessMs: number | null = null
+    if (anchorWall !== null && lastTime !== null) {
+      // How far the playback head trails the newest buffered frame.
+      const head = this.clock.now()
+      bufferDepthMs = head !== null ? Math.max(0, (lastTime - head) * 1000) : null
+      // Wall time since the newest buffered frame's expected arrival.
+      stalenessMs = Math.max(0, nowMs - (anchorWall + (lastTime - anchorStream) * 1000))
+    }
+    return {
+      state: this.currentState,
+      bufferChunks: buffer.size,
+      bufferFrames: buffer.frameCount,
+      bufferDepthMs,
+      stalenessMs,
+      latencyMs: this.lastLatencyMs,
+      reconnectCount: this.reconnectCount,
+      reconnectAttempts: this.reconnectAttempts,
+      framesDropped: this.framesDropped,
+      lastReason: this.lastReason,
+      contractVersion: this.lastContract?.contract_version ?? null,
+    }
+  }
+
   isLive(): boolean {
     return this.currentState === 'live'
   }
@@ -300,6 +442,18 @@ export class ArdyMotionSource {
     if (!trimmed || this.disposed) return
     this.lastPrompt = trimmed
     this.client.sendPrompt(trimmed)
+    if (this.sanityHold || this.leanEma > DRIFT_LEAN_DEG) {
+      // The service retains its (drifted) conditioning history across prompts
+      // — give the new command a fresh rollout and reclaim the pose.
+      this.sanityHold = false
+      this.insaneSinceMs = null
+      this.recoveredSinceMs = null
+      try {
+        this.client.sendReset()
+      } catch {
+        // Disconnected — the reconnect path owns recovery.
+      }
+    }
   }
 
   /**
@@ -337,7 +491,70 @@ export class ArdyMotionSource {
       }
     }
 
+    // ── Stream sanity gate (fail-closed; policy documented at the constants) ──
+    // Long autoregressive generations drift: the source emits a progressive
+    // lean, then joint garbage. Implausible frames never reach the bones;
+    // sustained drift releases the pose to ProceduralLocomotion.
+    if (pose !== null) {
+      const leanDeg = quatLeanDeg(pose.rootQuat)
+      const emaAlpha = Math.min(1, dt * LEAN_EMA_RATE)
+      this.leanEma += (leanDeg - this.leanEma) * emaAlpha
+      this.rootYEma += (pose.rootPos[1] - this.rootYEma) * emaAlpha
+      if (
+        leanDeg > HARD_LEAN_REJECT_DEG ||
+        pose.rootPos[1] < ROOT_Y_REJECT_MIN ||
+        pose.rootPos[1] > ROOT_Y_REJECT_MAX
+      ) {
+        pose = null // hold the last plausible sample
+      }
+    }
+    const drifting = this.leanEma > DRIFT_LEAN_DEG && this.rootYEma > DRIFT_ROOT_Y_MIN
+    if (!this.sanityHold && drifting) {
+      if (this.insaneSinceMs === null) this.insaneSinceMs = this.nowMs()
+      if (this.nowMs() - this.insaneSinceMs > INSANE_HOLD_MS) {
+        this.sanityHold = true
+        this.lastReason =
+          `motion stream degraded (hips lean ${this.leanEma.toFixed(0)}° while upright) — ` +
+          'released to procedural idle'
+        console.warn(`[ardy] ${this.lastReason}; requesting hard stream reset`)
+        try {
+          // Hard reset: drops the service's drifted conditioning history.
+          this.client.sendReset()
+        } catch {
+          // Disconnected — the reconnect path owns recovery.
+        }
+        this.recoveredSinceMs = null
+      }
+    } else if (!drifting) {
+      this.insaneSinceMs = null
+    }
+    if (this.sanityHold) {
+      if (this.leanEma < RECOVER_LEAN_DEG) {
+        if (this.recoveredSinceMs === null) this.recoveredSinceMs = this.nowMs()
+        if (this.nowMs() - this.recoveredSinceMs > RECOVER_HOLD_MS) {
+          this.sanityHold = false
+          this.insaneSinceMs = null
+          this.recoveredSinceMs = null
+          console.info('[ardy] motion stream recovered — resuming retarget')
+        }
+      } else {
+        this.recoveredSinceMs = null
+      }
+    }
+
     this.currentState = this.resolveState(sampleState)
+    if (this.sanityHold) this.currentState = 'stale' // ramps the crossfade out
+
+    // EMB-1 telemetry: journal latency of the frame we render and count
+    // frames the consumer had to skip (STALE = past the hold budget).
+    if (frameA !== null) {
+      const anchorWall = this.clock.anchorWallMs
+      if (anchorWall !== null) {
+        const expectedWall = anchorWall + (frameA.timeS - this.clock.anchorStreamS) * 1000
+        this.lastLatencyMs = Math.max(0, this.nowMs() - expectedWall)
+      }
+    }
+    if (sampleState === SampleState.STALE) this.framesDropped += 1
 
     if (pose !== null && frameA !== null && this.profiled !== null && !this.profiled.calibrated) {
       // Profiled path: measure the source rest from the settled idle stream
@@ -397,11 +614,45 @@ export class ArdyMotionSource {
   }
 
   private buildRetargeter(contract: SkeletonContract): void {
+    // EMB-1 fail-closed gate: the handshake contract is the single source of
+    // truth for the skeleton. An unknown contract_version MAJOR means the
+    // wire may decode differently — never guess, go offline with a journaled
+    // reason (spec §hardening 1). This gate sits above BOTH retarget paths
+    // (the profiled path bypasses selectAdapter's registry gate).
+    const version = contract.contract_version
+    if (version !== undefined) {
+      const major = version.split('.')[0]
+      if (major !== SUPPORTED_CONTRACT_VERSION_MAJOR) {
+        const reason = `unsupported contract_version ${version} (supported major ${SUPPORTED_CONTRACT_VERSION_MAJOR})`
+        console.warn(`[ardy] ${reason} — failing closed (offline)`)
+        this.currentState = 'offline'
+        this.lastReason = reason
+        this.retargeter = null
+        this.profiled = null
+        this.rootMotion = null
+        this.jointCount = 0
+        return
+      }
+    } else if (!this.warnedMissingContractVersion) {
+      // Pre-EMB-1 service: tolerate the field's absence (warn once, proceed)
+      // but stay strict about a present-but-unknown version above.
+      this.warnedMissingContractVersion = true
+      console.warn(
+        '[ardy] skeleton_contract carries no contract_version (pre-EMB-1 service) — ' +
+        'proceeding with tolerance; a present-but-unknown major would fail closed',
+      )
+    }
     const seq = ++this.buildSeq
     this.retargeter = null
     this.profiled = null
     this.rootMotion = null
     this.jointCount = 0
+    // New session handshake: fresh generation, fresh sanity slate.
+    this.leanEma = 0
+    this.rootYEma = 0.954
+    this.insaneSinceMs = null
+    this.recoveredSinceMs = null
+    this.sanityHold = false
     void (async () => {
       let vrmLike: VrmLike | null = null
       try {
@@ -510,6 +761,7 @@ export class ArdyMotionSource {
   private lastContract: SkeletonContract | null = null
   private lastVrmLike: VrmLike | null = null
   private retargeterPath = '1.0'
+  private warnedMissingContractVersion = false
 
   /** Calibration complete: wire the profiled retargeter into the pose path. */
   private finishProfiledCalibration(): void {
@@ -631,8 +883,20 @@ export class ArdyMotionSource {
 
   private scheduleReconnect(): void {
     if (this.disposed || this.reconnectTimer !== null) return
-    const delay = this.backoffMs
-    this.backoffMs = Math.min(this.backoffMs * 2, MAX_BACKOFF_MS)
+    // EMB-1 give-up threshold: after MAX_ATTEMPTS consecutive failed
+    // reconnect attempts, stop spinning, go offline, journal the reason.
+    this.reconnectAttempts += 1
+    if (this.reconnectAttempts > this.backoff.MAX_ATTEMPTS) {
+      const reason = `reconnect gave up after ${this.backoff.MAX_ATTEMPTS} attempts (max backoff ${this.backoff.MAX_MS} ms; last: ${this.lastReason ?? 'unknown'})`
+      console.warn(`[ardy] ${reason}`)
+      this.lastReason = reason
+      this.currentState = 'offline'
+      return
+    }
+    // Exponential backoff with ±JITTER randomization (pinned policy block).
+    const jitter = (Math.random() * 2 - 1) * this.backoff.JITTER
+    const delay = Math.round(this.backoffMs * (1 + jitter))
+    this.backoffMs = Math.min(this.backoffMs * 2, this.backoff.MAX_MS)
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       if (this.disposed) return

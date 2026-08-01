@@ -67,7 +67,21 @@ export async function mountTaiLoft(
   const ardyStatusTimer = setInterval(() => {
     const state = room.getArdyState()
     ardyStatus.dataset.state = state
-    ardyStatus.title = 'ARDY motion stream: ' + state
+    // EMB-1: surface latency/buffer/reconnect telemetry in the hover text.
+    const t = room.getArdyTelemetry()
+    let title = 'ARDY motion stream: ' + state
+    if (t) {
+      const parts: string[] = []
+      if (t.latencyMs !== null) parts.push(`latency ${Math.round(t.latencyMs)}ms`)
+      if (t.bufferDepthMs !== null) parts.push(`buffer ${Math.round(t.bufferDepthMs)}ms/${t.bufferFrames}f`)
+      if (t.stalenessMs !== null) parts.push(`stale ${Math.round(t.stalenessMs)}ms`)
+      parts.push(`reconnects ${t.reconnectCount} (attempts ${t.reconnectAttempts})`)
+      parts.push(`dropped ${t.framesDropped}`)
+      if (t.contractVersion !== null) parts.push(`contract v${t.contractVersion}`)
+      if (t.lastReason !== null) parts.push(`last: ${t.lastReason}`)
+      title += ' · ' + parts.join(' · ')
+    }
+    ardyStatus.title = title
   }, 500)
 
   // ARDY debug view (capture player / retarget compare) in a new tab.
@@ -79,10 +93,12 @@ export async function mountTaiLoft(
   })
   controls.append(debugButton)
 
-  // Debug/E2E handle: ardy state, prompt sender, and a hips-height probe.
+  // Debug/E2E handle: ardy state, EMB-1 telemetry, prompt sender, and a
+  // hips-height probe.
   const debugWindow = window as unknown as { __ardy?: unknown }
   debugWindow.__ardy = {
     getState: () => room.getArdyState(),
+    getTelemetry: () => room.getArdyTelemetry(),
     setPrompt: (text: string) => room.setArdyPrompt(text),
     hipsWorldY: () => room.getHipsWorldY(),
   }

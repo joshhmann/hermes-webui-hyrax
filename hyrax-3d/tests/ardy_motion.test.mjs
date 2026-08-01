@@ -306,3 +306,128 @@ function qyawFromXyzw(q) {
   const fz = 1 - 2 * (x * x + y * y)
   return Math.atan2(fx, fz)
 }
+
+// ── EMB-1 hardening ─────────────────────────────────────────────────
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+test('contract_version: unknown major fails closed (offline, journaled reason)', async () => {
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig)
+
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton({ ...makeContract(), contract_version: '2.0.0' })
+  await flushBuild()
+
+  assert.equal(source.state, 'offline')
+  const telemetry = source.getTelemetry()
+  assert(
+    telemetry.lastReason?.includes('unsupported contract_version 2.0.0'),
+    `reason must name the rejected version, got: ${telemetry.lastReason}`,
+  )
+  client.buffer.push(makeChunk({ t0: 5 }))
+  assert.equal(source.update(1 / 60), false, 'rejected contract must never write poses')
+  source.dispose()
+})
+
+test('contract_version: supported major proceeds; telemetry reports the version', async () => {
+  let now = 1000
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, { nowMs: () => now })
+
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton({ ...makeContract(), contract_version: '1.0.0' })
+  await flushBuild()
+  client.buffer.push(makeChunk({ t0: 5 }))
+  client.callbacks.onChunk?.()
+  assert.equal(source.update(1 / 60), true, 'supported contract must reach live')
+
+  const telemetry = source.getTelemetry()
+  assert.equal(telemetry.state, 'live')
+  assert.equal(telemetry.contractVersion, '1.0.0')
+  assert(telemetry.bufferFrames > 0, 'telemetry must report buffered frames')
+  assert.equal(telemetry.reconnectCount, 0)
+  assert.equal(telemetry.framesDropped, 0)
+  source.dispose()
+})
+
+test('backoff give-up: after MAX_ATTEMPTS the source goes offline with a journaled reason and stops spinning', async () => {
+  const client = makeMockClient()
+  // The reopened socket fails asynchronously (suppressNextClose only covers
+  // the OLD socket's close inside reconnect()).
+  client.reconnect = function () {
+    this.reconnects += 1
+    // The OLD socket's close inside reconnect() is suppressed; the NEW
+    // socket's failure arrives asynchronously and reschedules.
+    this.callbacks.onClose('old socket close')
+    setTimeout(() => {
+      this.connected = false
+      this.callbacks.onClose('connection refused')
+    }, 0)
+  }
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, {
+    backoff: { INITIAL_MS: 1, MAX_MS: 2, JITTER: 0, MAX_ATTEMPTS: 3 },
+  })
+
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.connected = false
+  client.callbacks.onClose('connection refused')
+
+  // Let the backoff ladder run out (1ms → 2ms → 2ms, plus async closes).
+  for (let i = 0; i < 20 && client.reconnects < 3; i += 1) await sleep(5)
+  await sleep(20)
+
+  assert.equal(client.reconnects, 3, 'exactly MAX_ATTEMPTS reconnect attempts')
+  assert.equal(source.state, 'offline')
+  const telemetry = source.getTelemetry()
+  assert(
+    telemetry.lastReason?.includes('gave up after 3 attempts'),
+    `give-up must be journaled, got: ${telemetry.lastReason}`,
+  )
+  assert.equal(telemetry.reconnectAttempts, 4, 'attempt counter includes the refused scheduling')
+
+  // No infinite spin: waiting longer must not schedule another reconnect.
+  await sleep(30)
+  assert.equal(client.reconnects, 3)
+  source.dispose()
+})
+
+test('successful reconnect resets the backoff ladder and counts as a reconnect', async () => {
+  let now = 1000
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, {
+    nowMs: () => now,
+    backoff: { INITIAL_MS: 1, MAX_MS: 2, JITTER: 0, MAX_ATTEMPTS: 3 },
+  })
+
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
+
+  client.connected = false
+  client.callbacks.onClose('drop')
+  await sleep(10) // timer fires; mock reconnect() sets connected = true
+  assert.equal(client.reconnects, 1)
+  client.callbacks.onOpen('s1') // reopened session
+  client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
+  client.buffer.push(makeChunk({ t0: 5 }))
+  client.callbacks.onChunk?.()
+  now = 1000
+  assert.equal(source.update(1 / 60), true, 'reconnected session must go live')
+
+  const telemetry = source.getTelemetry()
+  assert.equal(telemetry.reconnectCount, 1, 'a session opened after the first is a reconnect')
+  assert.equal(telemetry.reconnectAttempts, 0, 'ladder resets on open')
+  source.dispose()
+})

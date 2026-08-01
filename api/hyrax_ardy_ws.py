@@ -31,10 +31,19 @@ timed-out socket makefile is unusable afterwards); dead tabs are reaped by
 TCP keepalive and by upstream→browser write failures. The upstream socket
 has a recv timeout that drives keepalive pings and eventually closes an
 idle-dead session.
+
+Policies (EMB-1 spec, hardening gaps 4+5):
+  - multi-consumer: one concurrent proxied session per upstream URL; a second
+    browser is upgraded then immediately closed with 1013 + reason.
+  - prompt channel: {"type": "prompt"} text frames are length-capped
+    (PROMPT_MAX_CHARS), rate-capped (PROMPT_RATE_MAX per
+    PROMPT_RATE_WINDOW_S), and control-character-free; a rejected prompt
+    closes the session with 1008 + reason on both legs.
 """
 
 import base64
 import hashlib
+import json
 import logging
 import os
 import secrets
@@ -42,6 +51,9 @@ import socket
 import ssl
 import struct
 import threading
+import time
+import unicodedata
+from collections import deque
 
 from api.helpers import j
 
@@ -55,6 +67,28 @@ CONNECT_TIMEOUT_S = 10
 UPSTREAM_RECV_TIMEOUT_S = 60   # drives keepalive pings to the upstream
 UPSTREAM_IDLE_STRIKES = 5      # 5 consecutive idle timeouts (~5 min) -> close
 _MAX_HANDSHAKE_BYTES = 64 * 1024
+
+# Multi-consumer policy (EMB-1 spec, hardening gap 4 — fail-closed default):
+# exactly one concurrent proxied session per upstream URL. The gestalt-ardy
+# service does not multiplex consumers over one session, and two independent
+# upstream sessions would race the GPU producer. A second browser is refused
+# with 409 semantics expressed over WebSocket: the proxy completes the
+# upgrade, then immediately closes with 1013 (Try Again Later) + reason, so
+# the client's backoff retries attach once the first session ends.
+BUSY_CLOSE_CODE = 1013  # Try Again Later (RFC 6455 §7.4.1)
+BUSY_CLOSE_REASON = "ardy upstream busy: another session is active"
+_active_upstreams: set[str] = set()
+_active_upstreams_lock = threading.Lock()
+
+# Prompt-channel abuse bounds (EMB-1 spec, hardening gap 5): motion prompts
+# are operator input crossing into a GPU service that trusts its LAN clients.
+# Text frames carrying {"type": "prompt"} are validated at the proxy; a
+# rejected prompt closes the session with 1008 (policy violation) + reason.
+PROMPT_MAX_CHARS = 512
+PROMPT_RATE_MAX = 5          # prompts per window per connection
+PROMPT_RATE_WINDOW_S = 10.0
+PROMPT_REJECT_CLOSE_CODE = 1008  # policy violation (RFC 6455 §7.4.1)
+_MAX_CLOSE_REASON_BYTES = 123    # close payload cap is 125; 2 bytes are the code
 
 # Opcodes
 OP_CONT, OP_TEXT, OP_BINARY, OP_CLOSE, OP_PING, OP_PONG = 0x0, 0x1, 0x2, 0x8, 0x9, 0xA
@@ -208,6 +242,53 @@ def _send_locked(lock: threading.Lock, sock: socket.socket, data: bytes) -> None
         sock.sendall(data)
 
 
+def _try_acquire_upstream(url: str) -> bool:
+    """Take the single-session slot for this upstream (multi-consumer policy)."""
+    with _active_upstreams_lock:
+        if url in _active_upstreams:
+            return False
+        _active_upstreams.add(url)
+        return True
+
+
+def _release_upstream(url: str) -> None:
+    with _active_upstreams_lock:
+        _active_upstreams.discard(url)
+
+
+def _close_payload(code: int, reason: str) -> bytes:
+    return struct.pack(">H", code) + reason.encode("utf-8")[: _MAX_CLOSE_REASON_BYTES]
+
+
+def _validate_prompt_frame(payload: bytes, prompt_times: deque) -> str | None:
+    """Prompt-channel abuse bounds. Returns a rejection reason, or None.
+
+    Only complete JSON control messages with "type": "prompt" are judged —
+    anything that does not parse as JSON (a binary frame's bytes, a fragment
+    of a split message) is not a prompt and passes through untouched.
+    """
+    try:
+        message = json.loads(payload)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(message, dict) or message.get("type") != "prompt":
+        return None
+    text = message.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return "prompt text must be a non-empty string"
+    if len(text) > PROMPT_MAX_CHARS:
+        return f"prompt exceeds {PROMPT_MAX_CHARS} characters"
+    if any(unicodedata.category(ch) in ("Cc", "Cf", "Cs") for ch in text):
+        return "prompt contains control characters"
+    now = time.monotonic()
+    while prompt_times and now - prompt_times[0] > PROMPT_RATE_WINDOW_S:
+        prompt_times.popleft()
+    if len(prompt_times) >= PROMPT_RATE_MAX:
+        return f"prompt rate limit exceeded ({PROMPT_RATE_MAX} per {PROMPT_RATE_WINDOW_S:.0f}s)"
+    prompt_times.append(now)
+    return None
+
+
 def _enable_keepalive(sock: socket.socket) -> None:
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -243,27 +324,52 @@ def handle_ardy_ws(handler, parsed) -> bool:
 
     # ── Connect + handshake with the upstream ──
     upstream_url = os.environ.get("HYRAX_ARDY_WS_UPSTREAM") or _DEFAULT_UPSTREAM
+
+    def send_upgrade_response() -> bool:
+        response_lines = [
+            "HTTP/1.1 101 Switching Protocols",
+            "Upgrade: websocket",
+            "Connection: Upgrade",
+            f"Sec-WebSocket-Accept: {_accept_key(sec_key)}",
+        ]
+        # No Sec-WebSocket-Protocol: ArdyClient opens a bare WebSocket (no
+        # subprotocols), so there is nothing to negotiate or echo back.
+        response = ("\r\n".join(response_lines) + "\r\n\r\n").encode("ascii")
+        try:
+            handler.connection.sendall(response)
+            return True
+        except OSError:
+            return False
+
+    # Multi-consumer policy: one concurrent session per upstream (fail closed).
+    if not _try_acquire_upstream(upstream_url):
+        _logger.warning(
+            "ardy ws proxy: refusing second concurrent session for %s", upstream_url
+        )
+        # 409 semantics over WS: complete the upgrade, then immediately close
+        # with 1013 + reason so the client's backoff retries can attach later.
+        if send_upgrade_response():
+            handler.close_connection = True
+            try:
+                handler.connection.sendall(
+                    _build_frame(OP_CLOSE, _close_payload(BUSY_CLOSE_CODE, BUSY_CLOSE_REASON))
+                )
+            except OSError:
+                pass
+        return True
+
     try:
         upstream = _connect_upstream(upstream_url, headers.get("Sec-WebSocket-Protocol"))
     except Exception as exc:
+        _release_upstream(upstream_url)
         _logger.warning("ardy ws proxy: upstream connect failed: %s", exc)
         j(handler, {"error": "ARDY upstream unavailable"}, status=502)
         return True
 
     # ── Answer the browser's upgrade. From here on we own the socket. ──
-    response_lines = [
-        "HTTP/1.1 101 Switching Protocols",
-        "Upgrade: websocket",
-        "Connection: Upgrade",
-        f"Sec-WebSocket-Accept: {_accept_key(sec_key)}",
-    ]
-    # No Sec-WebSocket-Protocol: ArdyClient opens a bare WebSocket (no
-    # subprotocols), so there is nothing to negotiate or echo back.
-    response = ("\r\n".join(response_lines) + "\r\n\r\n").encode("ascii")
-    try:
-        handler.connection.sendall(response)
-    except OSError:
+    if not send_upgrade_response():
         upstream.close()
+        _release_upstream(upstream_url)
         return True
     handler.close_connection = True  # base handler must not reuse this socket
 
@@ -275,6 +381,7 @@ def handle_ardy_ws(handler, parsed) -> bool:
     stop = threading.Event()
     browser_send_lock = threading.Lock()
     upstream_send_lock = threading.Lock()
+    prompt_times: deque = deque()  # prompt rate-cap window (this connection)
 
     def pump_browser_to_upstream() -> None:
         # Reads via handler.rfile: the HTTP parser's buffered reader may
@@ -290,6 +397,19 @@ def handle_ardy_ws(handler, parsed) -> bool:
                         _build_frame(OP_CLOSE, payload, mask=True),
                     )
                     break
+                if opcode == OP_TEXT:
+                    # Prompt-channel abuse bounds: a rejected prompt kills the
+                    # session with 1008 + reason on both legs (fail closed).
+                    rejection = _validate_prompt_frame(payload, prompt_times)
+                    if rejection is not None:
+                        _logger.warning("ardy ws proxy: prompt rejected: %s", rejection)
+                        close = _close_payload(PROMPT_REJECT_CLOSE_CODE, f"prompt rejected: {rejection}")
+                        try:
+                            _send_locked(browser_send_lock, browser, _build_frame(OP_CLOSE, close))
+                            _send_locked(upstream_send_lock, upstream, _build_frame(OP_CLOSE, close, mask=True))
+                        except OSError:
+                            pass
+                        break
                 _send_locked(
                     upstream_send_lock, upstream,
                     _build_frame(opcode, payload, fin=fin, mask=True),
@@ -359,5 +479,6 @@ def handle_ardy_ws(handler, parsed) -> bool:
             upstream.close()
         except OSError:
             pass
+        _release_upstream(upstream_url)
         # handler.connection is closed by the base handler's finish().
     return True
