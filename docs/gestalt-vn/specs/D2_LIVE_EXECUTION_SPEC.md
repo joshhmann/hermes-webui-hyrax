@@ -39,6 +39,9 @@ Components:
    markdown/notes under whitelisted roots only
    (`/root/hermes-webui-hyrax/docs/`, profile `notes/` dirs). TTL 30 min.
    Rate limit 2/operator/day (config).
+   Note (2026-08-01, F5): `/root/workspace/wiki` was added as an explicit
+   whitelisted root at D3 — see D3_KANBAN_APPROVAL_TIER_SPEC.md "Input
+   decisions".
 3. **Executor handler** (essence_local_executor or a thin essenced wrapper):
    - capture pre-image (backup copy to `<file>.bak.<timestamp>` or git ref)
    - write rollback marker BEFORE the action runs

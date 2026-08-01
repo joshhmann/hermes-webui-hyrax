@@ -59,6 +59,58 @@ want (bigger action) → proposal flagged approval_required
   config.yaml — approve? [link]").
 - Timeout: 24h default (config); expiry is neutral for the breaker.
 
+## Input decisions (2026-08-01, from D2 review t_e5a65b3b)
+
+Two findings from the D2 authority-model review became explicit D3 input
+decisions. Josh approved the recommended defaults; no veto. Both are
+reflected in the running config (rules.json / hyrax-governor.yaml) and
+this spec.
+
+### F3 — the autonomy daily cap counts execution ATTEMPTS, not deliveries
+
+- Finding: a failed report-back did NOT increment the autonomy daily
+  counter (proposals.py:274-281 pre-decision), so a second execution the
+  same day stayed eligible up to the lease cap. §20.5 treats silence as
+  failure; the cap should too.
+- Decision: count execution ATTEMPTS toward the daily cap regardless of
+  delivery (fail-closed leaning). The counter now increments at attempt
+  time (approval clean + lease in hand), before executor outcome and
+  independent of report-back delivery. A failed report-back still consumes
+  the day's budget.
+- Data: `autonomy.execution.count_attempts` in rules.json (default true;
+  set false to restore delivered-only counting). The autonomy gate
+  (`policy.py evaluate_autonomy_gate`) reads the same counter, so a second
+  attempt the same day is refused once one attempt was made.
+- Replay consistency: `replay_autonomy_counters` mirrors the runtime —
+  autonomy_execution entries with outcome executed/failed increment daily
+  regardless of the delivery entry; D1 proposal deliveries still count on
+  delivery (no execution behind them).
+
+### F5 — docs_wiki_notes whitelists the real wiki root
+
+- Finding: the lease class whitelisted `/root/hermes-webui-hyrax/docs` +
+  per-operator `profiles/<op>/notes`, but the actual wiki
+  (`/root/workspace/wiki`) was NOT writable — fail-closed, correct, but
+  the class name over-promised (a want targeting a wiki page was refused).
+- Decision: add `/root/workspace/wiki` as an explicit whitelisted root in
+  the D3 lease-class config, keeping every existing containment/bounds
+  check (resolve + prefix containment, suffix/banned-part filters, executor
+  re-check before the write). The class was always meant to cover wiki
+  notes; the alternative (renaming the class to `docs_notes`) was rejected
+  by default — no rename.
+- Data: `hyrax-governor.yaml` → `proposal_governor.lease_classes.
+  docs_wiki_notes.roots`.
+
+### Live-proof requirement (Rei note 4, t_6fa64fe2)
+
+- Future live proofs of D3 MUST drive through `autonomy_tick()` end-to-end
+  (seeded want → gate → proposal → approval → lease → execute → report-back)
+  so the gate/cap bookkeeping and the `autonomy_evaluation` journaling join
+  the evidence trail. A harness that calls chain components directly does
+  NOT count as a live proof of D3 (D2's live proof ran via harness; the
+  evaluation record and persisted autonomy state were covered by tests
+  only — D3 acceptance evidence must include them).
+
 ## Acceptance criteria
 
 - [ ] Seeded want → mai files a real kanban task assigned to herself
@@ -72,6 +124,13 @@ want (bigger action) → proposal flagged approval_required
       deny → journaled, no execution, no breaker denial
 - [ ] G8 real check: free-tier classes never require Josh; approval-tier
       classes always do
+- [ ] F3 (attempt-counting): an execution whose report-back FAILS still
+      increments the autonomy daily counter — a second execution attempt
+      the same day is refused at the daily cap (suite test + live proof
+      through autonomy_tick())
+- [ ] F5 (wiki root): a want targeting /root/workspace/wiki/<page>.md
+      executes with backup + rollback marker; containment still refuses
+      paths outside ALL whitelisted roots (docs, wiki, profile notes)
 - [ ] Suite green + adversarial QA (self-assignment bypass attempts, approval
       spoofing, cooldown/breaker interactions)
 
