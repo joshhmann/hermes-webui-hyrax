@@ -14,7 +14,8 @@ import test from 'node:test'
 
 import { ChunkBuffer } from 'gestalt-motion/ChunkBuffer.ts'
 import { RootMotionAdapter } from 'gestalt-motion/RootMotionAdapter.ts'
-import { ARDY_CORE27_TO_VRM } from 'gestalt-motion/boneMap.ts'
+import { CSKEL27_SOURCE_JOINT_NAMES, CSKEL27_BUILTIN_MAP } from 'gestalt-motion/adapters/cskel27.ts'
+import { SEMANTIC_V1 } from 'gestalt-motion/semanticV1.ts'
 
 import {
   ArdyMotionSource,
@@ -23,7 +24,7 @@ import {
 
 // ── Fixtures ────────────────────────────────────────────────────────
 
-const JOINT_NAMES = ARDY_CORE27_TO_VRM.map((e) => e.ardyName)
+const JOINT_NAMES = CSKEL27_SOURCE_JOINT_NAMES
 
 // Parents precede children (contract invariant). Only FK consistency and a
 // non-degenerate pelvis→foot span matter for calibration.
@@ -46,7 +47,7 @@ const REST_OFFSETS = JOINT_NAMES.map((name) => {
 
 function makeContract() {
   return {
-    skeleton_id: 'test-core27',
+    skeleton_id: 'ardy-cskel27', // production wire id (selectAdapter gate)
     joint_names: JOINT_NAMES,
     parent_indices: PARENT_INDICES,
     rest_offsets_m: REST_OFFSETS,
@@ -73,9 +74,9 @@ function fakeNode(y = 0) {
 /** VrmLike with all required bones present, optional ones absent. */
 function makeFakeVrm() {
   const nodes = new Map()
-  for (const entry of ARDY_CORE27_TO_VRM) {
-    if (entry.vrmBone === null || entry.optional) continue
-    nodes.set(entry.vrmBone, fakeNode(entry.vrmBone === 'hips' ? 0.95 : 0.5))
+  for (const [semantic, sourceName] of Object.entries(CSKEL27_BUILTIN_MAP)) {
+    if (sourceName === null || SEMANTIC_V1[semantic].optional) continue
+    nodes.set(semantic, fakeNode(semantic === 'hips' ? 0.95 : 0.5))
   }
   return {
     humanoid: {
@@ -134,7 +135,7 @@ function makeChunk({ t0 = 5, frameCount = 40, frameSeqStart = 0, fps = 20, walkS
     chunk_seq: 0,
     frame_seq_start: frameSeqStart,
     fps,
-    skeleton_id: 'test-core27',
+    skeleton_id: 'ardy-cskel27', // production wire id (selectAdapter gate)
     frame_count: frameCount,
     reset,
     timestamps_s: timestamps,
@@ -153,13 +154,21 @@ function makeSource(client, rig, extra = {}) {
     vrmLikeFactory: () => makeFakeVrm(),
     autoConnect: true,
     nowMs: extra.nowMs ?? (() => extra.now ?? 1000),
+    // Default: no calibration profile (gestalt-motion path). Profiled-path
+    // tests override this seam (see tests/ardy_profiled.test.mjs).
+    profileFetcher: () => Promise.resolve(null),
     ...extra,
   })
 }
 
+/** Let the async retargeter build (profile fetch → retargeter init) settle. */
+function flushBuild() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 // ── Tests ───────────────────────────────────────────────────────────
 
-test('offline → not owning the pose (procedural fallback), live → owning, disconnect → fade-out → fallback', () => {
+test('offline → not owning the pose (procedural fallback), live → owning, disconnect → fade-out → fallback', async () => {
   let now = 1000
   const client = makeMockClient()
   const rig = makeMockRig()
@@ -174,6 +183,7 @@ test('offline → not owning the pose (procedural fallback), live → owning, di
   client.connected = true
   client.callbacks.onOpen('s1')
   client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
   client.buffer.push(makeChunk({ t0: 5 }))
   client.callbacks.onChunk?.()
   now = 1000
@@ -258,7 +268,7 @@ test('non-finite navigation answers approve nothing (fail closed)', () => {
   assert(Math.abs(out.sceneRootPos[2]) < 1e-9, 'broken nav must not move the avatar')
 })
 
-test('yaw decomposition: scene root owns yaw, hips bone does not double-apply it', () => {
+test('yaw decomposition: scene root owns yaw, hips bone does not double-apply it', async () => {
   let now = 1000
   const client = makeMockClient()
   const rig = makeMockRig()
@@ -269,6 +279,7 @@ test('yaw decomposition: scene root owns yaw, hips bone does not double-apply it
   client.connected = true
   client.callbacks.onOpen('s1')
   client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
   client.buffer.push(makeChunk({ t0: 5, rootYaw: yaw }))
   client.callbacks.onChunk?.()
   // Run past the 0.3 s fade-in so the pose is fully ARDY-owned.

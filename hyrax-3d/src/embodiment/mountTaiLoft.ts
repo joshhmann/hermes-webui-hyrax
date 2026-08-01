@@ -65,8 +65,19 @@ export async function mountTaiLoft(
   })
   controls.append(ardyStatus, ardyInput, ardySend)
   const ardyStatusTimer = setInterval(() => {
-    ardyStatus.dataset.state = room.getArdyState()
+    const state = room.getArdyState()
+    ardyStatus.dataset.state = state
+    ardyStatus.title = 'ARDY motion stream: ' + state
   }, 500)
+
+  // ARDY debug view (capture player / retarget compare) in a new tab.
+  const debugButton = document.createElement('button')
+  debugButton.textContent = 'Debug'
+  debugButton.title = 'Open the ARDY debug view in a new tab'
+  debugButton.addEventListener('click', () => {
+    window.open('/static/hyrax/3d/debug/ardy.html', '_blank', 'noopener')
+  })
+  controls.append(debugButton)
 
   // Debug/E2E handle: ardy state, prompt sender, and a hips-height probe.
   const debugWindow = window as unknown as { __ardy?: unknown }

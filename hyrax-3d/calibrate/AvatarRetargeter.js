@@ -99,16 +99,49 @@ export class AvatarRetargeter {
   }
 
   /**
+   * Swap the motion being POSED without re-measuring rest offsets.
+   *
+   * Use after setMotion() when the rest reference and the posed motion are
+   * different objects — e.g. the loft's live path measures offsets from the
+   * profile's canonical source rest (settled T-pose) and then poses a live
+   * stream that contains no T-pose of its own. Keeps boneMap, offsets,
+   * hipsScale and the ground-correction lowpass; only the per-frame data
+   * handle (and its joint index) is replaced.
+   * @param {object} motion  Same shape as setMotion(), minus the rest frame
+   *                    requirement — rot frames are written by the caller.
+   */
+  setPoseMotion(motion) {
+    if (!motion || !Array.isArray(motion.joints)) {
+      console.error('[AvatarRetargeter] setPoseMotion: bad motion shape', motion && Object.keys(motion))
+      return
+    }
+    if (!motion.rot && motion.global_rot_mats) motion.rot = motion.global_rot_mats
+    if (!motion.root && motion.root_positions) motion.root = motion.root_positions
+    if (!motion.contacts && motion.foot_contacts) motion.contacts = motion.foot_contacts
+    if (!Array.isArray(motion.rot)) {
+      console.error('[AvatarRetargeter] setPoseMotion: no rotation data', Object.keys(motion))
+      return
+    }
+    this.motion = motion
+    this.jointIndex = Object.fromEntries(motion.joints.map((n, i) => [n, i]))
+  }
+
+  /**
    * Retarget one frame.
    * @param {number} frame  Frame index
    * @param {object} opts
    * @param {number} opts.groundY  Ground plane Y (default 0)
    * @param {number} opts.contactSmoothing  Lowpass factor for ground correction (default 0.4)
+   * @param {boolean} opts.writeHipsPosition  Write the scaled delta-from-frame-0
+   *                    hips position (default true). Pass false when an external
+   *                    owner (e.g. the loft's RootMotionAdapter) owns the hips
+   *                    node position — the ground-contact lowpass still runs and
+   *                    is exposed via groundCorrection for that owner to apply.
    * @returns {object}  Snapshot { quat: {bone: THREE.Quaternion}, hipsPos: THREE.Vector3 }
    *                    for validation / inspection — not needed for normal use.
    */
   applyFrame(frame, opts = {}) {
-    const { groundY = 0, contactSmoothing = 0.4 } = opts
+    const { groundY = 0, contactSmoothing = 0.4, writeHipsPosition = true } = opts
     const map = this.boneMap
     if (!map || !this.motion) return null
 
@@ -129,16 +162,18 @@ export class AvatarRetargeter {
       snapshot.quat[bone] = W.clone()
     }
 
-    // Hips position: delta-from-frame-0 scaled
-    const p = this.motion.root[frame]
-    const p0 = this.motion.root[0]
-    this.hipsNode.userData.restY = this.hipsNode.userData.restY ?? this.hipsNode.position.y
-    this.hipsNode.position.set(
-      (p[0] - p0[0]) * this.hipsScale,
-      this.hipsNode.userData.restY + (p[1] - p0[1]) * this.hipsScale,
-      (p[2] - p0[2]) * this.hipsScale,
-    )
-    snapshot.hipsPos.copy(this.hipsNode.position)
+    if (writeHipsPosition) {
+      // Hips position: delta-from-frame-0 scaled
+      const p = this.motion.root[frame]
+      const p0 = this.motion.root[0]
+      this.hipsNode.userData.restY = this.hipsNode.userData.restY ?? this.hipsNode.position.y
+      this.hipsNode.position.set(
+        (p[0] - p0[0]) * this.hipsScale,
+        this.hipsNode.userData.restY + (p[1] - p0[1]) * this.hipsScale,
+        (p[2] - p0[2]) * this.hipsScale,
+      )
+      snapshot.hipsPos.copy(this.hipsNode.position)
+    }
 
     // Ground contact
     if (this.motion.contacts) {
@@ -154,13 +189,20 @@ export class AvatarRetargeter {
       if (isFinite(minY)) {
         const err = groundY - minY
         this._groundCorr += (err - this._groundCorr) * contactSmoothing
-        this.hipsNode.position.y += this._groundCorr
+        if (writeHipsPosition) this.hipsNode.position.y += this._groundCorr
       }
     }
 
     this.vrm.humanoid.update()
     return snapshot
   }
+
+  /**
+   * Current lowpassed ground-contact correction (meters). When
+   * applyFrame runs with writeHipsPosition:false, the external hips owner
+   * adds this to its own hips Y instead.
+   */
+  get groundCorrection() { return this._groundCorr }
 
   /**
    * Apply multiple frames. More efficient than per-frame calls if
