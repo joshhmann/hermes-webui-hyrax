@@ -196,6 +196,13 @@ def handle_hyrax_get(handler, parsed) -> bool:
     if not path.startswith("/api/hyrax/"):
         return False
 
+    # /api/hyrax/ardy/ws — WebSocket proxy for the ARDY motion stream.
+    # The upgrade request is a GET; the handler takes over the socket and
+    # must run before any normal-GET route logic touches the connection.
+    if path == "/api/hyrax/ardy/ws":
+        from api import hyrax_ardy_ws
+        return hyrax_ardy_ws.handle_ardy_ws(handler, parsed)
+
     # /api/hyrax/assets/<logical_name> — authenticated allowlist asset serving
     if path.startswith("/api/hyrax/assets"):
         return _handle_asset_request(handler, path)
