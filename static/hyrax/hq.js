@@ -620,6 +620,34 @@
   }
 
   // ── Launch 3D Loft (called from VN conversation) ──
+  // Overlay button injected into #mainHq while the 3D loft is mounted.
+  // Opens the ARDY debug page (mirrored under static/) in a new tab.
+  // #mainHq is position:relative while shown, and its innerHTML is reset on
+  // every remount / 2D fallback / VN reopen, so the button never outlives
+  // the loft it belongs to.
+  var DEBUG_URL = '/static/hyrax/3d/debug/ardy.html';
+
+  function inject3dDebugButton(content) {
+    if (!content || content.querySelector('#hqDebug3dBtn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'hqDebug3dBtn';
+    btn.type = 'button';
+    btn.textContent = 'Debug';
+    btn.title = 'Open the ARDY debug view (capture player / retarget compare) in a new tab';
+    btn.setAttribute('aria-label', btn.title);
+    btn.style.cssText = 'position:absolute;top:10px;right:10px;z-index:30;' +
+      'background:rgba(22,27,34,.85);color:#c9d1d9;border:1px solid #30363d;' +
+      'border-radius:4px;padding:4px 10px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;' +
+      'cursor:pointer;';
+    btn.addEventListener('mouseenter', function() { btn.style.background = '#30363d'; });
+    btn.addEventListener('mouseleave', function() { btn.style.background = 'rgba(22,27,34,.85)'; });
+    btn.addEventListener('click', function() {
+      window.open(DEBUG_URL, '_blank', 'noopener');
+    });
+    content.appendChild(btn);
+  }
+
+  // ── Launch 3D Loft (called from VN conversation) ──
   async function launch3d() {
     var content = document.getElementById('mainHq');
     if (!content) return;
@@ -666,6 +694,7 @@
           return;
         }
         _unmount3d = cleanup;
+        inject3dDebugButton(content);
         return;
       }
     } catch (_) {
