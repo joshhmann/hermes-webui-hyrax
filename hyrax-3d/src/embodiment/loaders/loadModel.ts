@@ -34,7 +34,6 @@ export async function loadModel(url: string, signal?: AbortSignal): Promise<Load
   if (vrm) {
     VRMUtils.rotateVRM0(vrm);
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
-    VRMUtils.combineSkeletons(gltf.scene);
     return { scene: gltf.scene, vrm };
   }
 
