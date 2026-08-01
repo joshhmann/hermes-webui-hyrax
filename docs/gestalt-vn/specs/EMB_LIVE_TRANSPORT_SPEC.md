@@ -74,22 +74,32 @@ Tailscale/cellular).
    may not multiplex. Decide: last-wins, first-wins, or proxy-side fan-out.
    Fail-closed default: proxy refuses a second concurrent upstream session
    per upstream with 409 semantics (WS close code + reason).
+   **Resolution (shipped)**: fail-closed first-wins — one concurrent proxied
+   session per upstream URL; a second browser is upgraded then immediately
+   closed with 1013 (Try Again Later) + reason, so its backoff retries
+   attach once the first session ends (api/hyrax_ardy_ws.py).
 5. **Prompt-channel abuse bounds**: motion prompts are operator/user input
    crossing into a GPU service — length cap, rate cap, and character
    validation at the proxy (the service trusts its LAN clients today).
 
 ## Acceptance criteria
 
-- [ ] contract_version sent + checked; mismatched major → offline with
-      reason logged (test both sides)
-- [ ] Latency/buffer/reconnect telemetry visible in the loft debug overlay
-      and via `window.__ardy`
-- [ ] Backoff policy constants in one config block; give-up path tested
+- [x] contract_version sent + checked; mismatched major → offline with
+      reason logged (tested both sides — client ArdyMotionSource gate +
+      gestalt-motion registry, service serializer tests. CAVEAT: the
+      DEPLOYED gestalt-ardy.service on 192.168.0.17 still runs pre-version
+      code; the client tolerates absence with a one-time warning until the
+      service is redeployed from /root/workspace/ardy-bridge)
+- [x] Latency/buffer/reconnect telemetry visible in the loft debug overlay
+      and via `window.__ardy` (status-dot hover text + `__ardy.getTelemetry()`)
+- [x] Backoff policy constants in one config block; give-up path tested
       (kill service → state offline with reason, no infinite reconnect)
-- [ ] Multi-consumer policy implemented per decision + tested
-- [ ] Prompt validation at proxy: oversized/overspeed prompts rejected with
-      a close reason (tests exist alongside test_hyrax_ardy_ws.py)
-- [ ] Existing suites stay green: hyrax-3d typecheck/build/tests,
+- [x] Multi-consumer policy implemented per decision + tested (1013 + reason;
+      verified live through 127.0.0.1:8787)
+- [x] Prompt validation at proxy: oversized/overspeed prompts rejected with
+      a close reason (tests exist alongside test_hyrax_ardy_ws.py; verified
+      live: 1008 + reason)
+- [x] Existing suites stay green: hyrax-3d typecheck/build/tests,
       tests/test_hyrax_ardy_ws.py, gestalt-motion 72 tests
 
 ## Non-goals
