@@ -200,6 +200,21 @@
   // Called by the shell when the sidebar context is established.
   function setActionCtx(ctx) {
     _actionCtx = ctx || {};
+    // Chips mirror sidebar availability for the same actions — re-render on
+    // stage frame commits too (a sidebar sit/stand click commits a pose
+    // frame; without this the chip stays stale/enabled). Subscribed here
+    // rather than init() because the shell calls setActionCtx AFTER
+    // stage.init, whose dispose() wipes any earlier stage listeners.
+    try {
+      var _vn = root.GestaltVN && root.GestaltVN.vn;
+      if (_vn && _vn.stage && typeof _vn.stage.subscribe === 'function') {
+        // Subscribe once per mount lifecycle — stage.init's dispose() wipes
+        // stage listeners on every mount, so a sticky once-guard would leave
+        // the chip deaf after the first remount. setActionCtx runs once per
+        // mount; _unsubs entries are cleared by composer dispose().
+        _unsubs.push(_vn.stage.subscribe(function() { _renderQuickActions(); }));
+      }
+    } catch (_) {}
     _renderQuickActions();
   }
 
@@ -406,6 +421,8 @@
     // Quick action chips (above the composer form).
     _quickActionsEl = _el('div', 'vn2-quick-actions');
     _container.appendChild(_quickActionsEl);
+
+
 
     _tray = _el('div', 'vn2-attach-tray');
     _tray.hidden = true;
