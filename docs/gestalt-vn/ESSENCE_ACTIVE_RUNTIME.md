@@ -813,3 +813,66 @@ while Local Mind is unavailable — fail-closed, by design. Delivery of the
 report message is NOT conditioned on gate verdicts (the gates govern
 future approval, not her telling Josh).
 
+## 21. Whims layer + playground lease as built (2026-08-02)
+
+WHIMS_LAYER_SPEC.md shipped. Object-wants with personality on top of the
+§19/§20 machinery — no new delivery or approval paths.
+
+- **Decks are data** — rules.json `whims.decks`, ≥3 templates per operator
+  (mai 4). Template slots: `object_source` ∈ stale_blocked_task /
+  aging_ready_task / current_task / recent_activity / playground, resolved
+  from live kanban/derived state at draw (unresolvable = skipped, never a
+  placeholder object). Decks validate on every tick, fail-closed: an
+  invalid deck = no whims for that operator, journaled
+  `whim_deck_invalid` once per status change.
+- **Cadence** — `whims.cadence_seconds` (6h default), `max_active` 2,
+  per-template recooldown, per-operator `personality_weight` draw
+  weighting (mai 1.2 … rei 0.7). Draws journal `whim_drawn`.
+- **Fires ride the §19 gate unchanged** — `whims.tick` (new
+  essenced/whims.py, called from run_once between outreach.tick and
+  proposals.autonomy_tick) runs `policy.evaluate_gate` with kind
+  `operator-whim`; delivery is the usual compose-note → both-lane path
+  with a whim block naming the concrete object; the register constraint
+  rides in automatically. Bookkeeping moves the SAME
+  `last_proactive_at`/daily counters as plain wants, so whims can never
+  exceed the proactive caps. Failed deliveries retry next pass without
+  moving counters.
+- **Fulfillment** — per-template check: `kanban_cleared` (named tasks left
+  blocked/ready/current), `shared` (user reply after the fire message),
+  `playground_execution` (a journaled `autonomy_execution` for subject
+  `whim:<id>`). A fulfilled whim closes with a moodlet from
+  `whims.moodlets` (§12 mechanism: `state.apply_deltas` + decay),
+  journaled `whim_fulfilled` in both journals. Unfulfilled whims expire at
+  `whim_ttl_seconds` (journaled `whim_expired`).
+- **`playground_tinker` lease class (free tier, mai-only)** — data in
+  hyrax-governor.yaml `lease_classes.playground_tinker` (host
+  192.168.0.17, `/root/playground/`, TTL 30m, cap 1/day,
+  `allowed_profiles: [mai]`). Payload = bare closed-alphabet filename +
+  bounded content, append-only; the lease manager normalises (mai-only,
+  filename/suffix/bounds, credential + fleet-path deny patterns, the D3
+  risk-content keyword scan) and the executor repeats every check before
+  the write. The executor is an SSH bridge (executor.execute_playground):
+  one fixed-shape command (mkdir + append via stdin + sha256sum), batch
+  mode, all forwarding/local-command channels closed — the payload can
+  never name a command, a fleet path, or credentials. A delivered
+  execution-bound whim seeds the autonomy accumulator (`whim:<id>`,
+  source `whim`), so the D2 chain (propose → essenced:governor-pilot →
+  lease → SSH append → "look what I made" report-back with the artifact
+  path) runs through the established machinery. Mai's cron playground
+  (CT 217/.139) is untouched — the lease is additive.
+- **HQ** — presence derivedState carries `whims` (fresh-only, ≤2 chips of
+  ≤80 chars from meta.whims.active); static/hyrax/hq.js renders one
+  "wants to: …" chip line under each operator card.
+- **Proof hook** — `essenced.py --seed-whim OP TEMPLATE_ID` draws one
+  named whim (object resolved from live state) and runs one tick through
+  the real pipeline, including the D2 chain for execution-bound templates.
+
+Live proof (2026-08-02, scratch `--rules` window, live rules.json never
+touched): mai's tinker whim fired → both-lane message naming the
+playground container (WebUI session fadb41a19b5f, Discord
+1533296247572660425) → proposal prop-028efb69b8de → lease
+lease-e95f3d2871e8 → exec-playground-a0317235f0d8 appended
+`192.168.0.17:/root/playground/tinker-2026-08-01-tinker-playground.md`
+(sha256 fd171065…, verified on the host) → report-back delivered (Discord
+1533296286181097582) → next pass journaled `whim_fulfilled` with the
+tinker-proud moodlet (valence 0.357 → 0.464).

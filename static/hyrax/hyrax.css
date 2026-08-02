@@ -1298,6 +1298,8 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 .hyrax-op-meta span { font-size: 11px; color: var(--muted, #8b949e); }
 .hyrax-op-card.staged { opacity: .45; filter: grayscale(.8); pointer-events: none; }
 .hyrax-op-card .hyrax-op-hint { font-size: 10px; color: var(--hq-tai, #6ecbf5); }
+/* Whims layer: active-whim chip line under the operator meta. */
+.hyrax-op-card .hyrax-op-whim { font-size: 10px; font-style: italic; color: var(--muted, #8b949e); }
 .hyrax-op-card:disabled { opacity: .6; cursor: default; }
 .hyrax-op-tai { border-left: 3px solid var(--hq-tai); }
 .hyrax-op-rei { border-left: 3px solid var(--hq-rei); }

@@ -925,7 +925,34 @@ _DERIVED_STATE_UNAVAILABLE = {
     "poseIntent": None,
     "sceneIntent": None,
     "tone": None,
+    "whims": [],
 }
+
+
+def _derived_whims(state: dict) -> list:
+    """Active whim chips out of essenced's meta.whims (read-only, bounded).
+
+    Each chip is the resolved "verb object" text ("reorganize the blocked
+    task ..."), capped at 2 entries / 80 chars — the HQ sidebar shows one
+    small line per operator. Anything malformed fails closed to [].
+    """
+    meta = state.get("meta")
+    if not isinstance(meta, dict):
+        return []
+    whims = meta.get("whims")
+    if not isinstance(whims, dict):
+        return []
+    active = whims.get("active")
+    if not isinstance(active, list):
+        return []
+    out = []
+    for whim in active[:2]:
+        if not isinstance(whim, dict):
+            continue
+        text = _bounded_str(whim.get("text"), 80)
+        if text:
+            out.append({"text": text})
+    return out
 
 
 def _derived_leaf(state: dict, *parts: str):
@@ -995,6 +1022,10 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
                 _bounded_str(_derived_leaf(state, "presentation", "tone"))
                 if fresh else None
             ),
+            # Whims layer (WHIMS_LAYER_SPEC.md): active per-operator whim
+            # chips from meta.whims. Fresh-only like the other derived
+            # fields — a stale file must never show a dead want.
+            "whims": _derived_whims(state) if fresh else [],
         }
         expression = None
         if fresh:

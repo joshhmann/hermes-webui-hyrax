@@ -13,8 +13,13 @@ Mai's existing playground container is the perfect first sandbox for them.
 - Whims are generated, not hardcoded per instance — decks are data
   (per-operator templates with slots filled from live state)
 - Fulfilled whims produce moodlets (existing §12 mechanism)
-- The playground lease is sandboxed to Mai's LXC only; nothing in it can
-  touch fleet state (network rules: loopback only, no fleet credentials)
+- The playground lease is sandboxed to Mai's LXC only; nothing the lease
+  can do touches fleet state (fixed append-only shape, no remote command
+  execution, payload scans refuse fleet paths/credentials). The sandbox
+  HOST itself sits on the LAN with normal egress — the lease is
+  credential-safe; the host is not loopback-isolated (QA 2026-08-02:
+  observed default route via 192.168.0.1, iptables OUTPUT ACCEPT, egress
+  to 192.168.0.1:22 / 192.168.0.175:22 open, operator shell state present)
 - Mai's existing cron playground keeps working during migration; no big-bang
 
 ## Shape
@@ -31,8 +36,11 @@ Mai's existing playground container is the perfect first sandbox for them.
    built?) — fulfilled → moodlet reward (existing moodlet table + new entries).
 4. **Playground lease class `playground_tinker`** (D2 machinery): scoped to
    Mai's LXC container at 192.168.0.17, append-only project area
-   (`/root/playground/`), loopback network only. Rate limit 1 tinker/day.
-   Report-back: "look what I made" with the artifact path.
+   (`/root/playground/`), one bounded SSH append per lease (no remote
+   command execution). The host itself is a normal LAN container — the
+   lease cannot touch fleet state; the host is not loopback-isolated.
+   Rate limit 1 tinker/day. Report-back: "look what I made" with the
+   artifact path.
 5. **Presentation**: active whims visible in HQ sidebar (per-operator chip:
    "wants to: reorganize the index") — read from derived_state.json meta.
 

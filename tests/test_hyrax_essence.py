@@ -1049,11 +1049,11 @@ def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
                            expression="smile", intensity=0.7,
                            activity_type="idle",
                            pose_intent="sitting", scene_intent="ops",
-                           tone="bright"):
+                           tone="bright", whims=None):
     def leaf(value):
         return {"value": value, "provenance": "derived",
                 "updatedAt": "2026-07-26T00:00:00+00:00"}
-    return {
+    payload = {
         "version": 2,
         "operatorId": "tai",
         "mood": {"primary": leaf(mood), "valence": leaf(0.4)},
@@ -1066,6 +1066,10 @@ def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
                          "sceneIntent": leaf(scene_intent),
                          "tone": leaf(tone)},
     }
+    if whims is not None:
+        # Whims layer: essenced persists active whims in meta.whims.
+        payload["meta"] = {"whims": {"active": whims}}
+    return payload
 
 
 class TestPresenceDerivedState:
@@ -1140,6 +1144,7 @@ class TestPresenceDerivedState:
             "fresh": True, "mood": "happy", "energy": 0.62, "focus": 0.81,
             "stress": 0.12, "staleness_days": 0,
             "poseIntent": "sitting", "sceneIntent": "ops", "tone": "bright",
+            "whims": [],
         }
         # Expression comes from derived presentation.expression, NOT the
         # session-derived "laughing".
@@ -1147,6 +1152,39 @@ class TestPresenceDerivedState:
         # Live fields stay live.
         assert item["activity"]["type"] == "conversing"
         assert item["kanban"] == {"running": 1, "blocked": 0}
+
+    def test_fresh_merge_carries_whim_chips(self, monkeypatch, profile_home):
+        """Whims layer: meta.whims.active -> derivedState.whims chips."""
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(whims=[
+            {"whim_id": "finish-build-1", "text": 'finish "build the whims layer"'},
+            {"whim_id": "unstick-1", "text": 'unstick the blocked task "x"'},
+            {"whim_id": "over-cap", "text": "this third entry is never served"},
+            "not-a-dict",
+        ]))
+        compact, full = self._streaming_tai()
+        self._patch(monkeypatch, compact, full)
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        assert handler.status == 200
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["whims"] == [
+            {"text": 'finish "build the whims layer"'},
+            {"text": 'unstick the blocked task "x"'},
+        ]
+
+    def test_stale_derived_state_serves_no_whims(self, monkeypatch,
+                                                 profile_home):
+        """A stale file must never show a dead want."""
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(whims=[
+            {"whim_id": "w1", "text": "reorganize the index"},
+        ]), age_seconds=90000)
+        compact, full = self._streaming_tai()
+        self._patch(monkeypatch, compact, full)
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["fresh"] is False
+        assert item["derivedState"]["whims"] == []
 
     def test_stale_derived_state_falls_back(self, monkeypatch, profile_home):
         home = profile_home("tai", None)
@@ -1178,6 +1216,7 @@ class TestPresenceDerivedState:
             "fresh": False, "mood": None, "energy": None, "focus": None,
             "stress": None, "staleness_days": None,
             "poseIntent": None, "sceneIntent": None, "tone": None,
+            "whims": [],
         }
         assert item["expression"]["current"] == "laughing"
 

@@ -349,6 +349,17 @@
       meta.appendChild(act);
       meta.appendChild(hint);
 
+      // Whims layer (WHIMS_LAYER_SPEC.md): active whims from essenced's
+      // derived state ride the presence payload — one small chip line.
+      var whims = presence && presence.derivedState && presence.derivedState.whims;
+      if (Array.isArray(whims) && whims.length) {
+        var chip = document.createElement('span');
+        chip.className = 'hyrax-op-whim';
+        chip.textContent = 'wants to: ' + whims[0].text;
+        chip.title = whims.map(function(w) { return 'wants to: ' + w.text; }).join('\n');
+        meta.appendChild(chip);
+      }
+
       card.appendChild(img);
       card.appendChild(meta);
 
