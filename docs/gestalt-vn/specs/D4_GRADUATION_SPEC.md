@@ -117,6 +117,19 @@ The scorecard is evidence; Josh's flag flip is the decision.
 - No whims/playground leases (whims spec governs those; they graduate
   through this same protocol when their time comes)
 
+## Hard boundaries (hyrax-os D3 review, t_ca56b34d, conditions before D4)
+
+- `external_resource`, `code_edit`, and `destructive` risk classes remain
+  HUMAN-ONLY forever. This is enforced structurally: no lease class exists
+  for them (absence, not permission), and the kanban_create content scan
+  (condition 1) refuses payloads that signal them. G8 approval never
+  delegates these downward — Josh's approval executes through the same
+  bounded executor, but no widening may create an essenced-approvable path
+  to these classes.
+- Governance-dir trust boundary, stated plainly: root write access to
+  /root/.hermes/governance can forge any store line. Accepted risk — the
+  journals are evidence, not a defense against the host's own root.
+
 ## Links
 
 GAMEPLAN.md §4, ESSENCE_ACTIVE_RUNTIME.md §20, D2_LIVE_EXECUTION_SPEC.md,
