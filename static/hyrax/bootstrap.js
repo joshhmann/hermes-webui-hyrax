@@ -17,21 +17,32 @@
   // placeholder panels — redundant with the native panels.)
   var HYRAX_PANELS = [
     { id: 'hq', label: 'HQ', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { id: 'approvals', label: 'Approvals', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   ];
 
-  // ── HQ mount/unmount hooks (lazy 3D) ──
-  // Delegates to window.__hqMount / __hqUnmount populated by hq.js.
-  // The module-level functions in hq.js are referenced here so we don't
-  // force eager loading — they're captured on first mount.
-  function mountHq(id) {
-    if (typeof window.__hqMount === 'function') {
-      return window.__hqMount(id);
+  // Panels whose main view renders entirely from JS (no placeholder chrome).
+  var MAIN_ONLY_PANELS = ['hq', 'approvals'];
+
+  // Panels whose sidebar shows another panel's view while active.
+  var SIDEBAR_FALLBACKS = { 'approvals': 'hq' };
+
+  // ── Mount/unmount hooks ──
+  // Dispatch to the owning module's window hook (hq.js / approvals.js).
+  // Graceful when the module hasn't loaded — hooks are captured on mount.
+  var MOUNT_HOOKS = { 'hq': '__hqMount', 'approvals': '__approvalsMount' };
+  var UNMOUNT_HOOKS = { 'hq': '__hqUnmount', 'approvals': '__approvalsUnmount' };
+
+  function mountPanel(id) {
+    var hook = window[MOUNT_HOOKS[id]];
+    if (typeof hook === 'function') {
+      return hook(id);
     }
   }
 
-  function unmountHq(id) {
-    if (typeof window.__hqUnmount === 'function') {
-      return window.__hqUnmount(id);
+  function unmountPanel(id) {
+    var hook = window[UNMOUNT_HOOKS[id]];
+    if (typeof hook === 'function') {
+      return hook(id);
     }
   }
 
@@ -49,12 +60,17 @@
     var i, p, unreg;
     for (i = 0; i < HYRAX_PANELS.length; i++) {
       p = HYRAX_PANELS[i];
-      unreg = hp.register({
+      var def = {
         id: p.id,
         label: p.label,
-        mount: mountHq,
-        unmount: unmountHq,
-      });
+        mainView: true,
+        mount: mountPanel,
+        unmount: unmountPanel,
+      };
+      // register() rejects an own sidebarFallback key that isn't a string,
+      // so only add the key when this panel actually has a fallback.
+      if (SIDEBAR_FALLBACKS[p.id]) def.sidebarFallback = SIDEBAR_FALLBACKS[p.id];
+      unreg = hp.register(def);
       // Keep unregister handle for any future cleanup
       if (typeof p._unreg !== 'undefined') continue;
       p._unreg = unreg;
@@ -72,7 +88,8 @@
   // already fired), land on HQ when the URL carries no explicit intent
   // and the user hasn't chosen chat as home. Explicit intents — ?session=,
   // /session/<id>, ?panel=, ?q=, #session= — are never hijacked, except
-  // ?panel=hq which always opens HQ regardless of the stored pref.
+  // ?panel=<hyrax-panel> (hq, approvals, …) which always opens that panel
+  // regardless of the stored pref.
   function hasExplicitIntent(search, path, hash) {
     if (/[?&](session|panel|q)=/.test(search)) return true;
     if (path.indexOf('/session/') !== -1) return true;
@@ -88,18 +105,27 @@
     }
   }
 
+  function isHyraxPanel(id) {
+    for (var i = 0; i < HYRAX_PANELS.length; i++) {
+      if (HYRAX_PANELS[i].id === id) return true;
+    }
+    return false;
+  }
+
   function maybeLandOnHq() {
     try {
       var loc = window.location || {};
       var search = typeof loc.search === 'string' ? loc.search : '';
       var path = typeof loc.pathname === 'string' ? loc.pathname : '';
       var hash = typeof loc.hash === 'string' ? loc.hash : '';
-      var wantsHq = /[?&]panel=hq([&#]|$)/.test(search);
-      if (!wantsHq) {
+      var m = search.match(/[?&]panel=([a-z][a-z0-9-]{0,31})([&#]|$)/);
+      var requested = m ? m[1] : null;
+      if (!isHyraxPanel(requested)) {
         if (hasExplicitIntent(search, path, hash)) return;
         if (homePref() === 'chat') return;
+        requested = 'hq';
       }
-      if (typeof switchPanel === 'function') switchPanel('hq');
+      if (typeof switchPanel === 'function') switchPanel(requested);
     } catch (_) {}
   }
 
@@ -167,7 +193,6 @@
     var mainEl = document.querySelector('main.main');
     if (!mainEl) return;
 
-    var mainOnlyPanels = ['hq'];  // HQ gets its own mount/unmount lifecycle
     var pIdx, p, mid, existing, div;
 
     for (pIdx = 0; pIdx < HYRAX_PANELS.length; pIdx++) {
@@ -180,10 +205,10 @@
       div.id = mid;
       div.className = 'main-view';
 
-      if (mainOnlyPanels.indexOf(p.id) !== -1) {
-        // HQ — empty container; hq.js/vn.js render into #mainHq on mount.
-        // (index.html already ships #mainHq, so this branch is a fallback
-        // and must not duplicate ids like mainHqBody.)
+      if (MAIN_ONLY_PANELS.indexOf(p.id) !== -1) {
+        // HQ / Approvals — empty container; the owning module renders into
+        // it on mount. (index.html already ships #mainHq, so this branch is
+        // a fallback and must not duplicate ids like mainHqBody.)
         div.innerHTML = '';
       } else {
         div.innerHTML = '<div class="main-view-header"><h2 class="main-view-title">' + p.label + '</h2></div>'

@@ -301,6 +301,29 @@ The HQ panel is the fork's home surface, not just another panel:
 
 ---
 
+## 6b. Approvals panel (approvals.js — added 2026-08-02)
+
+The D3 Josh approval-tier panel follows the HQ fix pattern end-to-end:
+
+- Registered in `HYRAX_PANELS` (`bootstrap.js`) as a `mainView` panel with
+  `sidebarFallback: 'hq'` — while it's active the sidebar keeps the
+  Operators view. Mount/unmount dispatch is per-panel (`MOUNT_HOOKS` /
+  `UNMOUNT_HOOKS` → `window.__approvalsMount` / `__approvalsUnmount`).
+- `#mainApprovals` is injected into `<main.main>` as an empty container
+  (`MAIN_ONLY_PANELS`); `approvals.js` renders into it on mount.
+- CSS channel in hyrax.css mirrors HQ:
+  `main.main.showing-approvals > #mainChat { display: none !important; }`
+  and `main.main.showing-approvals > #mainApprovals { display: flex !important; }`.
+- Deep link: `maybeLandOnHq()` honors `?panel=<any hyrax panel id>` (hq,
+  approvals) regardless of the stored home pref.
+- Data: `GET /api/hyrax/essence/approvals` (30s visibility-gated poll, same
+  cadence as HQ presence; the same poll maintains a pending-count
+  `.hyrax-nav-badge` on the rail/sidebar nav buttons) and
+  `POST /api/hyrax/essence/approvals/respond`. A filed decision renders as
+  "… filed — waiting for her next tick…" until a poll confirms the request
+  left the pending list — the panel never pretends essenced already acted
+  (same covenant as the whims dismiss).
+
 ## 7. Summary of Key Selectors
 
 | Purpose | Selector | File (line) |
