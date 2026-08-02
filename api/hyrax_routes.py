@@ -546,6 +546,7 @@ def _serve_agents(handler) -> bool:
 # sister allowlist is fixed and immutable.
 # ══════════════════════════════════════════════════════════════════════════
 
+import sys as _sys
 import threading as _threading
 
 from types import MappingProxyType as _MappingProxyType
@@ -558,73 +559,75 @@ from api.models import (
     new_session as _new_session,
 )
 
-# ── Fixed immutable sister allowlist ────────────────────────────────────────
+# ── Fixed immutable sister allowlist (startup-loaded, never hot-mutated) ────
 # Caller input never becomes a path. Display metadata only.
-# Both top-level and all nested dicts are wrapped in MappingProxyType.
-_VN_PROFILES_SOURCE: dict[str, dict[str, object]] = {
-    "tai": {
-        "name": "Tai",
-        "role": "Builder",
-        "available": True,
-        "assets": {
-            "portrait": "/api/hyrax/assets/tai.portrait.neutral",
-            "background": "/api/hyrax/assets/tai.background.control-room",
-            "chibi": "/api/hyrax/assets/tai.chibi.stand",
-            "model": "/api/hyrax/assets/tai.embodiment.vrm",
-        },
-    },
-    "rei": {
-        "name": "Rei",
-        "role": "QA",
-        "available": True,
-        "assets": {
-            "portrait": "/api/hyrax/assets/rei.portrait.neutral",
-            "background": "/api/hyrax/assets/rei.background.security",
-            "chibi": "/api/hyrax/assets/rei.chibi.stand",
-        },
-    },
-    "nei": {
-        "name": "Nei",
-        "role": "Quartermaster",
-        "available": True,
-        "assets": {
-            "portrait": "/api/hyrax/assets/nei.portrait.neutral",
-            "background": "/api/hyrax/assets/nei.background.lab",
-            "chibi": "/api/hyrax/assets/nei.chibi.stand",
-        },
-    },
-    "mai": {
-        "name": "Mai",
-        "role": "Support",
-        "available": True,
-        "assets": {
-            "portrait": "/api/hyrax/assets/mai.portrait.neutral",
-            "background": "/api/hyrax/assets/mai.background.supply-hub",
-            "chibi": "/api/hyrax/assets/mai.chibi.stand",
-        },
-    },
-}
-# Wrap all nested dicts recursively
-_VN_PROFILES_WRAPPED: dict[str, dict[str, object]] = {}
-for _pid, _meta in _VN_PROFILES_SOURCE.items():
-    _wrapped_meta: dict[str, object] = {}
-    for _k, _v in _meta.items():
-        if isinstance(_v, dict):
-            _wrapped_meta[_k] = _MappingProxyType(dict(_v))  # fresh copy for proxy
-        else:
-            _wrapped_meta[_k] = _v
-    _VN_PROFILES_WRAPPED[_pid] = _MappingProxyType(_wrapped_meta)
-VN_PROFILES: _MappingProxyType = _MappingProxyType(_VN_PROFILES_WRAPPED)
-# Delete mutable backing references — they must not be accessible at module scope
-# because mutating them changes the supposedly immutable VN_PROFILES.
-del _VN_PROFILES_SOURCE, _VN_PROFILES_WRAPPED
-del _pid, _meta, _wrapped_meta, _k, _v
+# Single source of truth: governance/operators.yaml, read ONCE at startup via
+# the shared operators_loader (the same loader essenced consumes). The loader
+# returns a fully immutable registry — MappingProxyType at the top level, at
+# every entry, and at every assets mapping — and caches the first load for the
+# life of the process, so VN_PROFILES cannot be hot-mutated or reloaded.
+# Editing operators.yaml takes effect on WebUI restart only. Onboarding a new
+# sister is a yaml edit, never a code change.
+#
+# Fail-closed policy: no VN-specific fallback is documented (repo rule:
+# "when you can't confirm something, fail closed and say so"), so if the
+# registry file is absent (status "missing") or file-level damaged (status
+# "invalid"), or the loader itself cannot be imported, the allowlist stays
+# EMPTY — every VN profile is disallowed, no open registration. The loader
+# journals the event (operators_missing / operators_invalid) and logs; we log
+# loudly here as well. There is deliberately no built-in sister list in this
+# module — hardcoding it is exactly the code-data coupling this replaces.
+
+# Governance is a FLEET-level store (like kanban.db, but owned by the shared
+# loader, which resolves it as ESSENCED_GOVERNANCE_DIR → fleet default
+# /root/.hermes/governance). Mirror that EXACT resolution rule here so the
+# loader module import and the registry file load can never disagree; a
+# HERMES_HOME-derived path would diverge under redirected environments (e.g.
+# the isolated pytest harness) and silently fail closed for the wrong reason.
+_governance_dir = os.environ.get("ESSENCED_GOVERNANCE_DIR") or "/root/.hermes/governance"
+if _governance_dir not in _sys.path:
+    _sys.path.insert(0, _governance_dir)
+
+try:
+    import operators_loader as _operators_loader
+except Exception as _loader_import_error:  # pragma: no cover — fleet loader lives beside the registry
+    _operators_loader = None
+    _logger.error(
+        "VN allowlist FAILED CLOSED: cannot import operators_loader (%s) — "
+        "no VN profiles will be served. Restore the fleet governance dir and restart.",
+        _loader_import_error,
+    )
+
+if _operators_loader is None:
+    VN_PROFILES: _MappingProxyType = _MappingProxyType({})
+else:
+    _VN_REGISTRY = _operators_loader.get_operators()
+    if _VN_REGISTRY.status != "loaded":
+        # Registry absent or file-level damaged: fail closed with an empty
+        # allowlist. The loader already journaled operators_missing/invalid.
+        _logger.error(
+            "VN allowlist FAILED CLOSED: operators registry %s has status %r%s — "
+            "no VN profiles will be served. Repair governance/operators.yaml and restart.",
+            _VN_REGISTRY.source,
+            _VN_REGISTRY.status,
+            f" ({_VN_REGISTRY.file_error})" if _VN_REGISTRY.file_error else "",
+        )
+        VN_PROFILES = _MappingProxyType({})
+    else:
+        # Already immutable at every level — alias directly, no re-wrap needed.
+        VN_PROFILES = _VN_REGISTRY.operators
+    del _VN_REGISTRY
+del _governance_dir
 """Fixed immutable allowlist for VN sister profiles.
 
-Caller input is validated against this dict and never used as a filesystem path,
-cookie value, or database query parameter beyond the WebUI session filter.
+Loaded once at startup from governance/operators.yaml (shared operators
+loader). Caller input is validated against this mapping and never used as a
+filesystem path, cookie value, or database query parameter beyond the WebUI
+session filter.
 
-Top-level assignment and nested mutation both raise TypeError."""
+Top-level assignment and nested mutation both raise TypeError. Fail-closed:
+if the registry cannot be loaded, the allowlist is empty (all profiles
+disallowed)."""
 
 # ── Per-sister conversation lock registry ───────────────────────────────────
 # Serializes create/archive per sister to prevent duplicate active VN sessions.
@@ -651,6 +654,12 @@ MAX_TITLE_LENGTH = 256                   # max length for session titles
 # The RFC requires "bounded trimmed non-empty UTF-8 text with a conservative
 # bounded length." We reject over-length input rather than silently truncating.
 MAX_TURN_TEXT_LENGTH = 4000
+
+# The one native start_session_turn 409 we surface to VN clients with a
+# bounded reason so the composer can adopt/retry the real stream. Matched
+# exactly against the native error string — any other 409 reason text is
+# never reflected (fixed {"error": "conflict"} instead).
+ACTIVE_STREAM_CONFLICT_ERROR = "session already has an active stream"
 
 # Bounds for VN turn attachments (mirrors the /api/chat/start attachment
 # shape {name, path, mime, size}, strictly validated — any other shape is

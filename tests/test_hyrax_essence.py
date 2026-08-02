@@ -1921,3 +1921,111 @@ class TestFrameFileServing:
         body = {"id": "frame.test.new", "operatorId": "tai", "state": {"expression": "smile"}, "image": "new.png"}
         assert he._handle_frame_register(handler, body) is True
         assert written["frames"][0]["assets"]["imageUrl"] == "/api/hyrax/essence/frames/file/new.png"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: essence shares the registry-driven operator allowlist
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestEssenceRegistryDrivenAllowlist:
+    """api.hyrax_essence consumes VN_PROFILES from api.hyrax_routes — the
+    same startup-loaded operator registry. Every scenario boots a fresh
+    interpreter against a hermetic governance dir (operators_loader copied
+    in, registry + journal isolated under tmp_path).
+
+    Contract under test: the essence runtime enforces the SAME allowlist —
+    a yaml-only onboarded operator is served, a malformed entry is absent,
+    and a missing registry fails closed (no operator served) while the
+    module still imports and its functions remain callable.
+    """
+
+    @staticmethod
+    def _run(gov, script: str) -> dict:
+        from tests.helpers import boot_python
+        rc, out, err = boot_python(gov, script)
+        assert rc == 0, f"daemon must boot:\n{err}"
+        return json.loads(out)
+
+    @staticmethod
+    def _frame(operator: str) -> str:
+        """Minimal schema-valid frame for the operator, as python literal."""
+        return (
+            "{\"id\": \"frame.probe.001\", \"operatorId\": %r, \"version\": \"1\",\n"
+            " \"source\": \"generated\", \"sceneSignature\": \"sig-123\",\n"
+            " \"state\": {\"pose\": \"stand\"},\n"
+            " \"assets\": {\"imageUrl\": \"/api/hyrax/essence/frames/file/p.png\"},\n"
+            " \"quality\": {\"approved\": True}}" % operator)
+
+    def test_essence_serves_registry_onboarded_operator(self, tmp_path):
+        """A 5th operator added ONLY to operators.yaml is served by the
+        essence runtime at boot — no source edit anywhere."""
+        from tests.helpers import make_governance_dir, operators_registry_yaml
+        gov = make_governance_dir(tmp_path)
+        (gov / "operators.yaml").write_text(
+            operators_registry_yaml(["tai", "rei", "nei", "mai", "nova"]))
+        facts = self._run(gov, """
+import json
+from types import MappingProxyType
+import api.hyrax_essence as e
+frame = %s
+cleaned = e._sanitize_registry_frame(frame)
+print(json.dumps({
+    "keys": sorted(e._VN_PROFILES.keys()),
+    "all_proxy": all(isinstance(m, MappingProxyType)
+                     for m in e._VN_PROFILES.values()),
+    "nova_meta": e._VN_PROFILES["nova"]["name"],
+    "frame_ok": cleaned is not None and cleaned["operatorId"] == "nova",
+}))
+""" % self._frame("nova"))
+        assert facts["keys"] == ["mai", "nei", "nova", "rei", "tai"]
+        assert facts["all_proxy"] is True
+        assert facts["nova_meta"] == "Nova"   # metadata came from the yaml
+        assert facts["frame_ok"] is True
+
+    def test_essence_skips_malformed_entry_and_rejects_its_frames(
+            self, tmp_path):
+        """An entry with an unknown field is absent from the essence
+        allowlist; frames claiming that operator are rejected."""
+        from tests.helpers import make_governance_dir, operators_registry_yaml
+        gov = make_governance_dir(tmp_path)
+        body = (
+            operators_registry_yaml(["tai", "nei"])
+            + "  broken:\n"
+            "    name: Broken\n"
+            "    role: Builder\n"
+            "    available: true\n"
+            "    evil: true\n"
+            "    assets:\n"
+            "      portrait: /p\n"
+            "      background: /b\n"
+            "      chibi: /c\n")
+        (gov / "operators.yaml").write_text(body)
+        facts = self._run(gov, """
+import json
+import api.hyrax_essence as e
+frame = %s
+print(json.dumps({
+    "keys": sorted(e._VN_PROFILES.keys()),
+    "broken_frame_rejected": e._sanitize_registry_frame(frame) is None,
+}))
+""" % self._frame("broken"))
+        assert facts["keys"] == ["nei", "tai"]
+        assert facts["broken_frame_rejected"] is True
+
+    def test_essence_missing_registry_fails_closed_still_boots(
+            self, tmp_path):
+        """No operators.yaml: the essence runtime imports fine but serves
+        NO operator — every frame is rejected (fail closed)."""
+        from tests.helpers import make_governance_dir
+        gov = make_governance_dir(tmp_path)  # deliberately no operators.yaml
+        facts = self._run(gov, """
+import json
+import api.hyrax_essence as e
+frame = %s
+print(json.dumps({
+    "keys": sorted(e._VN_PROFILES.keys()),
+    "any_frame_rejected": e._sanitize_registry_frame(frame) is None,
+}))
+""" % self._frame("tai"))
+        assert facts["keys"] == []
+        assert facts["any_frame_rejected"] is True
