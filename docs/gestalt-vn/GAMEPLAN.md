@@ -29,12 +29,11 @@ Tune thresholds from the journals, not from vibes.
 ### 2. ~~Phase D2 — live execution, free tier~~ DONE
 (rei QA PASS + hyrax-os endorse 2026-07-31; findings fixed in D3-prep)
 
-### 3. Phase D3 — kanban class + approval tier — IN FLIGHT
-- Gate: t_b1e9fad0 (rei F2 counter-replay FAIL) must close + rei re-verify
-- Spec current: specs/D3_KANBAN_APPROVAL_TIER_SPEC.md (F3/F5/live-proof folded in)
-- `kanban_create` lease (self-assigned tasks only)
-- Approval tier: anything bigger (code, deletes, config) routes to Josh via the approval UI
-- G8 (josh gate) implemented as the human-approval path
+### 3. ~~Phase D3 — kanban class + approval tier~~ DONE
+(rei QA PASS t_df2cea32 + hyrax-os ENDORSE WITH CONDITIONS t_ca56b34d,
+2026-08-01; kanban_create live for mai, G8 josh tier live via WebUI
+approvals API, 290 essenced tests; 5 conditions filed as t_8fc662dc,
+gate D4)
 
 ### 4. Phase D4 — graduation — SPEC READY
 - Spec: specs/D4_GRADUATION_SPEC.md (journal-based checklist, scorecard
