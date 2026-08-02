@@ -186,6 +186,8 @@ def main():
     ap.add_argument("--profile", default="tai-embodiment-v3")
     ap.add_argument("--vrm", default="/api/hyrax/assets/tai.embodiment.vrm")
     ap.add_argument("--label", default="", help="extra label for the report header")
+    ap.add_argument("--headed", action="store_true",
+                    help="launch a VISIBLE browser (watch the run on this machine's display)")
     args = ap.parse_args()
 
     checks = load_checks(args.checks)
@@ -210,7 +212,7 @@ def main():
             return 2
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=True,
+                headless=not args.headed,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--enable-unsafe-swiftshader"])
             ctx = browser.new_context(viewport={"width": 960, "height": 600})
             page = ctx.new_page()

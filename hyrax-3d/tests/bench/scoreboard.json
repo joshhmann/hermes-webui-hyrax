@@ -1,0 +1,1111 @@
+{
+ "suite": "GEVS v1",
+ "profile": "tai-embodiment-v3",
+ "vrmUrl": "/api/hyrax/assets/tai.embodiment.vrm",
+ "label": "tai-embodiment-v3 GEVS v1 baseline (committed)",
+ "startedAt": "2026-08-02T08:03:20",
+ "durationS": 382.4,
+ "gitSha": "4b6dd1df",
+ "gitDirty": true,
+ "service": {
+  "upstream": "ws://192.168.0.17:8791/ws",
+  "contractVersion": "1.0.0",
+  "model": "unknown (not exposed through the loft telemetry)"
+ },
+ "idleFloorRateDegS": 0.7862094952417247,
+ "scores": {
+  "categories": {
+   "balance": {
+    "score": 95.8,
+    "checks": [
+     "idle",
+     "sit-stand",
+     "squat",
+     "balance-one-foot"
+    ],
+    "unmeasured": []
+   },
+   "dance": {
+    "score": 100.0,
+    "checks": [
+     "shuffle"
+    ],
+    "unmeasured": []
+   },
+   "foot-contact": {
+    "score": 100.0,
+    "checks": [
+     "foot-contact"
+    ],
+    "unmeasured": []
+   },
+   "hands": {
+    "score": 100.0,
+    "checks": [
+     "wave",
+     "reach"
+    ],
+    "unmeasured": []
+   },
+   "locomotion": {
+    "score": 100.0,
+    "checks": [
+     "walk-forward",
+     "walk-backward",
+     "strafe-left",
+     "strafe-right",
+     "wall-absorb"
+    ],
+    "unmeasured": []
+   },
+   "turning": {
+    "score": 100.0,
+    "checks": [
+     "turn-90"
+    ],
+    "unmeasured": []
+   }
+  },
+  "overall": 99.3
+ },
+ "checks": [
+  {
+   "id": "idle",
+   "category": "balance",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100%",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "maxLeanEmaDeg",
+     "op": "<=",
+     "pass": 6,
+     "partial": 10,
+     "basis": "baseline 3.3\u00b0",
+     "value": 3.8,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "swayRangeM",
+     "op": "<=",
+     "pass": 0.1,
+     "partial": 0.2,
+     "basis": "baseline 0.055 m",
+     "value": 0.026,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "idle must never reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 3.8,
+    "streamResets": 0,
+    "navAbsorbs": 0,
+    "travelM": 0.034,
+    "pathM": 0.197,
+    "straightness": 0.173,
+    "netX": 0.034,
+    "netZ": 0.003,
+    "yawDeltaDeg": -1.7,
+    "yawAbsDeg": 1.7,
+    "swayRangeM": 0.026,
+    "hipsYMin": 0.866,
+    "hipsYMax": 0.922,
+    "hipsYRangeM": 0.056,
+    "leftHandAmpM": 0.18,
+    "rightHandAmpM": 0.165,
+    "handSymmetry": null,
+    "footMinY": -0.034,
+    "footP5Y": -0.024,
+    "footSlideM": 1.397,
+    "footLiftM": 0.006
+   }
+  },
+  {
+   "id": "walk-forward",
+   "category": "locomotion",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "pathM",
+     "op": ">=",
+     "pass": 1.5,
+     "partial": 0.8,
+     "basis": "baseline walked path in 12 s: 4.14 / 1.68 / 9.23 m over 3 runs (net travel 0.25\u20133.40 m \u2014 stochastic heading + wall absorb, evidence only)",
+     "value": 4.543,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": 1,
+     "basis": "walk inside the room must not reset the stream (a single stochastic stream teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade \u2192 partial)",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100%",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 4.2,
+    "streamResets": 0,
+    "navAbsorbs": 17,
+    "travelM": 0.309,
+    "pathM": 4.543,
+    "straightness": 0.068,
+    "netX": -0.137,
+    "netZ": 0.277,
+    "yawDeltaDeg": 24.5,
+    "yawAbsDeg": 24.5,
+    "swayRangeM": 1.389,
+    "hipsYMin": 0.841,
+    "hipsYMax": 0.915,
+    "hipsYRangeM": 0.074,
+    "leftHandAmpM": 1.913,
+    "rightHandAmpM": 2.104,
+    "handSymmetry": null,
+    "footMinY": -0.031,
+    "footP5Y": -0.026,
+    "footSlideM": 5.305,
+    "footLiftM": 0.153
+   }
+  },
+  {
+   "id": "walk-backward",
+   "category": "locomotion",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "pathM",
+     "op": ">=",
+     "pass": 2.0,
+     "partial": 1.0,
+     "basis": "baseline walked path in 12 s: 3.11 / 5.27 m",
+     "value": 12.178,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": 1,
+     "basis": "walk inside the room must not reset the stream (a single stochastic stream teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade \u2192 partial)",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100%",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 7.8,
+    "streamResets": 0,
+    "navAbsorbs": 28,
+    "travelM": 2.182,
+    "pathM": 12.178,
+    "straightness": 0.179,
+    "netX": -0.529,
+    "netZ": -2.116,
+    "yawDeltaDeg": 58.7,
+    "yawAbsDeg": 58.7,
+    "swayRangeM": 3.57,
+    "hipsYMin": 0.777,
+    "hipsYMax": 0.888,
+    "hipsYRangeM": 0.111,
+    "leftHandAmpM": 5.566,
+    "rightHandAmpM": 5.6,
+    "handSymmetry": null,
+    "footMinY": -0.048,
+    "footP5Y": -0.041,
+    "footSlideM": 25.409,
+    "footLiftM": 0.118
+   }
+  },
+  {
+   "id": "strafe-left",
+   "category": "locomotion",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "pathM",
+     "op": ">=",
+     "pass": 2.0,
+     "partial": 0.8,
+     "basis": "baseline walked path in 12 s: 7.61 / 0.83 (started at the wall) / 9.28 m",
+     "value": 6.759,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": 1,
+     "basis": "12 s at \u22480.55 m/s may touch the room bound; treadmill absorb must keep resets at 0 (a single stochastic stream teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade \u2192 partial)",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100%",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 5.9,
+    "streamResets": 0,
+    "navAbsorbs": 28,
+    "travelM": 1.633,
+    "pathM": 6.759,
+    "straightness": 0.242,
+    "netX": 0.699,
+    "netZ": 1.476,
+    "yawDeltaDeg": 12.8,
+    "yawAbsDeg": 12.8,
+    "swayRangeM": 2.628,
+    "hipsYMin": 0.672,
+    "hipsYMax": 0.924,
+    "hipsYRangeM": 0.252,
+    "leftHandAmpM": 4.513,
+    "rightHandAmpM": 4.056,
+    "handSymmetry": null,
+    "footMinY": -0.087,
+    "footP5Y": -0.082,
+    "footSlideM": 8.367,
+    "footLiftM": 0.124
+   }
+  },
+  {
+   "id": "strafe-right",
+   "category": "locomotion",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "pathM",
+     "op": ">=",
+     "pass": 2.5,
+     "partial": 1.0,
+     "basis": "baseline walked path in 12 s: 4.48 / 7.82 / 8.96 m",
+     "value": 5.204,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": 1,
+     "basis": "treadmill absorb must keep resets at 0 (a single stochastic stream teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade \u2192 partial)",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100%",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 5.2,
+    "streamResets": 0,
+    "navAbsorbs": 25,
+    "travelM": 0.644,
+    "pathM": 5.204,
+    "straightness": 0.124,
+    "netX": -0.092,
+    "netZ": 0.638,
+    "yawDeltaDeg": -58.9,
+    "yawAbsDeg": 58.9,
+    "swayRangeM": 1.434,
+    "hipsYMin": 0.696,
+    "hipsYMax": 0.933,
+    "hipsYRangeM": 0.237,
+    "leftHandAmpM": 1.917,
+    "rightHandAmpM": 2.276,
+    "handSymmetry": null,
+    "footMinY": -0.085,
+    "footP5Y": -0.073,
+    "footSlideM": 7.953,
+    "footLiftM": 0.142
+   }
+  },
+  {
+   "id": "turn-90",
+   "category": "turning",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "yawAbsDeg",
+     "op": "between",
+     "pass": [
+      45,
+      240
+     ],
+     "partial": [
+      20,
+      300
+     ],
+     "basis": "baseline |yaw delta| 169.9\u00b0 / 155.1\u00b0 / 79.0\u00b0 over 3 runs \u2014 magnitude AND sign vary (model turned right once); brackets bound 'turned a meaningful fraction of a turn, did not spin, did not freeze'",
+     "value": 147.8,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "turn in place must not reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 4.9,
+    "streamResets": 0,
+    "navAbsorbs": 4,
+    "travelM": 0.293,
+    "pathM": 2.209,
+    "straightness": 0.133,
+    "netX": 0.138,
+    "netZ": -0.258,
+    "yawDeltaDeg": 147.8,
+    "yawAbsDeg": 147.8,
+    "swayRangeM": 0.269,
+    "hipsYMin": 0.861,
+    "hipsYMax": 0.902,
+    "hipsYRangeM": 0.041,
+    "leftHandAmpM": 0.858,
+    "rightHandAmpM": 0.973,
+    "handSymmetry": null,
+    "footMinY": -0.032,
+    "footP5Y": -0.023,
+    "footSlideM": 3.622,
+    "footLiftM": 0.025
+   }
+  },
+  {
+   "id": "sit-stand",
+   "category": "balance",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "sitDropM",
+     "op": ">=",
+     "pass": 0.1,
+     "partial": 0.05,
+     "basis": "baseline 0.157 m hips drop (shallow sit at T1)",
+     "value": 0.25,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "standRecoveryM",
+     "op": "<=",
+     "pass": 0.25,
+     "partial": 0.4,
+     "basis": "baseline 0.159 m |final \u2212 initial| hips Y",
+     "value": 0.006,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "sit/stand must not reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 86.7,
+    "gateHoldSamples": 4,
+    "maxLeanEmaDeg": 16.2,
+    "streamResets": 0,
+    "navAbsorbs": 11,
+    "travelM": 0.404,
+    "pathM": 5.032,
+    "straightness": 0.08,
+    "netX": -0.318,
+    "netZ": -0.249,
+    "yawDeltaDeg": 71.3,
+    "yawAbsDeg": 71.3,
+    "swayRangeM": 1.536,
+    "hipsYMin": 0.316,
+    "hipsYMax": 1.001,
+    "hipsYRangeM": 0.685,
+    "sitDropM": 0.25,
+    "standRecoveryM": 0.006,
+    "leftHandAmpM": 2.363,
+    "rightHandAmpM": 2.71,
+    "handSymmetry": null,
+    "footMinY": -0.202,
+    "footP5Y": -0.17,
+    "footSlideM": 9.154,
+    "footLiftM": 0.024,
+    "segments": [
+     {
+      "frames": 33,
+      "pathM": 0.6604168411727283,
+      "travelM": 0.5455509609160619,
+      "yawDeltaDeg": -20.817138608792806,
+      "hipsRateMedianDegS": 3.1437778735635455
+     },
+     {
+      "frames": 50,
+      "pathM": 4.371704934631387,
+      "travelM": 0.5408611402967214,
+      "yawDeltaDeg": 92.13031689597176,
+      "hipsRateMedianDegS": 14.271273776594207
+     }
+    ],
+    "phraseCompletionPct": 100.0,
+    "quarterTurnYawDeg": null
+   }
+  },
+  {
+   "id": "wall-absorb",
+   "category": "locomotion",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": 1,
+     "basis": "BREAK-GUARD: sustained slide hits the room bound \u22487 s in; without treadmill absorb the residual clamp resets the stream every ~2 s (14 in 65 s measured pre-fix) (a single stochastic stream teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade \u2192 partial)",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "navAbsorbs",
+     "op": ">=",
+     "pass": 1,
+     "partial": null,
+     "basis": "baseline 78 / 42 / 50 absorb events at the boundary",
+     "value": 52,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100% \u2014 stream stays live dancing at the wall",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 10.0,
+    "streamResets": 0,
+    "navAbsorbs": 52,
+    "travelM": 0.593,
+    "pathM": 10.861,
+    "straightness": 0.055,
+    "netX": 0.288,
+    "netZ": 0.518,
+    "yawDeltaDeg": 44.1,
+    "yawAbsDeg": 44.1,
+    "swayRangeM": 2.179,
+    "hipsYMin": 0.693,
+    "hipsYMax": 0.93,
+    "hipsYRangeM": 0.237,
+    "leftHandAmpM": 4.9,
+    "rightHandAmpM": 4.453,
+    "handSymmetry": null,
+    "footMinY": -0.091,
+    "footP5Y": -0.081,
+    "footSlideM": 12.669,
+    "footLiftM": 0.119
+   }
+  },
+  {
+   "id": "shuffle",
+   "category": "dance",
+   "level": 2,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "phraseCompletionPct",
+     "op": ">=",
+     "pass": 90,
+     "partial": 60,
+     "basis": "baseline 100% of 10 phrases in both runs showed measurable motion (path \u22650.15 m or |yaw| \u226515\u00b0 or hips rate \u22652\u00d7 idle floor)",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "quarterTurnYawDeg",
+     "op": "between",
+     "pass": [
+      20,
+      220
+     ],
+     "partial": [
+      10,
+      300
+     ],
+     "basis": "baseline mean |yaw| of the quarter-turn phrases: 127.9\u00b0 / 25.9\u00b0 across runs \u2014 the model's quarter turn is unreliable at T1 (finding, documented); brackets still catch 'never turned' (<10\u00b0) and 'spun' (>300\u00b0)",
+     "value": 99.6,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "no phrase may reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100%",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 5.9,
+    "streamResets": 0,
+    "navAbsorbs": 96,
+    "travelM": 0.408,
+    "pathM": 21.745,
+    "straightness": 0.019,
+    "netX": -0.013,
+    "netZ": -0.408,
+    "yawDeltaDeg": 63.6,
+    "yawAbsDeg": 63.6,
+    "swayRangeM": 4.449,
+    "hipsYMin": 0.708,
+    "hipsYMax": 0.928,
+    "hipsYRangeM": 0.22,
+    "leftHandAmpM": 6.287,
+    "rightHandAmpM": 6.024,
+    "handSymmetry": null,
+    "footMinY": -0.074,
+    "footP5Y": -0.038,
+    "footSlideM": 37.102,
+    "footLiftM": 0.166,
+    "segments": [
+     {
+      "frames": 31,
+      "pathM": 3.668718702737719,
+      "travelM": 3.380559619872803,
+      "yawDeltaDeg": 17.330013228192556,
+      "hipsRateMedianDegS": 6.967231005724287
+     },
+     {
+      "frames": 35,
+      "pathM": 3.1330776438304175,
+      "travelM": 1.7355908466565086,
+      "yawDeltaDeg": 94.8662994484986,
+      "hipsRateMedianDegS": 6.413767641505101
+     },
+     {
+      "frames": 37,
+      "pathM": 0.6544777627191823,
+      "travelM": 0.055735469289527356,
+      "yawDeltaDeg": -20.641424965178505,
+      "hipsRateMedianDegS": 6.859981432566211
+     },
+     {
+      "frames": 37,
+      "pathM": 0.8946498162956645,
+      "travelM": 0.20442921349740975,
+      "yawDeltaDeg": 7.575004430409739,
+      "hipsRateMedianDegS": 8.831109294280958
+     },
+     {
+      "frames": 35,
+      "pathM": 1.078279549014663,
+      "travelM": 0.2960331161730932,
+      "yawDeltaDeg": -144.99440649308235,
+      "hipsRateMedianDegS": 4.998555074758592
+     },
+     {
+      "frames": 37,
+      "pathM": 2.774062816050082,
+      "travelM": 2.235730101151291,
+      "yawDeltaDeg": 95.87087332275117,
+      "hipsRateMedianDegS": 5.598946816154304
+     },
+     {
+      "frames": 37,
+      "pathM": 1.3271184002057081,
+      "travelM": 0.06826498800896275,
+      "yawDeltaDeg": 111.80836313339326,
+      "hipsRateMedianDegS": 11.199544666867146
+     },
+     {
+      "frames": 37,
+      "pathM": 0.7771817952265888,
+      "travelM": 0.07091946176307944,
+      "yawDeltaDeg": 83.80120640183054,
+      "hipsRateMedianDegS": 8.01108099599066
+     },
+     {
+      "frames": 38,
+      "pathM": 0.5594359474799298,
+      "travelM": 0.13498384917897926,
+      "yawDeltaDeg": 120.703451317665,
+      "hipsRateMedianDegS": 8.965238127031602
+     },
+     {
+      "frames": 54,
+      "pathM": 6.614346035117531,
+      "travelM": 5.150782594393798,
+      "yawDeltaDeg": 54.19003845152743,
+      "hipsRateMedianDegS": 4.134431318816627
+     }
+    ],
+    "phraseCompletionPct": 100.0,
+    "quarterTurnYawDeg": 99.6
+   }
+  },
+  {
+   "id": "wave",
+   "category": "hands",
+   "level": 2,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "rightHandAmpM",
+     "op": ">=",
+     "pass": 0.6,
+     "partial": 0.3,
+     "basis": "baseline 1.07 m right-hand world range",
+     "value": 0.95,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "maxLeanEmaDeg",
+     "op": "<=",
+     "pass": 8,
+     "partial": 12,
+     "basis": "no explosion: baseline 3.6\u00b0",
+     "value": 4.0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "wave must not reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 4.0,
+    "streamResets": 0,
+    "navAbsorbs": 0,
+    "travelM": 0.144,
+    "pathM": 0.285,
+    "straightness": 0.505,
+    "netX": -0.038,
+    "netZ": 0.139,
+    "yawDeltaDeg": -32.8,
+    "yawAbsDeg": 32.8,
+    "swayRangeM": 0.121,
+    "hipsYMin": 0.885,
+    "hipsYMax": 0.895,
+    "hipsYRangeM": 0.01,
+    "leftHandAmpM": 0.353,
+    "rightHandAmpM": 0.95,
+    "handSymmetry": null,
+    "footMinY": -0.014,
+    "footP5Y": -0.013,
+    "footSlideM": 1.18,
+    "footLiftM": 0.011
+   }
+  },
+  {
+   "id": "reach",
+   "category": "hands",
+   "level": 2,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "leftHandAmpM",
+     "op": ">=",
+     "pass": 0.4,
+     "partial": 0.2,
+     "basis": "baseline 0.74 m left-hand range on reach-left",
+     "value": 0.899,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "handSymmetry",
+     "op": ">=",
+     "pass": 0.5,
+     "partial": 0.3,
+     "basis": "baseline 0.73 min/max hand amplitude across the two reach segments",
+     "value": 0.623,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "reach must not reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 3.1,
+    "streamResets": 0,
+    "navAbsorbs": 0,
+    "travelM": 0.002,
+    "pathM": 0.392,
+    "straightness": 0.005,
+    "netX": 0.002,
+    "netZ": 0.0,
+    "yawDeltaDeg": -76.9,
+    "yawAbsDeg": 76.9,
+    "swayRangeM": 0.057,
+    "hipsYMin": 0.869,
+    "hipsYMax": 0.904,
+    "hipsYRangeM": 0.035,
+    "leftHandAmpM": 0.899,
+    "rightHandAmpM": 1.442,
+    "handSymmetry": 0.623,
+    "footMinY": -0.031,
+    "footP5Y": -0.021,
+    "footSlideM": 1.733,
+    "footLiftM": 0.011,
+    "segments": [
+     {
+      "frames": 27,
+      "pathM": 0.12661273071198687,
+      "travelM": 0.02941553839714505,
+      "yawDeltaDeg": 104.64797454462986,
+      "hipsRateMedianDegS": 1.1148709941509996
+     },
+     {
+      "frames": 43,
+      "pathM": 0.26501694625492495,
+      "travelM": 0.03005353075168005,
+      "yawDeltaDeg": 178.72519662793286,
+      "hipsRateMedianDegS": 1.9861197834676538
+     }
+    ],
+    "phraseCompletionPct": 100.0,
+    "quarterTurnYawDeg": null
+   }
+  },
+  {
+   "id": "squat",
+   "category": "balance",
+   "level": 2,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "hipsYRangeM",
+     "op": ">=",
+     "pass": 0.5,
+     "partial": 0.25,
+     "basis": "baseline 0.81 m hips range squat\u2192stand",
+     "value": 0.729,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "footSlideM",
+     "op": "<=",
+     "pass": 3.0,
+     "partial": 5.0,
+     "basis": "baseline 1.94 m foot XZ slide while in ground contact (feet skate at T1 \u2014 known wrongness, measured not hidden)",
+     "value": 2.603,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "squat must not reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 12.1,
+    "streamResets": 0,
+    "navAbsorbs": 0,
+    "travelM": 0.024,
+    "pathM": 1.972,
+    "straightness": 0.012,
+    "netX": -0.004,
+    "netZ": -0.023,
+    "yawDeltaDeg": 104.9,
+    "yawAbsDeg": 104.9,
+    "swayRangeM": 0.282,
+    "hipsYMin": 0.312,
+    "hipsYMax": 1.04,
+    "hipsYRangeM": 0.729,
+    "leftHandAmpM": 1.136,
+    "rightHandAmpM": 1.144,
+    "handSymmetry": null,
+    "footMinY": -0.24,
+    "footP5Y": -0.175,
+    "footSlideM": 2.603,
+    "footLiftM": 0.02
+   }
+  },
+  {
+   "id": "balance-one-foot",
+   "category": "balance",
+   "level": 2,
+   "verdict": "partial",
+   "score": 0.8333333333333334,
+   "assertions": [
+    {
+     "metric": "footLiftM",
+     "op": ">=",
+     "pass": 0.03,
+     "partial": 0.01,
+     "basis": "baseline raised-foot peak 0.057 / 0.036 / 0.038 / 0.012 m over 4 runs \u2014 the T1 model often barely lifts (unreliable behavior, documented); brackets catch 'no lift at all' (0.007 m measured with the rejected prompt phrasing)",
+     "value": 0.017,
+     "verdict": "partial",
+     "score": 0.5
+    },
+    {
+     "metric": "maxLeanEmaDeg",
+     "op": "<=",
+     "pass": 11,
+     "partial": 16,
+     "basis": "baseline 6.4\u20138.9\u00b0; sanity-gate drift EMA trips at 12\u00b0",
+     "value": 7.8,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": null,
+     "basis": "balance must not reset the stream",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 7.8,
+    "streamResets": 0,
+    "navAbsorbs": 0,
+    "travelM": 0.197,
+    "pathM": 0.407,
+    "straightness": 0.484,
+    "netX": -0.009,
+    "netZ": 0.197,
+    "yawDeltaDeg": 37.6,
+    "yawAbsDeg": 37.6,
+    "swayRangeM": 0.146,
+    "hipsYMin": 0.863,
+    "hipsYMax": 0.916,
+    "hipsYRangeM": 0.053,
+    "leftHandAmpM": 0.346,
+    "rightHandAmpM": 0.351,
+    "handSymmetry": null,
+    "footMinY": -0.038,
+    "footP5Y": -0.024,
+    "footSlideM": 1.121,
+    "footLiftM": 0.017
+   }
+  },
+  {
+   "id": "foot-contact",
+   "category": "foot-contact",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "footP5Y",
+     "op": ">=",
+     "pass": -0.12,
+     "partial": -0.2,
+     "basis": "baseline p5 of lowest foot-bone Y across the whole run: -0.074 m (mild floor penetration at T1 \u2014 measured, not hidden)",
+     "value": -0.073,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "footMinY",
+     "op": ">=",
+     "pass": -0.3,
+     "partial": -0.45,
+     "basis": "baseline min lowest foot-bone Y: -0.21 m (worst-frame penetration during sit/squat)",
+     "value": -0.24,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": null,
+    "gateHoldSamples": null,
+    "maxLeanEmaDeg": null,
+    "streamResets": null,
+    "navAbsorbs": null,
+    "travelM": 0.176,
+    "pathM": 71.828,
+    "straightness": 0.002,
+    "netX": 0.016,
+    "netZ": 0.175,
+    "yawDeltaDeg": 52.7,
+    "yawAbsDeg": 52.7,
+    "swayRangeM": 4.817,
+    "hipsYMin": 0.312,
+    "hipsYMax": 1.04,
+    "hipsYRangeM": 0.729,
+    "leftHandAmpM": 9.903,
+    "rightHandAmpM": 9.31,
+    "handSymmetry": null,
+    "footMinY": -0.24,
+    "footP5Y": -0.073,
+    "footSlideM": 117.915,
+    "footLiftM": 0.166
+   }
+  }
+ ],
+ "console": [
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "info: [ardy] profiled retarget calibrated (rest frame 20, hipsScale 0.989)",
+  "info: [ardy] retargeter ready (path profiled)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "warning: [ardy] motion stream degraded (hips lean 15\u00b0 while upright) \u2014 released to procedural idle; requesting hard stream reset",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+ ]
+}

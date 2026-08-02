@@ -64,6 +64,107 @@ export async function mountTaiLoft(
     if (event.key === 'Enter') sendArdyPrompt()
   })
   controls.append(ardyStatus, ardyInput, ardySend)
+
+  // Shuffle button: plays the GEVS shortened shuffle sequence (data:
+  // hyrax-3d/tests/bench/sequences/shuffle.json, served via /api/hyrax/3d/)
+  // as a timed prompt schedule through the normal prompt channel. Toggles
+  // to Stop while playing; timers are cleaned up on unmount.
+  const shuffleButton = document.createElement('button')
+  shuffleButton.textContent = '♪ Shuffle'
+  shuffleButton.title = 'Play the shortened shuffle sequence (GEVS dance benchmark)'
+  let shuffleTimers: number[] = []
+  const stopShuffle = (): void => {
+    for (const t of shuffleTimers) window.clearTimeout(t)
+    shuffleTimers = []
+    shuffleButton.textContent = '♪ Shuffle'
+  }
+  shuffleButton.addEventListener('click', () => {
+    if (shuffleTimers.length) { stopShuffle(); return }
+    shuffleButton.textContent = '■ Stop'
+    interface ShuffleSeq { phraseSeconds: number; phrases: { prompt: string }[]; repeats: number }
+    const fallback: ShuffleSeq = {
+      phraseSeconds: 9,
+      phrases: [
+        { prompt: 'a person steps to the right twice' },
+        { prompt: 'a person steps to the left twice' },
+        { prompt: 'a person taps their right heel forward' },
+        { prompt: 'a person taps their left heel forward' },
+        { prompt: 'a person turns a quarter turn to the left' },
+      ],
+      repeats: 2,
+    }
+    const play = (seq: ShuffleSeq): void => {
+      const total = seq.phrases.length * seq.repeats
+      for (let i = 0; i < total; i += 1) {
+        const phrase = seq.phrases[i % seq.phrases.length]
+        shuffleTimers.push(window.setTimeout(() => {
+          room.setArdyPrompt(phrase.prompt)
+          if (i === total - 1) {
+            shuffleTimers.push(window.setTimeout(() => {
+              room.setArdyPrompt('a person stands idle')
+              stopShuffle()
+            }, seq.phraseSeconds * 1000))
+          }
+        }, i * seq.phraseSeconds * 1000))
+      }
+    }
+    fetch('/api/hyrax/3d/tests/bench/sequences/shuffle.json')
+      .then((r) => (r.ok ? r.json() : fallback))
+      .then((seq) => play(seq as ShuffleSeq))
+      .catch(() => play(fallback))
+  })
+  controls.append(shuffleButton)
+
+  // GEVS scoreboard: toggle panel showing the latest bench report
+  // (hyrax-3d/tests/bench/scoreboard.json — promoted from the newest run;
+  // see tests/bench/README.md). Read-only; fetch failures hide the panel.
+  const scoreButton = document.createElement('button')
+  scoreButton.textContent = 'Scores'
+  scoreButton.title = 'Show the latest GEVS embodiment benchmark scores'
+  const scorePanel = document.createElement('div')
+  scorePanel.className = 'tai-loft-scoreboard'
+  scorePanel.style.display = 'none'
+  let scoreLoaded = false
+  scoreButton.addEventListener('click', () => {
+    const show = scorePanel.style.display === 'none'
+    scorePanel.style.display = show ? '' : 'none'
+    if (!show || scoreLoaded) return
+    interface CategoryScore { score: number }
+    interface ScoreReport {
+      startedAt?: string
+      scores?: { overall?: number; categories?: Record<string, CategoryScore> }
+      checks?: { id: string; verdict: string; summary?: string }[]
+    }
+    fetch('/api/hyrax/3d/tests/bench/scoreboard.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((report: ScoreReport | null) => {
+        scoreLoaded = true
+        if (!report || !report.scores) {
+          scorePanel.textContent = 'No GEVS report yet — run tests/bench/gevs.py'
+          return
+        }
+        const when = (report.startedAt ?? '').slice(0, 10)
+        const rows: string[] = [
+          `<div class="tai-loft-scoreboard-overall">GEVS ${report.scores.overall ?? '?'}<small>${when}</small></div>`,
+        ]
+        const cats = report.scores.categories ?? {}
+        for (const [name, cat] of Object.entries(cats)) {
+          rows.push(`<div class="tai-loft-scoreboard-row"><span>${name}</span><b>${cat.score}</b></div>`)
+        }
+        const fails = (report.checks ?? []).filter((c) => c.verdict !== 'pass')
+        if (fails.length) {
+          rows.push('<div class="tai-loft-scoreboard-partials">partials/fails: ' +
+            fails.map((c) => c.id).join(', ') + '</div>')
+        }
+        scorePanel.innerHTML = rows.join('')
+      })
+      .catch(() => {
+        scoreLoaded = true
+        scorePanel.textContent = 'GEVS report unavailable.'
+      })
+  })
+  controls.append(scoreButton)
+  shell.append(scorePanel)
   const ardyStatusTimer = setInterval(() => {
     const state = room.getArdyState()
     ardyStatus.dataset.state = state
@@ -131,6 +232,7 @@ export async function mountTaiLoft(
     if (destroyed) return
     destroyed = true
     clearInterval(ardyStatusTimer)
+    stopShuffle()
     delete debugWindow.__ardy
     if (configuration.development) window.removeEventListener('keydown', onKeyDown)
     workbench?.destroy()
