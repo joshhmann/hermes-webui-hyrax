@@ -207,11 +207,40 @@ export class TaiRoomScene {
     return this.ardySource?.getTelemetry() ?? null
   }
 
+  /**
+   * Bench seam (GEVS): re-anchor the avatar at a clear floor spot between
+   * checks so displacement metrics start from a deterministic position.
+   * Returns false when the stream is not live.
+   */
+  recenterArdyRoot(x: number, z: number): boolean {
+    return this.ardySource?.recenterRoot(x, z) ?? false
+  }
+
   /** Hips bone world-space Y (ARDY E2E probe; null when no rig/bone). */
   getHipsWorldY(): number | null {
     const bone = this.rig?.getBone('hips')
     if (!bone) return null
     return bone.getWorldPosition(this.diagnosticVector).y
+  }
+
+  /**
+   * Foot bone world-space Y vs the floor plane (ARDE foot-ground probe):
+   * lowest of the foot/toe bones per side, plus the overall lowest. Nulls
+   * when a bone is absent. Values below ~0 mean ground penetration.
+   */
+  getFootWorldY(): Record<string, number | null> | null {
+    const humanoid = this.rig?.vrm?.humanoid
+    if (!humanoid) return null
+    const out: Record<string, number | null> = {}
+    let lowest: number | null = null
+    for (const name of ['leftFoot', 'rightFoot', 'leftToes', 'rightToes']) {
+      const node = humanoid.getNormalizedBoneNode(name as any)
+      const y = node ? node.getWorldPosition(this.diagnosticVector).y : null
+      out[name] = y
+      if (y !== null && (lowest === null || y < lowest)) lowest = y
+    }
+    out.lowest = lowest
+    return out
   }
 
   /**
@@ -224,19 +253,26 @@ export class TaiRoomScene {
     z: number
     yaw: number
     bones: Record<string, [number, number, number, number] | null>
+    world: Record<string, [number, number, number] | null>
   } | null {
     const humanoid = this.rig?.vrm?.humanoid
     if (!this.rig || !humanoid) return null
     const bones: Record<string, [number, number, number, number] | null> = {}
+    const world: Record<string, [number, number, number] | null> = {}
     for (const name of boneNames) {
-      const q = humanoid.getNormalizedBoneNode(name as any)?.quaternion
+      const node = humanoid.getNormalizedBoneNode(name as any)
+      const q = node?.quaternion
       bones[name] = q ? [q.x, q.y, q.z, q.w] : null
+      world[name] = node
+        ? (node.getWorldPosition(this.diagnosticVector).toArray() as [number, number, number])
+        : null
     }
     return {
       x: this.rig.scene.position.x,
       z: this.rig.scene.position.z,
       yaw: this.rig.scene.rotation.y,
       bones,
+      world,
     }
   }
 

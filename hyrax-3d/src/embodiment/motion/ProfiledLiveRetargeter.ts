@@ -181,6 +181,11 @@ export class ProfiledLiveRetargeter {
     return this._blendBones
   }
 
+  /** Live lowpassed ground-contact correction (meters; null pre-calibration). */
+  get groundCorrection(): number | null {
+    return this.retargeter?.groundCorrection ?? null
+  }
+
   get hipsNode(): Object3DLike | null {
     return this._hipsNode
   }

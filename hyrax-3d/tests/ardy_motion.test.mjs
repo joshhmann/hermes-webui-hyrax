@@ -115,7 +115,7 @@ function makeMockRig() {
   }
 }
 
-function makeChunk({ t0 = 5, frameCount = 40, frameSeqStart = 0, fps = 20, walkSpeed = 0, reset = false, rootYaw = 0 }) {
+function makeChunk({ t0 = 5, frameCount = 40, frameSeqStart = 0, fps = 20, walkSpeed = 0, reset = false, rootYaw = 0, zBase = 0 }) {
   const jointCount = JOINT_NAMES.length
   const timestamps = new Float32Array(frameCount)
   const localRots = new Float32Array(frameCount * jointCount * 4)
@@ -125,7 +125,7 @@ function makeChunk({ t0 = 5, frameCount = 40, frameSeqStart = 0, fps = 20, walkS
   for (let i = 0; i < frameCount; i += 1) {
     const t = t0 + i / fps
     timestamps[i] = t
-    root.push({ position_m: [0, 1.0, walkSpeed * (t - t0)], orientation_wxyz: rootQuat })
+    root.push({ position_m: [0, 1.0, zBase + walkSpeed * (t - t0)], orientation_wxyz: rootQuat })
     for (let j = 0; j < jointCount; j += 1) localRots[(i * jointCount + j) * 4] = 1 // identity, w-first
     // Hips (joint 0, parent -1): its local rotation IS its global rotation.
     localRots.set(rootQuat, (i * jointCount) * 4)
@@ -256,6 +256,72 @@ test('root motion decomposition: navigation clamp bounds the approved root, hips
     'hips residual must be clamped (no teleport snap)',
   )
   assert(Math.abs(out.hipsPos[1] - 1.2 * 1.0) < 1e-9, 'hips Y is hipsScale × proposed Y')
+})
+
+test('treadmill absorb: sustained nav-blocked motion never resets the stream; the root stays at the wall', async () => {
+  // Measured live (Cha Cha Slide benchmark): "slide to the left" runs
+  // ≈0.55 m/s into the room bound; pre-fix the residual ramped past 0.3 m
+  // and the source sent a service reset every ~2 s (14 in 65 s), restarting
+  // the generation each time. The absorb folds the nav-rejected portion
+  // into the origin offset instead.
+  let now = 1000
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const clampNav = {
+    constrainMovement: (_from, to) => ({
+      position: { x: to.x, z: Math.min(to.z, 1.0) }, // wall at z = 1.0
+    }),
+  }
+  const source = makeSource(client, rig, { nowMs: () => now, navigation: clampNav })
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
+
+  // 8 s walk at 1 m/s straight into the wall (avatar starts at z=0.15).
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 160, walkSpeed: 1.0 }))
+  let owned = false
+  for (let i = 0; i < 270; i += 1) {
+    owned = source.update(1 / 30)
+    now += 1000 / 30
+  }
+  assert(owned, 'still live and owning at the wall (no release, no stall)')
+  assert.equal(client.resets, 0, 'nav-blocked motion must NOT reset the stream')
+  assert(rig.scene.position.z <= 1.0 + 1e-9, `nav owns the root: z=${rig.scene.position.z} clamps at the wall`)
+  assert(rig.scene.position.z > 0.8, `root should have walked TO the wall, z=${rig.scene.position.z}`)
+  const telemetry = source.getTelemetry()
+  assert.equal(telemetry.residualResetCount, 0)
+  assert(telemetry.navAbsorbCount > 0, 'rejected motion folded into the origin offset')
+  source.dispose()
+})
+
+test('teleport into the wall still requests a stream reset (single-frame jump, not a ramp)', async () => {
+  let now = 1000
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const clampNav = {
+    constrainMovement: (_from, to) => ({
+      position: { x: to.x, z: Math.min(to.z, 1.0) },
+    }),
+  }
+  const source = makeSource(client, rig, { nowMs: () => now, navigation: clampNav })
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
+
+  // Walk to just before the wall, then the stream teleports 4 m past it in
+  // one frame: the rejected jump exceeds the residual clamp in a single
+  // frame — that IS divergence (§3.3), not boundary treadmill.
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 40, walkSpeed: 0.4 }))
+  client.buffer.push(makeChunk({ t0: 7, frameSeqStart: 40, frameCount: 60, zBase: 4.8 }))
+  for (let i = 0; i < 150; i += 1) {
+    source.update(1 / 30)
+    now += 1000 / 30
+  }
+  assert(client.resets >= 1, 'a single-frame teleport past the clamp must still reset the stream')
+  assert(source.getTelemetry().residualResetCount >= 1)
+  source.dispose()
 })
 
 test('non-finite navigation answers approve nothing (fail closed)', () => {

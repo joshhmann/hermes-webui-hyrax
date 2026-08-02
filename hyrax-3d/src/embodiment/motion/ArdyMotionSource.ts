@@ -112,6 +112,16 @@ export interface ArdyTelemetry {
   lastReason: string | null
   /** contract_version from the last skeleton handshake, or null. */
   contractVersion: string | null
+  /** Times the root residual exceeded the clamp and a stream reset was sent. */
+  residualResetCount: number
+  /** Frames where nav-rejected motion was folded into the origin offset
+   * (treadmill absorb — boundary contact, no stream reset). */
+  navAbsorbCount: number
+  /** Live sanity-gate internals (benchmark/debug instrumentation). */
+  gate: { leanEmaDeg: number; rootYEma: number; hold: boolean }
+  /** Ground-contact correction currently applied to the hips (profiled path;
+   * null on the gestalt fallback). */
+  groundCorrectionM: number | null
 }
 
 const DEFAULT_ARDY_PATH = '/api/hyrax/ardy/ws'
@@ -131,6 +141,14 @@ const RESET_CROSSFADE_SECONDS = 0.45
  */
 const RESET_SPRING_OMEGA = 4 / RESET_CROSSFADE_SECONDS
 const RESET_COOLDOWN_MS = 2000
+/**
+ * Residual at/above this magnitude is treated as a teleport (stream
+ * re-origin / divergence, §3.3) and keeps the clamp+reset path; anything
+ * smaller is nav-rejected motion and is absorbed into the origin offset
+ * (see applySampled). A genuine teleport is meters; a fast blocked dance
+ * move rejects ≤ speed×frameTime (≈0.4 m at 2 m/s and 5 fps).
+ */
+const TELEPORT_RESIDUAL_M = 1.0
 
 /**
  * Stream sanity gate (fail-closed). Long autoregressive generations drift:
@@ -348,6 +366,8 @@ export class ArdyMotionSource {
   private reconnectAttempts = 0
   private reconnectCount = 0
   private framesDropped = 0
+  private residualResetCount = 0
+  private navAbsorbCount = 0
   private lastReason: string | null = null
   private lastLatencyMs: number | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -482,11 +502,42 @@ export class ArdyMotionSource {
       framesDropped: this.framesDropped,
       lastReason: this.lastReason,
       contractVersion: this.lastContract?.contract_version ?? null,
+      residualResetCount: this.residualResetCount,
+      navAbsorbCount: this.navAbsorbCount,
+      gate: {
+        leanEmaDeg: this.leanEma,
+        rootYEma: this.rootYEma,
+        hold: this.sanityHold,
+      },
+      groundCorrectionM: this.profiled?.groundCorrection ?? null,
     }
   }
 
   isLive(): boolean {
     return this.currentState === 'live'
+  }
+
+  /**
+   * Bench/debug seam (GEVS): teleport the avatar to a clear floor spot
+   * between checks by re-anchoring the stream origin there — the same
+   * machinery as session start (origin offset + adapter anchor + approval
+   * re-sync), so navigation, the residual clamp, and the rendered root stay
+   * consistent and no stream reset fires. No-op (returns false) when the
+   * source is not owning a live stream.
+   */
+  recenterRoot(targetX: number, targetZ: number): boolean {
+    if (!this.rootMotion || !this.lastSample || !Number.isFinite(targetX) || !Number.isFinite(targetZ)) {
+      return false
+    }
+    this.originOffset = [
+      targetX - this.lastSample.rootPos[0],
+      targetZ - this.lastSample.rootPos[2],
+    ]
+    const anchored: Vec3 = [targetX, this.lastSample.rootPos[1], targetZ]
+    this.rootMotion.anchor(anchored, qyaw(this.lastSample.rootQuat))
+    this.approval.reset(targetX, targetZ)
+    this.rig.setRootPosition(targetX, targetZ)
+    return true
   }
 
   setPrompt(text: string): void {
@@ -910,6 +961,35 @@ export class ArdyMotionSource {
     ]
     const out = rootMotion.update(proposed, sample.rootQuat)
 
+    // Treadmill at the boundary: navigation rejecting part of the proposed
+    // delta (room bounds / obstacle) is NOT stream divergence. Fold the
+    // rejected portion into the origin offset so the residual never ramps
+    // into the 0.3 m clamp + service-reset cycle — measured live: "slide to
+    // the left" (≈0.55 m/s sustained) hits the room bound in ~7 s and then
+    // reset the stream every ~2 s, restarting the generation and dipping the
+    // feet ~5 cm via the clamped hips residual. With the fold, the next
+    // frame's residual is only that frame's rejected motion, the dance
+    // continues in place at the wall, and she walks back out when the stream
+    // moves away from the boundary. The hips carry NO horizontal residual on
+    // an absorbed frame: the rejected motion never happened, so a wall-lean
+    // (and its foot-through-floor dip) would be a lie.
+    //
+    // Discriminator (measured): at low render rates a fast blocked move can
+    // reject >0.3 m in a single render frame (1.5 m/s × 0.2 s), so the
+    // adapter's resetRequested (>0.3 m) cannot tell "fast move into the
+    // wall" from a teleport. A genuine mid-stream teleport (stream re-origin
+    // without a reset flag, §3.3) is METERS; nothing a body does rejects
+    // ≥1 m in one frame (≥5 m/s even at 5 fps). Absorb below
+    // TELEPORT_RESIDUAL_M; at/above it, keep the reset path.
+    if (out.residualMagnitude > 1e-4 && out.residualMagnitude < TELEPORT_RESIDUAL_M) {
+      this.originOffset[0] += out.sceneRootPos[0] - proposed[0]
+      this.originOffset[1] += out.sceneRootPos[2] - proposed[2]
+      this.navAbsorbCount += 1
+      out.hipsPos[0] = 0
+      out.hipsPos[2] = 0
+      out.resetRequested = false
+    }
+
     // Navigation owns the AvatarRoot XZ + yaw; hips bone carries only the
     // bounded residual plus scaled vertical (RootMotionAdapter §3.1). The
     // yaw offset keeps the rendered facing continuous across a reset; the
@@ -925,6 +1005,7 @@ export class ArdyMotionSource {
       // Proposed/approved divergence > 0.3 m: clamp residual (already done by
       // the adapter — no snap) and ask the service to restart the stream (§3.3).
       this.lastResetSentAtMs = this.nowMs()
+      this.residualResetCount += 1
       console.warn('[ardy] root residual exceeded clamp; requesting stream reset')
       this.client.sendReset()
       this.clock.notifyReset()

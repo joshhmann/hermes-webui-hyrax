@@ -100,7 +100,9 @@ export async function mountTaiLoft(
     getState: () => room.getArdyState(),
     getTelemetry: () => room.getArdyTelemetry(),
     setPrompt: (text: string) => room.setArdyPrompt(text),
+    recenterRoot: (x: number, z: number) => room.recenterArdyRoot(x, z),
     hipsWorldY: () => room.getHipsWorldY(),
+    footWorldY: () => room.getFootWorldY(),
     poseProbe: (bones?: string[]) => room.getArdyPoseProbe(bones),
   }
   let workbenchButton: HTMLButtonElement | null = null
