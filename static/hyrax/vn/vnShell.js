@@ -99,9 +99,21 @@
     });
   }
 
+  // Shared transport lives in vnEvents.js (GestaltVN.api) — it rejects with
+  // an Error carrying .status + the parsed body payload on non-2xx. The
+  // inline fallback only fires when that script was never loaded, and still
+  // rejects on non-2xx so error bodies never land in success handlers.
   function _api(url, opts) {
+    if (typeof ns.api === 'function') return ns.api(url, opts);
     if (typeof root.api === 'function') return root.api(url, opts);
-    return fetch(url, opts).then(function(r) { return r.json(); });
+    return fetch(url, opts).then(function(r) {
+      if (!r.ok) {
+        var err = new Error('HTTP ' + r.status);
+        err.status = r.status;
+        throw err;
+      }
+      return r.json();
+    });
   }
 
   function _prefKey(operatorId) {

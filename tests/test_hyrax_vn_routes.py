@@ -904,6 +904,91 @@ class TestVnTurnsPost:
         assert handler.status == 409
         body = handler.json_body()
         assert body["error"] == "conflict"
+        # Unknown 409 reasons are never reflected — no reason/id leak.
+        assert "reason" not in body
+        assert "active_stream_id" not in body
+
+    def test_turn_native_409_active_stream_carries_bounded_reason(self, monkeypatch):
+        """The known active-stream 409 surfaces reason + bounded stream id."""
+        from api.hyrax_routes import ACTIVE_STREAM_CONFLICT_ERROR, handle_hyrax_vn_post
+
+        def _fake_start_turn(session_id, message, *, source=None):
+            return {
+                "error": ACTIVE_STREAM_CONFLICT_ERROR,
+                "active_stream_id": "stream_live_1",
+                "_status": 409,
+            }
+
+        monkeypatch.setattr("api.routes.start_session_turn", _fake_start_turn)
+
+        session = _make_mock_session("vn_session_1")
+        monkeypatch.setattr("api.hyrax_routes._get_session", lambda sid, **kw: session)
+
+        handler = _Handler()
+        parsed = SimpleNamespace(
+            path="/api/hyrax/vn/conversations/vn_session_1/turns", query=""
+        )
+        handle_hyrax_vn_post(handler, parsed, {"text": "Hello"})
+        assert handler.status == 409
+        body = handler.json_body()
+        assert body == {
+            "error": "conflict",
+            "reason": "active_stream",
+            "active_stream_id": "stream_live_1",
+        }
+
+    def test_turn_native_409_active_stream_id_is_bounded(self, monkeypatch):
+        """An over-long active_stream_id is truncated to MAX_ID_LENGTH."""
+        from api.hyrax_routes import (
+            ACTIVE_STREAM_CONFLICT_ERROR,
+            MAX_ID_LENGTH,
+            handle_hyrax_vn_post,
+        )
+
+        long_id = "s" * (MAX_ID_LENGTH + 40)
+
+        def _fake_start_turn(session_id, message, *, source=None):
+            return {
+                "error": ACTIVE_STREAM_CONFLICT_ERROR,
+                "active_stream_id": long_id,
+                "_status": 409,
+            }
+
+        monkeypatch.setattr("api.routes.start_session_turn", _fake_start_turn)
+
+        session = _make_mock_session("vn_session_1")
+        monkeypatch.setattr("api.hyrax_routes._get_session", lambda sid, **kw: session)
+
+        handler = _Handler()
+        parsed = SimpleNamespace(
+            path="/api/hyrax/vn/conversations/vn_session_1/turns", query=""
+        )
+        handle_hyrax_vn_post(handler, parsed, {"text": "Hello"})
+        assert handler.status == 409
+        body = handler.json_body()
+        assert body["reason"] == "active_stream"
+        assert body["active_stream_id"] == long_id[:MAX_ID_LENGTH]
+
+    def test_turn_native_409_active_stream_without_id(self, monkeypatch):
+        """Active-stream 409 without a usable id carries the reason only."""
+        from api.hyrax_routes import ACTIVE_STREAM_CONFLICT_ERROR, handle_hyrax_vn_post
+
+        def _fake_start_turn(session_id, message, *, source=None):
+            return {"error": ACTIVE_STREAM_CONFLICT_ERROR, "active_stream_id": 123, "_status": 409}
+
+        monkeypatch.setattr("api.routes.start_session_turn", _fake_start_turn)
+
+        session = _make_mock_session("vn_session_1")
+        monkeypatch.setattr("api.hyrax_routes._get_session", lambda sid, **kw: session)
+
+        handler = _Handler()
+        parsed = SimpleNamespace(
+            path="/api/hyrax/vn/conversations/vn_session_1/turns", query=""
+        )
+        handle_hyrax_vn_post(handler, parsed, {"text": "Hello"})
+        assert handler.status == 409
+        body = handler.json_body()
+        assert body == {"error": "conflict", "reason": "active_stream"}
 
     def test_turn_unknown_status_returns_fixed_500(self, monkeypatch):
         """Native unexpected status codes must be returned as fixed 500."""
@@ -1502,6 +1587,191 @@ class TestVnNoMutableBacking:
         import pytest
         with pytest.raises(TypeError):
             VN_PROFILES["tai"]["assets"]["portrait"] = "/evil/path"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test: VN_PROFILES is registry-driven (governance/operators.yaml)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestVnRegistryDrivenAllowlist:
+    """VN_PROFILES loads ONCE at startup from the operator registry.
+
+    The allowlist is bound at import time, so every scenario boots a fresh
+    interpreter against a hermetic governance dir (operators_loader copied
+    in, registry + journal isolated under tmp_path) — an in-process reload
+    would disturb module-level state other tests depend on.
+
+    Contract under test (shared operators_loader semantics):
+      * onboarding a new operator is a yaml edit only — no source change
+      * malformed/unknown-field entries are skipped and journaled while
+        the daemon still boots with the valid entries
+      * missing / file-level-invalid registry -> fail-closed EMPTY
+        allowlist + loud ERROR (webui policy; essenced's four-defaults
+        fallback is daemon-side, covered by the essenced suite)
+      * no runtime mutation or reload: the allowlist is immutable at every
+        level and a mid-process registry edit is never picked up
+    """
+
+    @staticmethod
+    def _facts_script(target: str) -> str:
+        """Boot api.hyrax_routes and print allowlist facts as JSON."""
+        return f"""
+import json
+import api.hyrax_routes as m
+immut = {{}}
+try:
+    m.VN_PROFILES["x"] = {{}}
+    immut["top"] = "MUTABLE"
+except TypeError:
+    immut["top"] = "TypeError"
+if {target!r} in m.VN_PROFILES:
+    try:
+        m.VN_PROFILES[{target!r}]["available"] = False
+        immut["nested"] = "MUTABLE"
+    except TypeError:
+        immut["nested"] = "TypeError"
+    try:
+        m.VN_PROFILES[{target!r}]["assets"]["portrait"] = "/evil"
+        immut["assets"] = "MUTABLE"
+    except TypeError:
+        immut["assets"] = "TypeError"
+print(json.dumps({{"keys": sorted(m.VN_PROFILES.keys()), "immut": immut}}))
+"""
+
+    def test_onboarding_new_operator_is_yaml_only(self, tmp_path):
+        """A 5th operator added ONLY to operators.yaml appears in the
+        allowlist at boot — zero source edits anywhere."""
+        from tests.helpers import boot_python, make_governance_dir, \
+            operators_registry_yaml, read_operators_journal
+        gov = make_governance_dir(tmp_path)
+        (gov / "operators.yaml").write_text(
+            operators_registry_yaml(["tai", "rei", "nei", "mai", "nova"]))
+        rc, out, err = boot_python(gov, self._facts_script("nova"))
+        assert rc == 0, f"daemon must boot:\n{err}"
+        facts = json.loads(out)
+        assert facts["keys"] == ["mai", "nei", "nova", "rei", "tai"]
+        # The registry entry became the allowlist entry verbatim (no
+        # code-side override): display metadata comes from the yaml.
+        assert facts["immut"] == {
+            "top": "TypeError", "nested": "TypeError", "assets": "TypeError"}
+        journal = read_operators_journal(gov)
+        assert [e["event"] for e in journal] == ["operators_loaded"]
+        assert journal[-1]["operator_count"] == 5
+        assert journal[-1]["rejected_count"] == 0
+
+    def test_unknown_field_entry_skipped_and_journaled_daemon_boots(
+            self, tmp_path):
+        """An entry with an unknown field is skipped + journaled with the
+        reason; the allowlist still boots with every valid entry."""
+        from tests.helpers import boot_python, make_governance_dir, \
+            operators_registry_yaml, read_operators_journal
+        gov = make_governance_dir(tmp_path)
+        body = (
+            operators_registry_yaml(["tai", "nei"])
+            + "  broken:\n"
+            "    name: Broken\n"
+            "    role: Builder\n"
+            "    available: true\n"
+            "    evil: true\n"
+            "    assets:\n"
+            "      portrait: /p\n"
+            "      background: /b\n"
+            "      chibi: /c\n")
+        (gov / "operators.yaml").write_text(body)
+        rc, out, err = boot_python(gov, self._facts_script("tai"))
+        assert rc == 0, f"daemon must still boot:\n{err}"
+        facts = json.loads(out)
+        assert facts["keys"] == ["nei", "tai"]
+        assert facts["immut"]["top"] == "TypeError"
+        journal = read_operators_journal(gov)
+        rejected = [e for e in journal
+                    if e["event"] == "operators_entry_rejected"]
+        assert len(rejected) == 1
+        assert rejected[0]["operator_id"] == "broken"
+        assert "unknown field" in rejected[0]["reason"]
+        assert journal[-1]["event"] == "operators_loaded"
+        assert journal[-1]["operator_ids"] == ["nei", "tai"]
+        assert journal[-1]["rejected_count"] == 1
+
+    def test_missing_registry_fails_closed_with_loud_error(self, tmp_path):
+        """No operators.yaml: EMPTY allowlist + loud ERROR + journaled
+        operators_missing — the daemon still boots (fail closed, per repo
+        rule; no open registration)."""
+        from tests.helpers import boot_python, make_governance_dir, \
+            read_operators_journal
+        gov = make_governance_dir(tmp_path)  # deliberately no operators.yaml
+        rc, out, err = boot_python(gov, self._facts_script("tai"))
+        assert rc == 0, f"daemon must still boot:\n{err}"
+        facts = json.loads(out)
+        assert facts["keys"] == []
+        assert "FAILED CLOSED" in err
+        journal = read_operators_journal(gov)
+        assert [e["event"] for e in journal] == ["operators_missing"]
+
+    def test_invalid_registry_fails_closed_and_journaled(self, tmp_path):
+        """File-level-damaged registry (not YAML): EMPTY allowlist, loud
+        ERROR, operators_invalid journaled — still boots."""
+        from tests.helpers import boot_python, make_governance_dir, \
+            read_operators_journal
+        gov = make_governance_dir(tmp_path)
+        (gov / "operators.yaml").write_text("::: not: [yaml")
+        rc, out, err = boot_python(gov, self._facts_script("tai"))
+        assert rc == 0, f"daemon must still boot:\n{err}"
+        facts = json.loads(out)
+        assert facts["keys"] == []
+        assert "FAILED CLOSED" in err
+        journal = read_operators_journal(gov)
+        assert [e["event"] for e in journal] == ["operators_invalid"]
+
+    def test_no_runtime_reload_after_registry_edit(self, tmp_path):
+        """A registry edit mid-process is NOT picked up: the loader cache
+        returns the same object and VN_PROFILES stays unchanged."""
+        from tests.helpers import boot_python, make_governance_dir, \
+            operators_registry_yaml
+        gov = make_governance_dir(tmp_path)
+        (gov / "operators.yaml").write_text(
+            operators_registry_yaml(["tai", "rei", "nei", "mai"]))
+        rc, out, err = boot_python(gov, """
+import json
+import api.hyrax_routes as m
+import operators_loader
+before = sorted(m.VN_PROFILES.keys())
+reg = operators_loader.get_operators()
+reg.source.write_text(
+    reg.source.read_text()
+    + "\\n  nova:\\n    name: Nova\\n    role: Ops\\n    available: true\\n"
+    + "    assets:\\n      portrait: /n\\n      background: /b\\n      chibi: /c\\n")
+again = operators_loader.get_operators()
+print(json.dumps({
+    "before": before,
+    "same_object": again is reg,
+    "after_get": sorted(again.operators.keys()),
+    "vn_after": sorted(m.VN_PROFILES.keys()),
+}))
+""")
+        assert rc == 0, f"probe failed:\n{err}"
+        facts = json.loads(out)
+        assert facts["before"] == ["mai", "nei", "rei", "tai"]
+        assert facts["same_object"] is True
+        assert facts["after_get"] == facts["before"]  # cache never reloads
+        assert facts["vn_after"] == facts["before"]   # allowlist unchanged
+
+    def test_allowlist_source_has_no_operator_literals(self):
+        """The allowlist section of api/hyrax_routes.py carries zero
+        operator ids / display metadata — onboarding is a yaml edit, never
+        a source edit."""
+        from pathlib import Path
+        from tests.helpers import source_between
+        src = Path(__file__).resolve().parent.parent.joinpath(
+            "api", "hyrax_routes.py").read_text(encoding="utf-8")
+        section = source_between(
+            src,
+            "# ── Fixed immutable sister allowlist",
+            "# ── Per-sister conversation lock registry",
+        )
+        for literal in ('"tai"', '"rei"', '"nei"', '"mai"', '"name":'):
+            assert literal not in section, (
+                f"operator literal {literal} leaked into the allowlist section")
 
 
 # ══════════════════════════════════════════════════════════════════════════

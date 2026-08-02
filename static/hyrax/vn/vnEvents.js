@@ -4,7 +4,9 @@
  * The ONLY SSE subscriber for the VN surface. Every other module consumes
  * the normalized VNRuntimeEvent stream from here (ARCH §3).
  *
- * Classic script, IIFE. Registers onto window.GestaltVN.events.
+ * Classic script, IIFE. Registers onto window.GestaltVN.events — and
+ * window.GestaltVN.api, the shared JSON transport every VN/essence module
+ * delegates to (loaded first of the vn2 scripts).
  *
  * Stream: GET /api/hyrax/vn/conversations/{sid}/events (alias of the native
  * session SSE). Subscribes to the full native vocabulary and normalizes each
@@ -97,6 +99,64 @@
 
   var BUFFER_MAX = 500;
   var SEEN_MAX = 1000;
+
+  // ── Shared JSON transport (window.GestaltVN.api) ──
+  // One home for the _api helper every VN/essence module used to copy.
+  // Contract: resolve with the parsed JSON body on 2xx; REJECT with an
+  // Error carrying .status and the parsed body payload fields (reason,
+  // active_stream_id, …) on non-2xx — from EITHER transport. The native
+  // window.api (workspace.js) already rejects on non-2xx but keeps the body
+  // as raw text on err.body; the raw-fetch fallback did not reject at all,
+  // which let a 409 {"error":"conflict"} land in success handlers.
+  function _normalizeApiError(err) {
+    if (!err || typeof err !== 'object') {
+      return new Error(err ? String(err) : 'Request failed');
+    }
+    var payload = null;
+    if (typeof err.body === 'string' && err.body) {
+      try {
+        var parsed = JSON.parse(err.body);
+        if (parsed && typeof parsed === 'object') payload = parsed;
+      } catch (_) { /* non-JSON body — no payload fields */ }
+    } else if (err.body && typeof err.body === 'object') {
+      payload = err.body;
+    }
+    if (payload) {
+      err.payload = payload;
+      if (typeof payload.reason === 'string') err.reason = payload.reason;
+      if (typeof payload.active_stream_id === 'string') {
+        err.active_stream_id = payload.active_stream_id;
+      }
+    }
+    return err;
+  }
+
+  function _api(url, opts) {
+    if (typeof root.api === 'function') {
+      return Promise.resolve(root.api(url, opts)).catch(function(err) {
+        throw _normalizeApiError(err);
+      });
+    }
+    if (typeof fetch !== 'function') {
+      return Promise.reject(new Error('no api transport'));
+    }
+    return fetch(url, opts).then(function(r) {
+      if (r && r.ok === false) {
+        return r.json().catch(function() { return null; }).then(function(body) {
+          var msg = (body && typeof body.error === 'string' && body.error) ||
+            (body && typeof body.message === 'string' && body.message) ||
+            ('HTTP ' + r.status);
+          var err = new Error(msg);
+          err.status = r.status;
+          if (body && typeof body === 'object') err.body = body;
+          throw _normalizeApiError(err);
+        });
+      }
+      return r.json();
+    });
+  }
+
+  ns.api = _api;
 
   // ── State ──
   var _es = null;

@@ -1450,7 +1450,16 @@ def _vn_handle_turn(handler, sid: str, body: dict) -> bool:
         _j(handler, {"error": "not found"}, status=404)
         return True
     if status == 409:
-        _j(handler, {"error": "conflict"}, status=409)
+        payload = {"error": "conflict"}
+        if result.get("error") == ACTIVE_STREAM_CONFLICT_ERROR:
+            # Known active-stream conflict: pass a bounded reason + stream id
+            # through so the client can adopt the real stream (reconnect) or
+            # retry when the stream proves stale.
+            payload["reason"] = "active_stream"
+            raw_active = result.get("active_stream_id")
+            if isinstance(raw_active, str) and raw_active:
+                payload["active_stream_id"] = raw_active[:MAX_ID_LENGTH]
+        _j(handler, payload, status=409)
         return True
     if status != 200:
         _j(handler, {"error": "internal error"}, status=500)

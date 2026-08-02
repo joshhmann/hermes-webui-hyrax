@@ -63,9 +63,21 @@
     }
   }
 
+  // Shared transport lives in vnEvents.js (GestaltVN.api) — it rejects with
+  // an Error carrying .status + the parsed body payload on non-2xx. The
+  // inline fallback only fires when that script was never loaded, and still
+  // rejects on non-2xx so error bodies never land in success handlers.
   function _api(url, opts) {
+    if (typeof ns.api === 'function') return ns.api(url, opts);
     if (typeof root.api === 'function') return root.api(url, opts);
-    return fetch(url, opts).then(function(r) { return r.json(); });
+    return fetch(url, opts).then(function(r) {
+      if (!r.ok) {
+        var err = new Error('HTTP ' + r.status);
+        err.status = r.status;
+        throw err;
+      }
+      return r.json();
+    });
   }
 
   function _cur() {
@@ -273,7 +285,49 @@
 
   // ── Send / cancel / edit / regenerate ──
 
-  function send(textOverride) {
+  // Restore a failed send's text into the composer (the standard chat does
+  // draft restore on failed sends; a turn must never vanish silently).
+  function _restoreDraft(text) {
+    if (!text || !_textarea) return;
+    if (!_textarea.value) {
+      _textarea.value = text;
+      try { _textarea.focus(); } catch (_) {}
+    }
+  }
+
+  // 409 active_stream recovery: our turn never started — the server already
+  // has a stream for this session. Refresh the conversation (the existing
+  // GET path) and adopt the truth: a genuinely active stream becomes our
+  // busy state (cancel uses the recovered id; SSE settle events clear it);
+  // a stale one (server cleared it) means the turn is retried once.
+  function _recoverActiveStream(err, text) {
+    _toast("She's mid-reply — reconnecting…");
+    var s = _session();
+    var refreshed = (s && typeof s.refresh === 'function')
+      ? s.refresh().catch(function() { return null; })
+      : Promise.resolve(null);
+    return refreshed.then(function() {
+      if (_disposed) return false;
+      var cur = _cur();
+      if (cur && cur.busy) {
+        _inFlight = true;
+        _activeStreamId = cur.activeStreamId ||
+          ((err && typeof err.active_stream_id === 'string') ? err.active_stream_id : null);
+        _syncBusy();
+        return false;
+      }
+      // Stale stream: the server no longer reports one — retry the turn once.
+      if (text || _staged.length) return send(text, true);
+      return false;
+    }).catch(function() {
+      if (_disposed) return false;
+      _restoreDraft(text);
+      _toast('Could not reconnect to the reply — your message is still in the box.');
+      return false;
+    });
+  }
+
+  function send(textOverride, _retried) {
     if (_disposed || !_textarea) return Promise.resolve(false);
     // Sidebar hermes-intent actions pass their message; the button path
     // reads the textarea. One shared send path (SPEC §3 duplicate-send rule).
@@ -318,6 +372,10 @@
     }).catch(function(err) {
       if (_disposed) return false;
       _adoptLimitFromError(err);
+      if (!_retried && err && err.status === 409 && err.reason === 'active_stream') {
+        return _recoverActiveStream(err, text);
+      }
+      _restoreDraft(text);
       var msg = (err && err.message) ? String(err.message) : 'Run failed';
       _toast(msg);
       return false;

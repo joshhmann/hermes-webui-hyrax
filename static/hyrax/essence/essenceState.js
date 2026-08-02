@@ -44,15 +44,21 @@
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
+  // Shared transport lives in vnEvents.js (GestaltVN.api) — it rejects with
+  // an Error carrying .status + the parsed body payload on non-2xx. The
+  // inline fallback only fires when that script was never loaded, and still
+  // rejects on non-2xx so error bodies never land in success handlers.
   function _api(url, opts) {
+    if (typeof GestaltVN.api === 'function') return GestaltVN.api(url, opts);
     if (typeof root.api === 'function') return root.api(url, opts);
-    if (typeof fetch === 'function') {
-      return fetch(url, opts).then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      });
-    }
-    return Promise.reject(new Error('no api transport'));
+    return fetch(url, opts).then(function(r) {
+      if (!r.ok) {
+        var err = new Error('HTTP ' + r.status);
+        err.status = r.status;
+        throw err;
+      }
+      return r.json();
+    });
   }
 
   function _clamp(v, lo, hi) {
