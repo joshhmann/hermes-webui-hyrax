@@ -318,12 +318,22 @@
   // ── Operators sidebar panel-view ──
   // Card click opens STANDARD chat with the sister's session; chibi click
   // on the map opens the VN. Both stay <button> for keyboard access.
+  // Whims layer: an active-whim chip under the card opens the whims panel
+  // (read-only + Josh's dismiss veto); see openWhimsPanel.
+  var _lastPresence = {};        // last presence map (panel re-renders)
+  var _whimsPanelFor = null;     // operator id with an open whims panel
+  var _dismissPending = {};      // whim id -> true (veto filed, awaiting close)
+
   function renderOperatorsPanel(presenceMap) {
+    _lastPresence = presenceMap || {};
     var host = document.getElementById('hyraxHqOperators');
     if (!host) return;
     host.replaceChildren();
     HQ_SISTERS.forEach(function(s) {
-      var presence = presenceMap[s.id] || null;
+      var presence = _lastPresence[s.id] || null;
+      var wrap = document.createElement('div');
+      wrap.className = 'hyrax-op-wrap';
+
       var card = document.createElement('button');
       card.className = 'hyrax-op-card hyrax-op-' + s.id;
       card.setAttribute('aria-label', 'Open chat with ' + s.name);
@@ -349,17 +359,6 @@
       meta.appendChild(act);
       meta.appendChild(hint);
 
-      // Whims layer (WHIMS_LAYER_SPEC.md): active whims from essenced's
-      // derived state ride the presence payload — one small chip line.
-      var whims = presence && presence.derivedState && presence.derivedState.whims;
-      if (Array.isArray(whims) && whims.length) {
-        var chip = document.createElement('span');
-        chip.className = 'hyrax-op-whim';
-        chip.textContent = 'wants to: ' + whims[0].text;
-        chip.title = whims.map(function(w) { return 'wants to: ' + w.text; }).join('\n');
-        meta.appendChild(chip);
-      }
-
       card.appendChild(img);
       card.appendChild(meta);
 
@@ -378,9 +377,224 @@
       card.addEventListener('click', function() {
         openStandardChat(s, card);
       });
-      host.appendChild(card);
+      wrap.appendChild(card);
+
+      // Whims layer (WHIMS_LAYER_SPEC.md): active whims from essenced's
+      // derived state ride the presence payload — one small chip button
+      // under the card opens the whims panel (veto lives there, not on
+      // the chip, so the read path stays one click away). With no active
+      // whims but history/totals to show, a subdued button keeps the
+      // panel reachable.
+      var derived = presence && presence.derivedState;
+      var whims = derived && derived.whims;
+      var hasWhims = Array.isArray(whims) && whims.length > 0;
+      var fulfilledTotal = derived && typeof derived.whimFulfilledTotal === 'number'
+        ? derived.whimFulfilledTotal : 0;
+      var hasHistory = derived && ((Array.isArray(derived.whimHistory) && derived.whimHistory.length > 0)
+        || fulfilledTotal > 0);
+      if (hasWhims || hasHistory) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'hyrax-op-whim' + (hasWhims ? '' : ' hyrax-op-whim-quiet');
+        chip.textContent = hasWhims
+          ? 'wants to: ' + whims[0].text
+          : 'whims · ' + fulfilledTotal + ' fulfilled';
+        chip.title = hasWhims
+          ? whims.map(function(w) { return 'wants to: ' + w.text; }).join('\n')
+            + '\n— click for the whims panel'
+          : 'No active whims — click for history';
+        chip.setAttribute('aria-label', 'Open whims panel for ' + s.name);
+        chip.setAttribute('aria-expanded', _whimsPanelFor === s.id ? 'true' : 'false');
+        chip.addEventListener('click', function() {
+          toggleWhimsPanel(s.id);
+        });
+        wrap.appendChild(chip);
+      }
+
+      if (_whimsPanelFor === s.id) {
+        wrap.appendChild(buildWhimsPanel(s));
+      }
+      host.appendChild(wrap);
     });
   }
+
+  // ── Whims panel (read-only + Josh's gentle veto) ──
+  // One action: dismiss. No approve/deny-per-whim, no auto-approve — the
+  // graduation discipline stays in config. Data comes from the presence
+  // payload (derivedState.whims / whimHistory / whimFulfilledTotal); the
+  // panel re-renders from the latest presence after every refresh.
+  function toggleWhimsPanel(operatorId) {
+    _whimsPanelFor = (_whimsPanelFor === operatorId) ? null : operatorId;
+    renderOperatorsPanel(_lastPresence);
+  }
+
+  function _fmtWhimTime(epochSeconds) {
+    try {
+      var d = new Date(epochSeconds * 1000);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString(undefined, { month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function _fmtWhimTs(iso) {
+    if (typeof iso !== 'string' || !iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString(undefined, { month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function buildWhimsPanel(sister) {
+    var presence = _lastPresence[sister.id] || null;
+    var derived = (presence && presence.derivedState) || {};
+    var whims = Array.isArray(derived.whims) ? derived.whims : [];
+    var history = Array.isArray(derived.whimHistory) ? derived.whimHistory : [];
+    var total = typeof derived.whimFulfilledTotal === 'number'
+      ? derived.whimFulfilledTotal : 0;
+
+    // Clear pending-dismiss markers for whims no longer active.
+    var activeIds = {};
+    whims.forEach(function(w) { if (w && w.id) activeIds[w.id] = true; });
+    Object.keys(_dismissPending).forEach(function(id) {
+      if (!activeIds[id]) delete _dismissPending[id];
+    });
+
+    var panel = document.createElement('section');
+    panel.className = 'hyrax-whims-panel';
+    panel.setAttribute('aria-label', sister.name + ' whims');
+
+    var head = document.createElement('div');
+    head.className = 'hyrax-whims-head';
+    var title = document.createElement('strong');
+    title.textContent = sister.name + '’s whims';
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'hyrax-whims-close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Close whims panel');
+    close.addEventListener('click', function() { toggleWhimsPanel(sister.id); });
+    head.appendChild(title);
+    head.appendChild(close);
+    panel.appendChild(head);
+
+    var activeLabel = document.createElement('p');
+    activeLabel.className = 'hyrax-whims-label';
+    activeLabel.textContent = whims.length
+      ? 'Active (' + whims.length + ')' : 'No active whims right now.';
+    panel.appendChild(activeLabel);
+
+    whims.forEach(function(w) {
+      if (!w || !w.id) return;
+      var row = document.createElement('div');
+      row.className = 'hyrax-whim-row';
+      var text = document.createElement('span');
+      text.className = 'hyrax-whim-text';
+      text.textContent = 'wants to: ' + (w.text || '');
+      row.appendChild(text);
+      var metaLine = document.createElement('span');
+      metaLine.className = 'hyrax-whim-meta';
+      var bits = [];
+      if (w.source) bits.push('about ' + w.source);
+      bits.push(w.firedAt ? 'fired ' + _fmtWhimTime(w.firedAt) : 'not fired yet');
+      metaLine.textContent = bits.join(' · ');
+      row.appendChild(metaLine);
+      var dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.className = 'hyrax-whim-dismiss';
+      if (_dismissPending[w.id]) {
+        dismiss.textContent = 'dismiss filed…';
+        dismiss.disabled = true;
+        dismiss.title = 'Veto filed — she closes it on her next tick';
+      } else {
+        dismiss.textContent = 'dismiss';
+        dismiss.title = 'Gently close this whim (she shrugs it off)';
+        dismiss.addEventListener('click', function() {
+          dismissWhim(sister, w, dismiss);
+        });
+      }
+      row.appendChild(dismiss);
+      panel.appendChild(row);
+    });
+
+    var totals = document.createElement('p');
+    totals.className = 'hyrax-whims-label';
+    totals.textContent = total + ' fulfilled all time';
+    panel.appendChild(totals);
+
+    if (history.length) {
+      var histLabel = document.createElement('p');
+      histLabel.className = 'hyrax-whims-label';
+      histLabel.textContent = 'Recent';
+      panel.appendChild(histLabel);
+      var list = document.createElement('ul');
+      list.className = 'hyrax-whims-history';
+      history.forEach(function(h) {
+        if (!h || !h.kind) return;
+        var item = document.createElement('li');
+        var what = h.kind === 'whim_fulfilled' ? 'fulfilled'
+          : h.kind === 'whim_expired' ? 'expired' : 'dismissed';
+        var parts = [what + ': ' + (h.text || h.whimId || '')];
+        if (h.moodlet) parts.push('moodlet ' + h.moodlet);
+        var when = _fmtWhimTs(h.ts);
+        if (when) parts.push(when);
+        item.textContent = parts.join(' · ');
+        list.appendChild(item);
+      });
+      panel.appendChild(list);
+    }
+    return panel;
+  }
+
+  // Josh's gentle veto: confirm, file the dismiss, refresh from presence.
+  // The whim stays listed (button marked "dismiss filed…") until essenced's
+  // poll closes it — the panel never pretends the close already happened.
+  function dismissWhim(sister, whim, button) {
+    var msg = 'Dismiss this whim? She\'ll shrug it off.\n\nwants to: ' + (whim.text || '');
+    try {
+      if (typeof window.confirm === 'function' && !window.confirm(msg)) return;
+    } catch (_) { /* no confirm available — proceed */ }
+    button.disabled = true;
+    button.textContent = 'dismissing…';
+    var req;
+    try {
+      req = api('/api/hyrax/essence/whims/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator: sister.id, whim_id: whim.id }),
+      });
+    } catch (_) {
+      _whimDismissError(sister);
+      return;
+    }
+    Promise.resolve(req).then(function(payload) {
+      if (!payload || payload.recorded !== true) throw new Error('refused');
+      _dismissPending[whim.id] = true;
+      refreshPresence();
+    }).catch(function() {
+      _whimDismissError(sister);
+    });
+  }
+
+  function _whimDismissError(sister) {
+    // Re-render, then flag the failure inline (fail closed, never silent).
+    renderOperatorsPanel(_lastPresence);
+    var host = document.getElementById('hyraxHqOperators');
+    if (!host) return;
+    var panel = host.querySelector('.hyrax-whims-panel');
+    if (!panel) return;
+    var err = document.createElement('p');
+    err.className = 'hyrax-whims-error';
+    err.textContent = 'dismiss failed — try again';
+    panel.appendChild(err);
+  }
+
 
   // ── Operator card → standard chat ──
   // Select-or-create the sister's VN session server-side, then hand the

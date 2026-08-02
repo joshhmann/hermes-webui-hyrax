@@ -1144,7 +1144,7 @@ class TestPresenceDerivedState:
             "fresh": True, "mood": "happy", "energy": 0.62, "focus": 0.81,
             "stress": 0.12, "staleness_days": 0,
             "poseIntent": "sitting", "sceneIntent": "ops", "tone": "bright",
-            "whims": [],
+            "whims": [], "whimHistory": [], "whimFulfilledTotal": 0,
         }
         # Expression comes from derived presentation.expression, NOT the
         # session-derived "laughing".
@@ -1154,13 +1154,20 @@ class TestPresenceDerivedState:
         assert item["kanban"] == {"running": 1, "blocked": 0}
 
     def test_fresh_merge_carries_whim_chips(self, monkeypatch, profile_home):
-        """Whims layer: meta.whims.active -> derivedState.whims chips."""
+        """Whims layer: meta.whims.active -> derivedState.whims entries
+        carrying id/text/firedAt/source (chip + whims panel fields)."""
         home = profile_home("tai", None)
         self._write_derived(home, _derived_state_payload(whims=[
-            {"whim_id": "finish-build-1", "text": 'finish "build the whims layer"'},
-            {"whim_id": "unstick-1", "text": 'unstick the blocked task "x"'},
-            {"whim_id": "over-cap", "text": "this third entry is never served"},
+            {"whim_id": "finish-build-1785000000",
+             "text": 'finish "build the whims layer"',
+             "object": '"build the whims layer"', "fired_at": 1785000100.5},
+            {"whim_id": "unstick-1785000200",
+             "text": 'unstick the blocked task "x"',
+             "object": 'the blocked task "x"', "fired_at": None},
+            {"whim_id": "over-cap-1785000300",
+             "text": "this third entry is never served"},
             "not-a-dict",
+            {"text": "no id — dropped"},
         ]))
         compact, full = self._streaming_tai()
         self._patch(monkeypatch, compact, full)
@@ -1168,8 +1175,12 @@ class TestPresenceDerivedState:
         assert handler.status == 200
         item = self._items_by_operator(handler)["tai"]
         assert item["derivedState"]["whims"] == [
-            {"text": 'finish "build the whims layer"'},
-            {"text": 'unstick the blocked task "x"'},
+            {"id": "finish-build-1785000000",
+             "text": 'finish "build the whims layer"',
+             "firedAt": 1785000100.5, "source": '"build the whims layer"'},
+            {"id": "unstick-1785000200",
+             "text": 'unstick the blocked task "x"',
+             "firedAt": None, "source": 'the blocked task "x"'},
         ]
 
     def test_stale_derived_state_serves_no_whims(self, monkeypatch,
@@ -1185,6 +1196,86 @@ class TestPresenceDerivedState:
         item = self._items_by_operator(handler)["tai"]
         assert item["derivedState"]["fresh"] is False
         assert item["derivedState"]["whims"] == []
+
+    def test_whim_history_from_journal_tail(self, monkeypatch, profile_home):
+        """Whims panel history: fulfilled (with moodlet), expired, and
+        dismissed events from the outreach journal tail — newest first,
+        bounded at 5, non-whim lines skipped."""
+        home = profile_home("tai", None)
+        payload = _derived_state_payload()
+        payload["meta"] = {"whims": {"active": [], "fulfilled_total": 7}}
+        self._write_derived(home, payload)
+        lines = [
+            {"kind": "whim_drawn", "whim_id": "w0", "text": "not history"},
+            {"kind": "whim_fulfilled", "whim_id": "w1-1785000000",
+             "text": "finish the thing", "moodlet": "whim-fulfilled",
+             "ts": "2026-08-02T01:00:00+00:00"},
+            {"kind": "whim_expired", "whim_id": "w2-1785000100",
+             "text": "tinker a bit", "ts": "2026-08-02T02:00:00+00:00"},
+            {"kind": "outreach_delivery", "want": "operator-whim"},
+            {"kind": "whim_dismissed", "whim_id": "w3-1785000200",
+             "text": "reorganize the index", "moodlet": "whim-dismissed",
+             "actor": "josh", "ts": "2026-08-02T03:00:00+00:00"},
+        ]
+        journal = home / "essence" / "outreach_journal.jsonl"
+        journal.write_text("".join(json.dumps(e) + "\n" for e in lines))
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["whimFulfilledTotal"] == 7
+        history = item["derivedState"]["whimHistory"]
+        assert [h["kind"] for h in history] == [
+            "whim_dismissed", "whim_expired", "whim_fulfilled"]
+        dismissed = history[0]
+        assert dismissed["whimId"] == "w3-1785000200"
+        assert dismissed["moodlet"] == "whim-dismissed"
+        assert dismissed["actor"] == "josh"
+        assert dismissed["ts"] == "2026-08-02T03:00:00+00:00"
+        assert history[2]["moodlet"] == "whim-fulfilled"
+        assert "moodlet" not in history[1]  # expired carries no moodlet
+
+    def test_whim_history_bounded_at_five(self, monkeypatch, profile_home):
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload())
+        journal = home / "essence" / "outreach_journal.jsonl"
+        journal.write_text("".join(
+            json.dumps({"kind": "whim_expired", "whim_id": f"w{i}",
+                        "text": f"whim {i}", "ts": f"2026-08-02T0{i}:00:00+00:00"})
+            + "\n" for i in range(8)))
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        history = self._items_by_operator(handler)["tai"]["derivedState"]["whimHistory"]
+        assert len(history) == 5
+        assert history[0]["whimId"] == "w7"  # newest first
+
+    def test_whim_history_missing_journal_fails_closed(
+            self, monkeypatch, profile_home):
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload())
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["whimHistory"] == []
+        assert item["derivedState"]["whimFulfilledTotal"] == 0
+
+    def test_whim_history_survives_stale_derived_state(
+            self, monkeypatch, profile_home):
+        """History is a record, not a live intent: served even when the
+        derived state file is stale (chips stay fresh-only)."""
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload(),
+                            age_seconds=90000)
+        journal = home / "essence" / "outreach_journal.jsonl"
+        journal.write_text(json.dumps({
+            "kind": "whim_dismissed", "whim_id": "w1-1785000000",
+            "text": "x", "actor": "josh",
+            "ts": "2026-08-02T03:00:00+00:00"}) + "\n")
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        assert item["derivedState"]["fresh"] is False
+        assert [h["kind"] for h in item["derivedState"]["whimHistory"]] \
+            == ["whim_dismissed"]
 
     def test_stale_derived_state_falls_back(self, monkeypatch, profile_home):
         home = profile_home("tai", None)
@@ -1216,7 +1307,7 @@ class TestPresenceDerivedState:
             "fresh": False, "mood": None, "energy": None, "focus": None,
             "stress": None, "staleness_days": None,
             "poseIntent": None, "sceneIntent": None, "tone": None,
-            "whims": [],
+            "whims": [], "whimHistory": [], "whimFulfilledTotal": 0,
         }
         assert item["expression"]["current"] == "laughing"
 

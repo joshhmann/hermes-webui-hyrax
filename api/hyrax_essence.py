@@ -16,6 +16,10 @@ Endpoints (dispatched from api.hyrax_routes):
   - POST /api/hyrax/essence/approvals/respond — record Josh's approve/deny
                                            decision (actor josh:webui,
                                            server-stamped)
+  - POST /api/hyrax/essence/whims/dismiss — file Josh's whim veto (actor
+                                           josh, server-stamped) into the
+                                           append-only dismiss store;
+                                           essenced's poll closes the whim
 
 Design contract: docs/gestalt-vn/ESSENCE_RUNTIME_SPEC.md (§4 signatures,
 §6 expression enum, §7 registry) and GESTALT_VN_API_CONTRACTS.md (§2/§6/§7).
@@ -926,15 +930,36 @@ _DERIVED_STATE_UNAVAILABLE = {
     "sceneIntent": None,
     "tone": None,
     "whims": [],
+    "whimHistory": [],
+    "whimFulfilledTotal": 0,
 }
+
+MAX_WHIM_ID_LENGTH = 64
+MAX_WHIM_HISTORY = 5
+_WHIM_HISTORY_KINDS = frozenset({
+    "whim_fulfilled", "whim_expired", "whim_dismissed",
+})
+# Journal tail read for the whim history (bounded; the file is append-only
+# and can grow unbounded, so only the tail window is ever read).
+_MAX_JOURNAL_TAIL_BYTES = 64 * 1024
+
+
+def _bounded_epoch(value) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    val = float(value)
+    return val if _math.isfinite(val) and val > 0 else None
 
 
 def _derived_whims(state: dict) -> list:
-    """Active whim chips out of essenced's meta.whims (read-only, bounded).
+    """Active whims out of essenced's meta.whims (read-only, bounded).
 
-    Each chip is the resolved "verb object" text ("reorganize the blocked
-    task ..."), capped at 2 entries / 80 chars — the HQ sidebar shows one
-    small line per operator. Anything malformed fails closed to [].
+    Each entry carries {id, text, firedAt, source}: the resolved "verb
+    object" text for the HQ chip plus the fields the whims panel needs —
+    id for the dismiss action, firedAt (epoch seconds, null until the fire
+    message delivers), and source (the concrete object the whim is about).
+    Capped at 2 entries / 80-char text. Anything malformed fails closed
+    to [].
     """
     meta = state.get("meta")
     if not isinstance(meta, dict):
@@ -950,8 +975,79 @@ def _derived_whims(state: dict) -> list:
         if not isinstance(whim, dict):
             continue
         text = _bounded_str(whim.get("text"), 80)
-        if text:
-            out.append({"text": text})
+        whim_id = _bounded_str(whim.get("whim_id"), MAX_WHIM_ID_LENGTH)
+        if not text or not whim_id:
+            continue
+        out.append({
+            "id": whim_id,
+            "text": text,
+            "firedAt": _bounded_epoch(whim.get("fired_at")),
+            "source": _bounded_str(whim.get("object"), MAX_ESSENCE_STRING),
+        })
+    return out
+
+
+def _derived_whim_fulfilled_total(state: dict) -> int:
+    """meta.whims.fulfilled_total (lifetime fulfillment count). 0 on miss."""
+    try:
+        return max(0, int(
+            ((state.get("meta") or {}).get("whims") or {})
+            .get("fulfilled_total") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _whim_history(profile: str) -> list:
+    """Recent whim lifecycle events from the operator's outreach journal
+    tail (read-only, bounded): fulfilled (with moodlet), expired, dismissed.
+
+    Newest first, capped at MAX_WHIM_HISTORY. Any read/parse problem fails
+    closed to []. Journal lines essenced writes carry ts (ISO), kind,
+    whim_id, text, and (for fulfilled/dismissed) moodlet.
+    """
+    path = _profile_home(profile) / "essence" / "outreach_journal.jsonl"
+    try:
+        if not os.path.isfile(path) or os.path.islink(path):
+            return []
+        size = os.lstat(path).st_size
+        with open(path, "rb") as fh:
+            if size > _MAX_JOURNAL_TAIL_BYTES:
+                fh.seek(-_MAX_JOURNAL_TAIL_BYTES, os.SEEK_END)
+            raw = fh.read(_MAX_JOURNAL_TAIL_BYTES + 1)
+        lines = raw.decode("utf-8", errors="replace").splitlines()
+        if size > _MAX_JOURNAL_TAIL_BYTES and lines:
+            lines = lines[1:]  # drop the partial first line of the window
+    except OSError:
+        return []
+    out = []
+    for line in reversed(lines):
+        if len(out) >= MAX_WHIM_HISTORY:
+            break
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("kind")
+        if kind not in _WHIM_HISTORY_KINDS:
+            continue
+        item = {
+            "kind": kind,
+            "whimId": _bounded_str(entry.get("whim_id"), MAX_WHIM_ID_LENGTH),
+            "text": _bounded_str(entry.get("text"), 80),
+            "ts": _bounded_str(entry.get("ts"), 64),
+        }
+        moodlet = _bounded_str(entry.get("moodlet"), MAX_ESSENCE_STRING)
+        if moodlet is not None:
+            item["moodlet"] = moodlet
+        actor = _bounded_str(entry.get("actor"), 64)
+        if actor is not None:
+            item["actor"] = actor
+        out.append(item)
     return out
 
 
@@ -1022,10 +1118,16 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
                 _bounded_str(_derived_leaf(state, "presentation", "tone"))
                 if fresh else None
             ),
-            # Whims layer (WHIMS_LAYER_SPEC.md): active per-operator whim
-            # chips from meta.whims. Fresh-only like the other derived
-            # fields — a stale file must never show a dead want.
+            # Whims layer (WHIMS_LAYER_SPEC.md): active per-operator whims
+            # from meta.whims. Fresh-only like the other derived fields —
+            # a stale file must never show a dead want.
             "whims": _derived_whims(state) if fresh else [],
+            # Whim history (fulfilled/expired/dismissed, from the outreach
+            # journal tail) and the lifetime fulfillment count are a
+            # historical record, not a live intent — served whenever the
+            # derived state file parses, fresh or stale.
+            "whimHistory": _whim_history(profile),
+            "whimFulfilledTotal": _derived_whim_fulfilled_total(state),
         }
         expression = None
         if fresh:
@@ -1634,6 +1736,136 @@ def _handle_josh_approval_respond(handler, body) -> bool:
     return True
 
 
+# ── Whims dismiss surface (HQ whims panel — Josh's gentle veto) ─────────────
+#
+# essenced's whims layer draws object-wants into meta.whims active; the HQ
+# whims panel is READ-ONLY plus ONE action: dismiss. The WebUI never writes
+# essenced-owned state (derived_state.json is rewritten by the daemon every
+# pass — a direct write would be clobbered or interleave). Instead this
+# endpoint files a request in the append-only governance store
+# (whim_dismissals.jsonl, same channel shape as the josh_approvals tier)
+# and essenced's whims tick polls it one pass later: the whim closes with
+# the "whim-dismissed" moodlet, journaled whim_dismissed — never counted
+# as fulfilled, breaker-neutral.
+#
+# The actor is ALWAYS stamped "josh" server-side (the panel is Josh's
+# veto); the body cannot set it. Fail closed: an unavailable store is a
+# 503, a non-active whim is a 404 (idempotent — a repeat dismiss of an
+# already-closed whim changes nothing and says why).
+
+WHIM_DISMISS_ACTOR = "josh"
+"""The only dismiss actor — Josh's gentle veto. Stamped here, never taken
+from the request body."""
+
+_WHIMS_DISMISS_PATH = "/api/hyrax/essence/whims/dismiss"
+# whim_id shape: "<template-slug>-<epoch seconds>" (whims.py draw).
+_WHIM_ID_RE = _re.compile(r"^[a-z0-9][a-z0-9-]{0,46}-\d{6,14}$")
+_WHIM_DISMISS_STORE_MODULE_CACHE: dict[str, object] = {}
+
+
+def _whim_dismiss_store_module():
+    """Load governance/whim_dismissals.py (the store's owner). Cached.
+
+    Returns None on any failure (fail closed). Tests monkeypatch this
+    function to inject a tmp-store instance — never the filesystem.
+    """
+    cached = _WHIM_DISMISS_STORE_MODULE_CACHE.get("module")
+    if cached is not None:
+        return cached
+    import importlib.util
+
+    path = _fleet_governance_dir() / "whim_dismissals.py"
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "hyrax_whim_dismissals_store", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except (OSError, ValueError, ImportError):
+        return None
+    _WHIM_DISMISS_STORE_MODULE_CACHE["module"] = module
+    return module
+
+
+def _whim_is_active(operator: str, whim_id: str) -> bool:
+    """True only when whim_id is in the operator's meta.whims active list
+    (read-only bounded read of derived_state.json). Fail closed: a
+    missing/corrupt state file means NOT active — never file a veto we
+    cannot verify against current state."""
+    state = _read_json_bounded(
+        _profile_home(operator) / "essence" / "derived_state.json",
+        MAX_STATE_FILE_BYTES)
+    if not isinstance(state, dict):
+        return False
+    active = (((state.get("meta") or {}).get("whims") or {}).get("active"))
+    if not isinstance(active, list):
+        return False
+    return any(
+        isinstance(w, dict) and w.get("whim_id") == whim_id for w in active)
+
+
+def _handle_whim_dismiss(handler, body) -> bool:
+    """POST /api/hyrax/essence/whims/dismiss — file Josh's whim veto.
+
+    Body: {"operator": "<sister>", "whim_id": "<template>-<epoch>"}. The
+    request is appended to the store ONLY when the whim is currently
+    active (unknown/inactive ids fail closed with 404 — a replayed or
+    crafted dismiss cannot re-close history). essenced's poll takes it
+    from there; presence reflects the close on the next pass.
+    """
+    if not isinstance(body, dict):
+        _j(handler, {"error": "invalid body"}, status=400)
+        return True
+    extra = set(body.keys()) - {"operator", "whim_id"}
+    if extra:
+        _j(handler, {"error": "invalid body"}, status=400)
+        return True
+    operator = body.get("operator")
+    if operator not in _VN_PROFILES:
+        _j(handler, {"error": "unknown operator"}, status=400)
+        return True
+    whim_id = body.get("whim_id")
+    if (
+        not isinstance(whim_id, str)
+        or len(whim_id) > MAX_WHIM_ID_LENGTH
+        or not _WHIM_ID_RE.match(whim_id)
+    ):
+        _j(handler, {"error": "invalid whim_id"}, status=400)
+        return True
+    module = _whim_dismiss_store_module()
+    if module is None:
+        _j(handler, {"error": "dismiss store unavailable"}, status=503)
+        return True
+    if not _whim_is_active(operator, whim_id):
+        _j(handler, {
+            "error": "whim not active",
+            "detail": "unknown or already closed (fulfilled/expired/"
+                      "dismissed) — nothing to dismiss",
+        }, status=404)
+        return True
+    try:
+        request = module.request(operator, whim_id,
+                                 actor=WHIM_DISMISS_ACTOR)
+    except Exception:
+        _j(handler, {"error": "dismiss store unavailable"}, status=503)
+        return True
+    if not isinstance(request, dict) or not request.get("request_id"):
+        _j(handler, {"error": "dismiss store unavailable"}, status=503)
+        return True
+    _j(handler, {
+        "recorded": True,
+        "request_id": str(request.get("request_id"))[:32],
+        "operator": operator,
+        "whim_id": whim_id,
+        "actor": WHIM_DISMISS_ACTOR,
+        # essenced's whims tick polls the store each pass (~15s) and
+        # closes the whim; the panel refreshes from presence.
+        "status": "pending",
+    })
+    return True
+
+
 def handle_essence_get(handler, parsed) -> bool:
     """Dispatch GET /api/hyrax/presence and /api/hyrax/essence/* requests."""
     path = parsed.path
@@ -1672,5 +1904,7 @@ def handle_essence_post(handler, parsed, body) -> bool:
         return _handle_frame_register(handler, body)
     if parsed.path == _APPROVALS_RESPOND_PATH:
         return _handle_josh_approval_respond(handler, body)
+    if parsed.path == _WHIMS_DISMISS_PATH:
+        return _handle_whim_dismiss(handler, body)
     _j(handler, {"error": "not found"}, status=404)
     return True

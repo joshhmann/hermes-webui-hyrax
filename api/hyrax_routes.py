@@ -253,8 +253,10 @@ def handle_hyrax_post(handler, parsed) -> bool:
 
     # /api/hyrax/essence/frames/register — Essence frame registry writes
     # /api/hyrax/essence/approvals/respond — D3 Josh approval-tier decision
+    # /api/hyrax/essence/whims/dismiss — HQ whims panel: Josh's whim veto
     if path in ("/api/hyrax/essence/frames/register",
-                "/api/hyrax/essence/approvals/respond"):
+                "/api/hyrax/essence/approvals/respond",
+                "/api/hyrax/essence/whims/dismiss"):
         from api import routes as _routes
         try:
             body = _routes.read_body(handler)

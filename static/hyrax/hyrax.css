@@ -1280,6 +1280,7 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 
 /* ── HQ Operators sidebar panel-view ── */
 .hyrax-hq-operators { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.hyrax-op-wrap { display: flex; flex-direction: column; gap: 4px; }
 .hyrax-op-card {
   position: relative;
   display: flex; align-items: center; gap: 10px;
@@ -1298,13 +1299,76 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 .hyrax-op-meta span { font-size: 11px; color: var(--muted, #8b949e); }
 .hyrax-op-card.staged { opacity: .45; filter: grayscale(.8); pointer-events: none; }
 .hyrax-op-card .hyrax-op-hint { font-size: 10px; color: var(--hq-tai, #6ecbf5); }
-/* Whims layer: active-whim chip line under the operator meta. */
-.hyrax-op-card .hyrax-op-whim { font-size: 10px; font-style: italic; color: var(--muted, #8b949e); }
+/* Whims layer: active-whim chip button under the operator card; opens
+   the whims panel (read-only + dismiss veto). */
+.hyrax-op-whim {
+  font-size: 10px; font-style: italic; color: var(--muted, #8b949e);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 2px 6px; text-align: left; cursor: pointer;
+  touch-action: manipulation;
+}
+.hyrax-op-whim:hover { color: #e6edf3; border-color: var(--line, #30363d); }
+.hyrax-op-whim:focus-visible { outline: 2px solid currentColor; }
+.hyrax-op-whim[aria-expanded="true"] { color: #e6edf3; border-color: var(--line, #30363d); }
+/* No active whims but history to show — quieter affordance. */
+.hyrax-op-whim-quiet { font-style: normal; opacity: .75; }
 .hyrax-op-card:disabled { opacity: .6; cursor: default; }
 .hyrax-op-tai { border-left: 3px solid var(--hq-tai); }
 .hyrax-op-rei { border-left: 3px solid var(--hq-rei); }
 .hyrax-op-nei { border-left: 3px solid var(--hq-nei); }
 .hyrax-op-mai { border-left: 3px solid var(--hq-mai); }
+
+/* ── Whims panel (HQ sidebar; read-only + Josh's dismiss veto) ── */
+.hyrax-whims-panel {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel, #161b22);
+  border: 1px solid var(--line, #30363d);
+  border-radius: 10px;
+  font-size: 11px; color: var(--muted, #8b949e);
+}
+.hyrax-whims-head { display: flex; align-items: center; justify-content: space-between; }
+.hyrax-whims-head strong { font-size: 12px; color: #e6edf3; }
+.hyrax-whims-close {
+  background: transparent; border: 1px solid var(--line, #30363d);
+  border-radius: 6px; color: var(--muted, #8b949e);
+  width: 24px; height: 24px; cursor: pointer; line-height: 1;
+}
+.hyrax-whims-close:hover { color: #fff; border-color: #8b949e; }
+.hyrax-whims-label { font-size: 10px; margin: 6px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
+.hyrax-whim-row {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--line, #30363d);
+  border-radius: 8px;
+}
+.hyrax-whim-text { color: #e6edf3; font-style: italic; }
+.hyrax-whim-meta { font-size: 10px; }
+.hyrax-whim-dismiss {
+  align-self: flex-end;
+  font-size: 11px; padding: 4px 12px;
+  background: rgba(22,27,34,.5);
+  border: 1px solid var(--line, #30363d); border-radius: 12px;
+  color: var(--muted, #8b949e); cursor: pointer;
+  touch-action: manipulation;
+}
+.hyrax-whim-dismiss:hover { border-color: var(--muted, #8b949e); color: #e6edf3; }
+.hyrax-whim-dismiss:disabled { opacity: .5; cursor: default; }
+.hyrax-whims-history {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.hyrax-whims-history li { font-size: 10px; }
+.hyrax-whims-error { font-size: 11px; color: var(--danger, #f0883e); margin: 4px 0 0; }
+
+@media (max-width: 719px) {
+  /* Narrow HQ: the sidebar stacks, so give panel controls comfortable
+     touch targets and let rows breathe. */
+  .hyrax-op-whim { font-size: 11px; padding: 6px 8px; }
+  .hyrax-whims-panel { font-size: 12px; padding: 10px 12px; }
+  .hyrax-whim-dismiss { padding: 8px 16px; font-size: 12px; }
+  .hyrax-whims-close { width: 32px; height: 32px; }
+}
 
 /* Placeholder must yield to the hidden attribute (author display:grid
    would otherwise override it — mobile "loading scene…" bleed-through) */
