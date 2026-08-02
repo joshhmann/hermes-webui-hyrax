@@ -71,7 +71,7 @@ gate D4)
 - mnemosyne↔cognee alignment; record-ontology patterns for memory hygiene
 
 ## Housekeeping (fill gaps)
-- VN conflict bubble: surface real reason (stale-runtime vs active-stream)
+- ~~VN conflict bubble: surface real reason~~ DONE (8f483f69 — bounded reason + composer recovery)
 - rei's Discord 403 scope
 - Matrix homeserver 502 storm
 - WebUI password rotation (plaintext in unit, 0.0.0.0 bind)
