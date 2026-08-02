@@ -122,6 +122,8 @@ export interface ArdyTelemetry {
   /** Ground-contact correction currently applied to the hips (profiled path;
    * null on the gestalt fallback). */
   groundCorrectionM: number | null
+  /** Reflex layer: active reaction prompt (variant or null) + lifetime count. */
+  reflex: { active: boolean; variant: ArdyReflexDirection | null; count: number }
 }
 
 const DEFAULT_ARDY_PATH = '/api/hyrax/ardy/ws'
@@ -149,6 +151,57 @@ const RESET_COOLDOWN_MS = 2000
  * move rejects ≤ speed×frameTime (≈0.4 m at 2 m/s and 5 fps).
  */
 const TELEPORT_RESIDUAL_M = 1.0
+
+/**
+ * Reflex layer (walls exist to her). The treadmill absorb makes nav-rejected
+ * motion SILENT (she moonwalks into a wall forever); the reflex layer makes
+ * it VISIBLE: sustained rejection fires one momentary reaction prompt, then
+ * restores the interrupted INTENT prompt. Policy:
+ *  - TRIGGER: a leaky accumulator over the per-frame rejected distance fires
+ *    at TRIGGER_ACCUM_M. The leak (ACCUM_LEAK_M_PER_S) means only a blocked
+ *    walking speed above the leak rate builds up — brushing past an obstacle
+ *    or a one-frame graze never reflexes, pressing into a wall does.
+ *  - DIRECTION: the rejected vector (world XZ, from the nav approval) is
+ *    classified against the avatar's approved facing into front / left /
+ *    right, picking the reaction variant from PROMPTS.
+ *  - INTENT vs REFLEX prompts: `lastPrompt` is always the intent prompt
+ *    (user prompt, shuffle phrase, or the initial idle — also the reconnect
+ *    re-kick and the restore target). Reflex prompts are sent directly to
+ *    the client and never touch it. A user/shuffle prompt during a reflex
+ *    WINS: the reflex is cancelled (no restore queued).
+ *  - COOLDOWN: wall-grinding must not spam prompt resets — at most one
+ *    reflex per COOLDOWN_MS; rejection during cooldown absorbs silently
+ *    (today's behavior). A reflex never interrupts an active reflex.
+ *  - GATE: no reflex while the drift watchdog holds the pose (procedural
+ *    owns the rig). If the watchdog engages DURING a reflex, the pending
+ *    restore is deferred (pendingIntentRestore) and sent when the gate
+ *    recovers — otherwise the service would keep generating the bump
+ *    reaction forever after recovery. The gate itself is untouched:
+ *    implausible reflex frames are still hard-rejected, drift still
+ *    releases (fail-closed).
+ * Prompt sends go through the normal T1 path (the service drops history on
+ * prompt), so a reflex arrives as a reset chunk and blends via the T2
+ * 0.45 s crossfade — no hard cut, no sendReset (the history is not drifted).
+ */
+export const ARDY_REFLEX = {
+  /** Rejected distance (m) the leaky accumulator must reach to fire. */
+  TRIGGER_ACCUM_M: 0.15,
+  /** Accumulator leak (m/s): blocked speeds at/below this never reflex. */
+  ACCUM_LEAK_M_PER_S: 0.25,
+  /** How long the reaction prompt plays before the intent prompt returns. */
+  DURATION_MS: 3000,
+  /** Minimum wall time between reflexes (wall-grinding cadence cap). */
+  COOLDOWN_MS: 5000,
+  /** Reaction prompt per contact direction (avatar-relative). */
+  PROMPTS: {
+    front: 'a person bumps into something and stops, steadying themselves',
+    left: 'a person bumps their left side into something and stops, steadying themselves',
+    right: 'a person bumps their right side into something and stops, steadying themselves',
+  },
+} as const
+
+export type ArdyReflexDirection = keyof typeof ARDY_REFLEX.PROMPTS
+
 
 /**
  * Stream sanity gate (fail-closed). Long autoregressive generations drift:
@@ -192,6 +245,19 @@ function wrapAngle(a: number): number {
   if (r <= -Math.PI) r += 2 * Math.PI
   else if (r > Math.PI) r -= 2 * Math.PI
   return r
+}
+
+/**
+ * Classify a world-XZ rejected vector against the avatar's approved facing
+ * (heading 0 ⇒ faces +Z; in right-handed Y-up her RIGHT hand is −X). The
+ * lateral component must dominate 1.5× to pick a side variant — a mostly
+ * frontal contact is the generic bump.
+ */
+function classifyReflexDirection(rejected: [number, number], yaw: number): ArdyReflexDirection {
+  const forward = rejected[0] * Math.sin(yaw) + rejected[1] * Math.cos(yaw)
+  const right = -rejected[0] * Math.cos(yaw) + rejected[1] * Math.sin(yaw)
+  if (Math.abs(right) > Math.abs(forward) * 1.5) return right > 0 ? 'right' : 'left'
+  return 'front'
 }
 
 /**
@@ -242,7 +308,11 @@ export interface ArdyRigLike {
 
 /** Structural subset of RoomNavigation used by RoomNavigationApproval. */
 export interface ArdyNavigationLike {
-  constrainMovement(from: Vector3, to: Vector3): { position: { x: number; z: number } }
+  constrainMovement(from: Vector3, to: Vector3): {
+    position: { x: number; z: number }
+    hit?: boolean
+    obstacleId?: string
+  }
 }
 
 /**
@@ -251,11 +321,17 @@ export interface ArdyNavigationLike {
  * and only the approved portion is reported back. Tracks the approved
  * position so absolute clamping works on deltas; reset() re-syncs it with
  * the RootMotionAdapter's anchor (stream start / full session reset).
+ * Also records the REJECTED portion of the last call (world XZ) plus what
+ * blocked it — the reflex layer's contact event stream.
  */
 export class RoomNavigationApproval implements NavigationInterface {
   private x = 0
   private z = 0
   private readonly navigation: ArdyNavigationLike
+  /** Rejected portion of the last approve() (world XZ; [0,0] when fully approved). */
+  lastRejected: [number, number] = [0, 0]
+  /** Obstacle/boundary id from the last approve(), null when unobstructed. */
+  lastBlockerId: string | null = null
 
   constructor(navigation: ArdyNavigationLike) {
     this.navigation = navigation
@@ -272,6 +348,8 @@ export class RoomNavigationApproval implements NavigationInterface {
     const resolved = this.navigation.constrainMovement(from, to)
     this.x = resolved.position.x
     this.z = resolved.position.z
+    this.lastRejected = [to.x - this.x, to.z - this.z]
+    this.lastBlockerId = resolved.hit ? (resolved.obstacleId ?? 'unknown') : null
     return { deltaXZ: [this.x - from.x, this.z - from.z], deltaYaw }
   }
 }
@@ -308,6 +386,11 @@ export interface ArdyMotionSourceOptions {
    * constants; only the fields present are overridden.
    */
   backoff?: Partial<typeof ARDY_BACKOFF>
+  /**
+   * Reflex policy override (tests — deterministic timing). Defaults to the
+   * pinned ARDY_REFLEX constants; only the fields present are overridden.
+   */
+  reflex?: Partial<typeof ARDY_REFLEX>
 }
 
 function defaultUrl(): string {
@@ -362,6 +445,7 @@ export class ArdyMotionSource {
   private everOpened = false
   private disposed = false
   private readonly backoff: typeof ARDY_BACKOFF
+  private readonly reflexConfig: typeof ARDY_REFLEX
   private backoffMs: number
   private reconnectAttempts = 0
   private reconnectCount = 0
@@ -384,6 +468,13 @@ export class ArdyMotionSource {
   private insaneSinceMs: number | null = null
   private recoveredSinceMs: number | null = null
   private sanityHold = false
+  // Reflex layer state (policy block at ARDY_REFLEX).
+  private reflexActive: { variant: ArdyReflexDirection; restoreAtMs: number } | null = null
+  private lastReflexAtMs = -Infinity
+  private rejectAccum = 0
+  private reflexCount = 0
+  /** A reflex was cancelled by the watchdog hold — restore intent on recovery. */
+  private pendingIntentRestore = false
   private readonly slerpFrom = new Quaternion()
   private readonly slerpTo = new Quaternion()
 
@@ -393,6 +484,7 @@ export class ArdyMotionSource {
     this.nowMs = options.nowMs ?? (() => performance.now())
     this.initialPrompt = options.initialPrompt ?? DEFAULT_INITIAL_PROMPT
     this.backoff = { ...ARDY_BACKOFF, ...options.backoff }
+    this.reflexConfig = { ...ARDY_REFLEX, ...options.reflex }
     this.backoffMs = this.backoff.INITIAL_MS
     this.clock = new PlaybackClock({ nowMs: this.nowMs })
     this.approval = new RoomNavigationApproval(options.navigation)
@@ -510,6 +602,11 @@ export class ArdyMotionSource {
         hold: this.sanityHold,
       },
       groundCorrectionM: this.profiled?.groundCorrection ?? null,
+      reflex: {
+        active: this.reflexActive !== null,
+        variant: this.reflexActive?.variant ?? null,
+        count: this.reflexCount,
+      },
     }
   }
 
@@ -544,6 +641,10 @@ export class ArdyMotionSource {
     const trimmed = text.trim()
     if (!trimmed || this.disposed) return
     this.lastPrompt = trimmed
+    // The pilot wins: a user/shuffle prompt cancels any active reflex and
+    // any restore the watchdog deferred — nothing queues behind it.
+    this.reflexActive = null
+    this.pendingIntentRestore = false
     this.client.sendPrompt(trimmed)
     if (this.sanityHold || this.leanEma > DRIFT_LEAN_DEG) {
       // The service retains its (drifted) conditioning history across prompts
@@ -578,6 +679,22 @@ export class ArdyMotionSource {
       this.beginResetCrossfade()
     }
     this.clock.update(buffer)
+
+    // Reflex layer: leak the rejection accumulator (only blocked speeds above
+    // the leak rate can build to the trigger) and run the restore clock. The
+    // restore must run even while the watchdog owns the rig, so it sits here
+    // rather than in applySampled.
+    this.rejectAccum = Math.max(0, this.rejectAccum - dt * this.reflexConfig.ACCUM_LEAK_M_PER_S)
+    if (this.reflexActive !== null && this.nowMs() >= this.reflexActive.restoreAtMs) {
+      this.reflexActive = null
+      if (this.sanityHold) {
+        // The watchdog owns the rig — defer the restore to gate recovery
+        // rather than prompt-spamming a drifted stream.
+        this.pendingIntentRestore = true
+      } else {
+        this.restoreIntentPrompt()
+      }
+    }
 
     let sampleState: SampleState = SampleState.BUFFERING
     let pose: SampledPose | null = null
@@ -641,6 +758,12 @@ export class ArdyMotionSource {
           this.insaneSinceMs = null
           this.recoveredSinceMs = null
           console.info('[ardy] motion stream recovered — resuming retarget')
+          if (this.pendingIntentRestore) {
+            // A reflex was cancelled by the hold — the service is still
+            // generating the reaction prompt; hand the intent back.
+            this.pendingIntentRestore = false
+            this.restoreIntentPrompt()
+          }
         }
       } else {
         this.recoveredSinceMs = null
@@ -723,6 +846,16 @@ export class ArdyMotionSource {
   }
 
   // ── internals ──────────────────────────────────────────────────────
+
+  /**
+   * Reflex layer: hand the INTENT prompt back to the service after a
+   * reaction (or after a watchdog-deferred restore). Never touches
+   * lastPrompt — it already IS the intent prompt, and a disconnect no-ops
+   * here while the reconnect path re-kicks the same intent.
+   */
+  private restoreIntentPrompt(): void {
+    this.client.sendPrompt(this.lastPrompt ?? this.initialPrompt)
+  }
 
   /**
    * T2a: crossfade ACROSS a reset chunk (new prompt / drift-watchdog hard
@@ -988,6 +1121,34 @@ export class ArdyMotionSource {
       out.hipsPos[0] = 0
       out.hipsPos[2] = 0
       out.resetRequested = false
+
+      // Reflex layer: sustained rejection is a wall she should FEEL. The
+      // accumulator leaked in update() gates grazes; the cooldown gates
+      // wall-grinding; the watchdog gate keeps reflexes off while procedural
+      // owns the pose. The reaction prompt goes through the normal T1/T2
+      // prompt path (reset chunk + 0.45 s crossfade, no sendReset).
+      this.rejectAccum += out.residualMagnitude
+      if (
+        this.reflexActive === null &&
+        !this.sanityHold &&
+        this.rejectAccum >= this.reflexConfig.TRIGGER_ACCUM_M &&
+        this.nowMs() - this.lastReflexAtMs >= this.reflexConfig.COOLDOWN_MS
+      ) {
+        const variant = classifyReflexDirection(this.approval.lastRejected, out.sceneRootYaw)
+        this.reflexActive = { variant, restoreAtMs: this.nowMs() + this.reflexConfig.DURATION_MS }
+        this.lastReflexAtMs = this.nowMs()
+        this.reflexCount += 1
+        this.rejectAccum = 0
+        console.info(
+          `[ardy] nav reflex (${variant}` +
+          (this.approval.lastBlockerId !== null ? `, ${this.approval.lastBlockerId}` : '') +
+          ')',
+        )
+        // Direct client send: lastPrompt stays the INTENT prompt (restore
+        // target + reconnect re-kick). A disconnect no-ops the send; the
+        // reconnect path re-kicks the intent and the restore is a no-op too.
+        this.client.sendPrompt(this.reflexConfig.PROMPTS[variant])
+      }
     }
 
     // Navigation owns the AvatarRoot XZ + yaw; hips bone carries only the

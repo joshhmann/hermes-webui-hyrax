@@ -26620,17 +26620,36 @@ const oS = {
   MAX_MS: 1e4,
   JITTER: 0.25,
   MAX_ATTEMPTS: 8
-}, eu = "/api/hyrax/ardy/ws", aS = "/api/hyrax/3d/calibrate/calibration-profiles/tai-embodiment-v3.json", lS = "a person stands idle", ua = 0.3, Ld = 0.45, da = 4 / Ld, cS = 2e3, hS = 1, uS = 45, dS = 0.4, fS = 1.3, tu = 12, pS = 0.75, mS = 8, gS = 1.5, _S = 2e3, vS = 3e3;
-function xS(s) {
+}, eu = "/api/hyrax/ardy/ws", aS = "/api/hyrax/3d/calibrate/calibration-profiles/tai-embodiment-v3.json", lS = "a person stands idle", ua = 0.3, Ld = 0.45, da = 4 / Ld, cS = 2e3, hS = 1, uS = {
+  /** Rejected distance (m) the leaky accumulator must reach to fire. */
+  TRIGGER_ACCUM_M: 0.15,
+  /** Accumulator leak (m/s): blocked speeds at/below this never reflex. */
+  ACCUM_LEAK_M_PER_S: 0.25,
+  /** How long the reaction prompt plays before the intent prompt returns. */
+  DURATION_MS: 3e3,
+  /** Minimum wall time between reflexes (wall-grinding cadence cap). */
+  COOLDOWN_MS: 5e3,
+  /** Reaction prompt per contact direction (avatar-relative). */
+  PROMPTS: {
+    front: "a person bumps into something and stops, steadying themselves",
+    left: "a person bumps their left side into something and stops, steadying themselves",
+    right: "a person bumps their right side into something and stops, steadying themselves"
+  }
+}, dS = 45, fS = 0.4, pS = 1.3, tu = 12, mS = 0.75, gS = 8, _S = 1.5, vS = 2e3, xS = 3e3;
+function yS(s) {
   const e = 1 - 2 * (s[1] * s[1] + s[3] * s[3]);
   return Math.acos(Math.max(-1, Math.min(1, e))) * 180 / Math.PI;
 }
-function yS(s) {
+function MS(s) {
   let e = s % (2 * Math.PI);
   return e <= -Math.PI ? e += 2 * Math.PI : e > Math.PI && (e -= 2 * Math.PI), e;
 }
+function SS(s, e) {
+  const t = s[0] * Math.sin(e) + s[1] * Math.cos(e), n = -s[0] * Math.cos(e) + s[1] * Math.sin(e);
+  return Math.abs(n) > Math.abs(t) * 1.5 ? n > 0 ? "right" : "left" : "front";
+}
 const nu = /* @__PURE__ */ new Map();
-function MS(s) {
+function ES(s) {
   let e = nu.get(s);
   return e === void 0 && (e = (async () => {
     try {
@@ -26644,11 +26663,15 @@ function MS(s) {
     }
   })(), nu.set(s, e)), e;
 }
-class SS {
+class TS {
   constructor(e) {
     L(this, "x", 0);
     L(this, "z", 0);
     L(this, "navigation");
+    /** Rejected portion of the last approve() (world XZ; [0,0] when fully approved). */
+    L(this, "lastRejected", [0, 0]);
+    /** Obstacle/boundary id from the last approve(), null when unobstructed. */
+    L(this, "lastBlockerId", null);
     this.navigation = e;
   }
   reset(e, t) {
@@ -26656,17 +26679,17 @@ class SS {
   }
   approve(e, t) {
     const n = new x(this.x, 0, this.z), i = new x(this.x + e[0], 0, this.z + e[1]), r = this.navigation.constrainMovement(n, i);
-    return this.x = r.position.x, this.z = r.position.z, { deltaXZ: [this.x - n.x, this.z - n.z], deltaYaw: t };
+    return this.x = r.position.x, this.z = r.position.z, this.lastRejected = [i.x - this.x, i.z - this.z], this.lastBlockerId = r.hit ? r.obstacleId ?? "unknown" : null, { deltaXZ: [this.x - n.x, this.z - n.z], deltaYaw: t };
   }
 }
-function ES() {
+function wS() {
   if (typeof window < "u") {
     const s = new URLSearchParams(window.location.search).get("ardyWs");
     return s || `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${eu}`;
   }
   return eu;
 }
-class TS {
+class bS {
   constructor(e) {
     L(this, "rig");
     L(this, "url");
@@ -26707,6 +26730,7 @@ class TS {
     L(this, "everOpened", !1);
     L(this, "disposed", !1);
     L(this, "backoff");
+    L(this, "reflexConfig");
     L(this, "backoffMs");
     L(this, "reconnectAttempts", 0);
     L(this, "reconnectCount", 0);
@@ -26729,6 +26753,13 @@ class TS {
     L(this, "insaneSinceMs", null);
     L(this, "recoveredSinceMs", null);
     L(this, "sanityHold", !1);
+    // Reflex layer state (policy block at ARDY_REFLEX).
+    L(this, "reflexActive", null);
+    L(this, "lastReflexAtMs", -1 / 0);
+    L(this, "rejectAccum", 0);
+    L(this, "reflexCount", 0);
+    /** A reflex was cancelled by the watchdog hold — restore intent on recovery. */
+    L(this, "pendingIntentRestore", !1);
     L(this, "slerpFrom", new me());
     L(this, "slerpTo", new me());
     L(this, "lastContract", null);
@@ -26736,12 +26767,12 @@ class TS {
     L(this, "retargeterPath", "1.0");
     L(this, "warnedMissingContractVersion", !1);
     var r;
-    this.rig = e.rig, this.url = e.url ?? ES(), this.nowMs = e.nowMs ?? (() => performance.now()), this.initialPrompt = e.initialPrompt ?? lS, this.backoff = { ...oS, ...e.backoff }, this.backoffMs = this.backoff.INITIAL_MS, this.clock = new FM({ nowMs: this.nowMs }), this.approval = new SS(e.navigation), this.vrmLikeFactory = e.vrmLikeFactory ?? (() => {
+    this.rig = e.rig, this.url = e.url ?? wS(), this.nowMs = e.nowMs ?? (() => performance.now()), this.initialPrompt = e.initialPrompt ?? lS, this.backoff = { ...oS, ...e.backoff }, this.reflexConfig = { ...uS, ...e.reflex }, this.backoffMs = this.backoff.INITIAL_MS, this.clock = new FM({ nowMs: this.nowMs }), this.approval = new TS(e.navigation), this.vrmLikeFactory = e.vrmLikeFactory ?? (() => {
       const o = e.rig.vrm;
       return o ? nS(o) : null;
     });
     const t = e.profileUrl === void 0 ? aS : e.profileUrl;
-    this.profileReady = t === null ? Promise.resolve(null) : e.profileFetcher !== void 0 ? e.profileFetcher(t).then((o) => o ?? null).catch((o) => (console.warn(`[ardy] calibration profile fetch failed: ${String(o)} — falling back to gestalt-motion retarget`), null)) : MS(t);
+    this.profileReady = t === null ? Promise.resolve(null) : e.profileFetcher !== void 0 ? e.profileFetcher(t).then((o) => o ?? null).catch((o) => (console.warn(`[ardy] calibration profile fetch failed: ${String(o)} — falling back to gestalt-motion retarget`), null)) : ES(t);
     const n = {
       onOpen: () => {
         this.everOpened && (this.reconnectCount += 1), this.everOpened = !0, this.reconnectAttempts = 0, this.lastReason = null, this.backoffMs = this.backoff.INITIAL_MS, this.currentState = "connecting";
@@ -26782,12 +26813,12 @@ class TS {
    * last sampled frame ≈ now − expectedWall(frameA.timeS).
    */
   getTelemetry() {
-    var l, c;
+    var l, c, h;
     const e = this.client.buffer, t = this.clock.anchorWallMs, n = this.clock.anchorStreamS, i = e.lastTimeS(), r = this.nowMs();
     let o = null, a = null;
     if (t !== null && i !== null) {
-      const h = this.clock.now();
-      o = h !== null ? Math.max(0, (i - h) * 1e3) : null, a = Math.max(0, r - (t + (i - n) * 1e3));
+      const u = this.clock.now();
+      o = u !== null ? Math.max(0, (i - u) * 1e3) : null, a = Math.max(0, r - (t + (i - n) * 1e3));
     }
     return {
       state: this.currentState,
@@ -26808,7 +26839,12 @@ class TS {
         rootYEma: this.rootYEma,
         hold: this.sanityHold
       },
-      groundCorrectionM: ((c = this.profiled) == null ? void 0 : c.groundCorrection) ?? null
+      groundCorrectionM: ((c = this.profiled) == null ? void 0 : c.groundCorrection) ?? null,
+      reflex: {
+        active: this.reflexActive !== null,
+        variant: ((h = this.reflexActive) == null ? void 0 : h.variant) ?? null,
+        count: this.reflexCount
+      }
     };
   }
   isLive() {
@@ -26834,7 +26870,7 @@ class TS {
   }
   setPrompt(e) {
     const t = e.trim();
-    if (!(!t || this.disposed) && (this.lastPrompt = t, this.client.sendPrompt(t), this.sanityHold || this.leanEma > tu)) {
+    if (!(!t || this.disposed) && (this.lastPrompt = t, this.reflexActive = null, this.pendingIntentRestore = !1, this.client.sendPrompt(t), this.sanityHold || this.leanEma > tu)) {
       this.sanityHold = !1, this.insaneSinceMs = null, this.recoveredSinceMs = null;
       try {
         this.client.sendReset();
@@ -26850,7 +26886,7 @@ class TS {
     var c, h;
     if (this.disposed) return !1;
     const t = this.client.buffer;
-    t.resetPending && (t.resetPending = !1, this.clock.notifyReset(), this.needsAnchor = !0, this.streamGeneration += 1, (c = this.profiled) == null || c.resetFeed(), this.beginResetCrossfade()), this.clock.update(t);
+    t.resetPending && (t.resetPending = !1, this.clock.notifyReset(), this.needsAnchor = !0, this.streamGeneration += 1, (c = this.profiled) == null || c.resetFeed(), this.beginResetCrossfade()), this.clock.update(t), this.rejectAccum = Math.max(0, this.rejectAccum - e * this.reflexConfig.ACCUM_LEAK_M_PER_S), this.reflexActive !== null && this.nowMs() >= this.reflexActive.restoreAtMs && (this.reflexActive = null, this.sanityHold ? this.pendingIntentRestore = !0 : this.restoreIntentPrompt());
     let n = Ut.BUFFERING, i = null, r = null;
     const o = this.clock.now();
     if (o !== null && (this.retargeter !== null || this.profiled !== null) && this.jointCount > 0) {
@@ -26858,12 +26894,12 @@ class TS {
       n = u.state, (u.state === Ut.OK || u.state === Ut.GAP_HOLD) && u.a !== null && (r = u.a, i = Md.sample(u.a, u.b, u.alpha, this.jointCount), t.dropPlayed(u.a.frameSeq));
     }
     if (i !== null) {
-      const u = xS(i.rootQuat), d = Math.min(1, e * gS);
-      this.leanEma += (u - this.leanEma) * d, this.rootYEma += (i.rootPos[1] - this.rootYEma) * d, (u > uS || i.rootPos[1] < dS || i.rootPos[1] > fS) && (i = null);
+      const u = yS(i.rootQuat), d = Math.min(1, e * _S);
+      this.leanEma += (u - this.leanEma) * d, this.rootYEma += (i.rootPos[1] - this.rootYEma) * d, (u > dS || i.rootPos[1] < fS || i.rootPos[1] > pS) && (i = null);
     }
-    const a = this.leanEma > tu && this.rootYEma > pS;
+    const a = this.leanEma > tu && this.rootYEma > mS;
     if (!this.sanityHold && a) {
-      if (this.insaneSinceMs === null && (this.insaneSinceMs = this.nowMs()), this.nowMs() - this.insaneSinceMs > _S) {
+      if (this.insaneSinceMs === null && (this.insaneSinceMs = this.nowMs()), this.nowMs() - this.insaneSinceMs > vS) {
         this.sanityHold = !0, this.lastReason = `motion stream degraded (hips lean ${this.leanEma.toFixed(0)}° while upright) — released to procedural idle`, console.warn(`[ardy] ${this.lastReason}; requesting hard stream reset`);
         try {
           this.client.sendReset();
@@ -26872,7 +26908,7 @@ class TS {
         this.recoveredSinceMs = null;
       }
     } else a || (this.insaneSinceMs = null);
-    if (this.sanityHold && (this.leanEma < mS ? (this.recoveredSinceMs === null && (this.recoveredSinceMs = this.nowMs()), this.nowMs() - this.recoveredSinceMs > vS && (this.sanityHold = !1, this.insaneSinceMs = null, this.recoveredSinceMs = null, console.info("[ardy] motion stream recovered — resuming retarget"))) : this.recoveredSinceMs = null), this.currentState = this.resolveState(n), this.sanityHold && (this.currentState = "stale"), r !== null) {
+    if (this.sanityHold && (this.leanEma < gS ? (this.recoveredSinceMs === null && (this.recoveredSinceMs = this.nowMs()), this.nowMs() - this.recoveredSinceMs > xS && (this.sanityHold = !1, this.insaneSinceMs = null, this.recoveredSinceMs = null, console.info("[ardy] motion stream recovered — resuming retarget"), this.pendingIntentRestore && (this.pendingIntentRestore = !1, this.restoreIntentPrompt()))) : this.recoveredSinceMs = null), this.currentState = this.resolveState(n), this.sanityHold && (this.currentState = "stale"), r !== null) {
       const u = this.clock.anchorWallMs;
       if (u !== null) {
         const d = u + (r.timeS - this.clock.anchorStreamS) * 1e3;
@@ -26899,6 +26935,15 @@ class TS {
     this.disposed || (this.disposed = !0, this.reconnectTimer !== null && (clearTimeout(this.reconnectTimer), this.reconnectTimer = null), this.client.disconnect());
   }
   // ── internals ──────────────────────────────────────────────────────
+  /**
+   * Reflex layer: hand the INTENT prompt back to the service after a
+   * reaction (or after a watchdog-deferred restore). Never touches
+   * lastPrompt — it already IS the intent prompt, and a disconnect no-ops
+   * here while the reconnect path re-kicks the same intent.
+   */
+  restoreIntentPrompt() {
+    this.client.sendPrompt(this.lastPrompt ?? this.initialPrompt);
+  }
   /**
    * T2a: crossfade ACROSS a reset chunk (new prompt / drift-watchdog hard
    * reset) instead of hard-cutting. Restarting the blend ramp at 0 makes
@@ -27012,14 +27057,19 @@ class TS {
         e.rootPos[1],
         e.rootPos[2] + this.originOffset[1]
       ], f = za(e.rootQuat);
-      n.anchor(d, f), this.approval.reset(d[0], d[2]), this.yawContinuityArmed && this.lastFacingYaw !== null && (this.yawJumpOffset = yS(this.lastFacingYaw - f), this.yawJumpVelocity = 0), this.yawContinuityArmed = !1, this.needsAnchor = !1;
+      n.anchor(d, f), this.approval.reset(d[0], d[2]), this.yawContinuityArmed && this.lastFacingYaw !== null && (this.yawJumpOffset = MS(this.lastFacingYaw - f), this.yawJumpVelocity = 0), this.yawContinuityArmed = !1, this.needsAnchor = !1;
     }
     const i = [
       e.rootPos[0] + this.originOffset[0],
       e.rootPos[1],
       e.rootPos[2] + this.originOffset[1]
     ], r = n.update(i, e.rootQuat);
-    r.residualMagnitude > 1e-4 && r.residualMagnitude < hS && (this.originOffset[0] += r.sceneRootPos[0] - i[0], this.originOffset[1] += r.sceneRootPos[2] - i[2], this.navAbsorbCount += 1, r.hipsPos[0] = 0, r.hipsPos[2] = 0, r.resetRequested = !1);
+    if (r.residualMagnitude > 1e-4 && r.residualMagnitude < hS && (this.originOffset[0] += r.sceneRootPos[0] - i[0], this.originOffset[1] += r.sceneRootPos[2] - i[2], this.navAbsorbCount += 1, r.hipsPos[0] = 0, r.hipsPos[2] = 0, r.resetRequested = !1, this.rejectAccum += r.residualMagnitude, this.reflexActive === null && !this.sanityHold && this.rejectAccum >= this.reflexConfig.TRIGGER_ACCUM_M && this.nowMs() - this.lastReflexAtMs >= this.reflexConfig.COOLDOWN_MS)) {
+      const d = SS(this.approval.lastRejected, r.sceneRootYaw);
+      this.reflexActive = { variant: d, restoreAtMs: this.nowMs() + this.reflexConfig.DURATION_MS }, this.lastReflexAtMs = this.nowMs(), this.reflexCount += 1, this.rejectAccum = 0, console.info(
+        `[ardy] nav reflex (${d}` + (this.approval.lastBlockerId !== null ? `, ${this.approval.lastBlockerId}` : "") + ")"
+      ), this.client.sendPrompt(this.reflexConfig.PROMPTS[d]);
+    }
     const o = r.sceneRootYaw + this.yawJumpOffset;
     this.rig.setRootPosition(r.sceneRootPos[0], r.sceneRootPos[2]), this.rig.setFacingYaw(o), this.lastFacingYaw = o, r.resetRequested && this.nowMs() - this.lastResetSentAtMs > cS && (this.lastResetSentAtMs = this.nowMs(), this.residualResetCount += 1, console.warn("[ardy] root residual exceeded clamp; requesting stream reset"), this.client.sendReset(), this.clock.notifyReset(), this.needsAnchor = !0);
     const a = -r.sceneRootYaw / 2, l = [Math.cos(a), 0, Math.sin(a), 0], c = e.localRots.slice(), h = [c[0], c[1], c[2], c[3]], u = zt($n(l, h));
@@ -27087,7 +27137,7 @@ function fa(s, e, t) {
   }
   return l >= a && l >= 0 && a <= 1;
 }
-class wS {
+class AS {
   constructor(e, t = 0.28) {
     L(this, "obstacles", []);
     this.bounds = e, this.actorRadius = t;
@@ -27365,7 +27415,7 @@ const Va = {
   rightlowerleg: ["rightleg", "rightcalf", "rightshin", "lowerlegr", "rcalf", "calfr", "shinr", "legr"],
   leftfoot: ["footl", "lfoot"],
   rightfoot: ["footr", "rfoot"]
-}, bS = new Map(
+}, RS = new Map(
   Object.entries(Va).flatMap(([s, e]) => [
     [s, s],
     ...e.map((t) => [t, s])
@@ -27397,9 +27447,9 @@ function Ds(s) {
 }
 function Is(s) {
   const e = Ds(s);
-  return bS.get(e) ?? e;
+  return RS.get(e) ?? e;
 }
-class AS {
+class PS {
   constructor(e) {
     L(this, "scene");
     L(this, "model");
@@ -27718,9 +27768,9 @@ class AS {
       }
   }
 }
-const RS = [{ id: "stage", displayName: "Open Floor", type: "zone", position: { x: 0, y: 0, z: 0 }, walkTarget: !0, lookTarget: !0, description: "Clear center floor for walking, turning, gesturing, and letting Motor V1 breathe.", affordances: ["walk_to", "look_at", "idle"] }, { id: "couch", displayName: "Deep Velvet Couch", type: "furniture", position: { x: 0, y: 0, z: 1.55 }, approachPoint: { x: -1.25, y: 0, z: 1.24 }, lookTargetPosition: { x: 0, y: 0.45, z: 1.55 }, interactionRange: 1.5, walkTarget: !0, lookTarget: !0, description: "Low worn-velvet lounge couch for casual conversation and late-night hangout energy.", affordances: ["inspect", "sit", "talk_to"], state: { occupied: !1 } }, { id: "chair", displayName: "Mismatched Armchair", type: "furniture", position: { x: -1.5, y: 0, z: -0.35 }, approachPoint: { x: -1.28, y: 0, z: 0.32 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Comfortable salvaged armchair near the workstation side of the lounge.", affordances: ["inspect", "sit", "talk_to"], state: { occupied: !1 } }, { id: "coffee_table", displayName: "Low Coffee Table", type: "furniture", position: { x: 0, y: 0.28, z: 1.15 }, approachPoint: { x: -0.85, y: 0, z: 1.15 }, placementPoint: { x: 0, y: 0.35, z: 1.15 }, interactionRange: 1.5, walkTarget: !1, lookTarget: !0, description: "Soft-edged low table anchoring the hangout zone.", affordances: ["inspect", "place_on"] }, { id: "workstation", displayName: "Workstation", type: "furniture", zone: "Work wall", position: { x: -2.8, y: 1.15, z: -1.25 }, approachPoint: { x: -2.45, y: 0, z: -1.4 }, placementPoint: { x: -3.5, y: 0.95, z: -1.25 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Curved high-resolution display that reads like modern art when idle.", affordances: ["inspect", "use", "place_on"] }, { id: "projector", displayName: "Ambient Projector Wall", type: "media", zone: "North wall", position: { x: 0, y: 1.35, z: -3.72 }, approachPoint: { x: 0, y: 0, z: -2.65 }, lookTargetPosition: { x: 0, y: 1.35, z: -3.72 }, interactionRange: 1.8, walkTarget: !0, lookTarget: !0, description: "Large ambient media wall for shared visuals, memory playback, and room-scale focus.", affordances: ["inspect", "use", "look_at"] }, { id: "servers", displayName: "Hidden Server Panels", type: "utility", zone: "East alcove", position: { x: 3.15, y: 1, z: -0.9 }, approachPoint: { x: 2.35, y: 0, z: -0.65 }, lookTargetPosition: { x: 3.15, y: 1.05, z: -0.9 }, interactionRange: 1.4, walkTarget: !0, lookTarget: !0, description: "Quiet compute wall behind warm panels; Tai can reference it when thinking about tools, sandbox work, and system state.", affordances: ["inspect", "use", "look_at"] }, { id: "bed", displayName: "Reset Daybed", type: "furniture", zone: "West nook", position: { x: -3.25, y: 0.25, z: 1.9 }, approachPoint: { x: -2.38, y: 0, z: 1.62 }, lookTargetPosition: { x: -3.25, y: 0.45, z: 1.9 }, interactionRange: 1.35, walkTarget: !0, lookTarget: !0, description: "Compact reset daybed for quiet idle poses and low-energy moments.", affordances: ["inspect", "sit", "look_at"], state: { occupied: !1 } }, { id: "record_player", displayName: "Record Player", type: "media", zone: "Lounge shelf", position: { x: 2.65, y: 0.8, z: 1.45 }, approachPoint: { x: 1.92, y: 0, z: 1.22 }, lookTargetPosition: { x: 2.65, y: 0.82, z: 1.45 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Analog music corner that gives the room a lived-in, human-scale rhythm.", affordances: ["inspect", "use", "look_at"] }, { id: "plant", displayName: "Big Plant", type: "decor", zone: "Window corner", position: { x: 2.85, y: 0.75, z: -2.15 }, approachPoint: { x: 2.05, y: 0, z: -1.78 }, lookTargetPosition: { x: 2.85, y: 0.9, z: -2.15 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Tall plant softening the room's tech edge and giving Tai a natural attention target.", affordances: ["inspect", "look_at"] }, { id: "coffee_mug", displayName: "Ceramic Mug", type: "item", position: { x: 0.2, y: 0.35, z: 1.15 }, interactionRange: 1.3, walkTarget: !1, lookTarget: !0, description: "A warm ceramic mug, likely containing coffee or tea.", affordances: ["inspect", "pick_up"], state: { held: !1, full: !0, location: "coffee_table" } }, { id: "kitchen", displayName: "Kitchenette", type: "utility", position: { x: 2.15, y: 0, z: -3.45 }, approachPoint: { x: 1.32, y: 0, z: -2.82 }, interactionRange: 1.5, walkTarget: !0, lookTarget: !0, description: "Hidden refreshment station with counter space and an espresso setup.", affordances: ["inspect", "use", "place_on"] }], PS = {
-  objects: RS
-}, CS = {
+const CS = [{ id: "stage", displayName: "Open Floor", type: "zone", position: { x: 0, y: 0, z: 0 }, walkTarget: !0, lookTarget: !0, description: "Clear center floor for walking, turning, gesturing, and letting Motor V1 breathe.", affordances: ["walk_to", "look_at", "idle"] }, { id: "couch", displayName: "Deep Velvet Couch", type: "furniture", position: { x: 0, y: 0, z: 1.55 }, approachPoint: { x: -1.25, y: 0, z: 1.24 }, lookTargetPosition: { x: 0, y: 0.45, z: 1.55 }, interactionRange: 1.5, walkTarget: !0, lookTarget: !0, description: "Low worn-velvet lounge couch for casual conversation and late-night hangout energy.", affordances: ["inspect", "sit", "talk_to"], state: { occupied: !1 } }, { id: "chair", displayName: "Mismatched Armchair", type: "furniture", position: { x: -1.5, y: 0, z: -0.35 }, approachPoint: { x: -1.28, y: 0, z: 0.32 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Comfortable salvaged armchair near the workstation side of the lounge.", affordances: ["inspect", "sit", "talk_to"], state: { occupied: !1 } }, { id: "coffee_table", displayName: "Low Coffee Table", type: "furniture", position: { x: 0, y: 0.28, z: 1.15 }, approachPoint: { x: -0.85, y: 0, z: 1.15 }, placementPoint: { x: 0, y: 0.35, z: 1.15 }, interactionRange: 1.5, walkTarget: !1, lookTarget: !0, description: "Soft-edged low table anchoring the hangout zone.", affordances: ["inspect", "place_on"] }, { id: "workstation", displayName: "Workstation", type: "furniture", zone: "Work wall", position: { x: -2.8, y: 1.15, z: -1.25 }, approachPoint: { x: -2.45, y: 0, z: -1.4 }, placementPoint: { x: -3.5, y: 0.95, z: -1.25 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Curved high-resolution display that reads like modern art when idle.", affordances: ["inspect", "use", "place_on"] }, { id: "projector", displayName: "Ambient Projector Wall", type: "media", zone: "North wall", position: { x: 0, y: 1.35, z: -3.72 }, approachPoint: { x: 0, y: 0, z: -2.65 }, lookTargetPosition: { x: 0, y: 1.35, z: -3.72 }, interactionRange: 1.8, walkTarget: !0, lookTarget: !0, description: "Large ambient media wall for shared visuals, memory playback, and room-scale focus.", affordances: ["inspect", "use", "look_at"] }, { id: "servers", displayName: "Hidden Server Panels", type: "utility", zone: "East alcove", position: { x: 3.15, y: 1, z: -0.9 }, approachPoint: { x: 2.35, y: 0, z: -0.65 }, lookTargetPosition: { x: 3.15, y: 1.05, z: -0.9 }, interactionRange: 1.4, walkTarget: !0, lookTarget: !0, description: "Quiet compute wall behind warm panels; Tai can reference it when thinking about tools, sandbox work, and system state.", affordances: ["inspect", "use", "look_at"] }, { id: "bed", displayName: "Reset Daybed", type: "furniture", zone: "West nook", position: { x: -3.25, y: 0.25, z: 1.9 }, approachPoint: { x: -2.38, y: 0, z: 1.62 }, lookTargetPosition: { x: -3.25, y: 0.45, z: 1.9 }, interactionRange: 1.35, walkTarget: !0, lookTarget: !0, description: "Compact reset daybed for quiet idle poses and low-energy moments.", affordances: ["inspect", "sit", "look_at"], state: { occupied: !1 } }, { id: "record_player", displayName: "Record Player", type: "media", zone: "Lounge shelf", position: { x: 2.65, y: 0.8, z: 1.45 }, approachPoint: { x: 1.92, y: 0, z: 1.22 }, lookTargetPosition: { x: 2.65, y: 0.82, z: 1.45 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Analog music corner that gives the room a lived-in, human-scale rhythm.", affordances: ["inspect", "use", "look_at"] }, { id: "plant", displayName: "Big Plant", type: "decor", zone: "Window corner", position: { x: 2.85, y: 0.75, z: -2.15 }, approachPoint: { x: 2.05, y: 0, z: -1.78 }, lookTargetPosition: { x: 2.85, y: 0.9, z: -2.15 }, interactionRange: 1.2, walkTarget: !0, lookTarget: !0, description: "Tall plant softening the room's tech edge and giving Tai a natural attention target.", affordances: ["inspect", "look_at"] }, { id: "coffee_mug", displayName: "Ceramic Mug", type: "item", position: { x: 0.2, y: 0.35, z: 1.15 }, interactionRange: 1.3, walkTarget: !1, lookTarget: !0, description: "A warm ceramic mug, likely containing coffee or tea.", affordances: ["inspect", "pick_up"], state: { held: !1, full: !0, location: "coffee_table" } }, { id: "kitchen", displayName: "Kitchenette", type: "utility", position: { x: 2.15, y: 0, z: -3.45 }, approachPoint: { x: 1.32, y: 0, z: -2.82 }, interactionRange: 1.5, walkTarget: !0, lookTarget: !0, description: "Hidden refreshment station with counter space and an espresso setup.", affordances: ["inspect", "use", "place_on"] }], LS = {
+  objects: CS
+}, IS = {
   aa: "A",
   ae: "I",
   ah: "I",
@@ -27762,7 +27812,7 @@ const RS = [{ id: "stage", displayName: "Open Floor", type: "zone", position: { 
   zh: "E",
   sil: "_"
 };
-class LS {
+class NS {
   constructor() {
     L(this, "queue", []);
     L(this, "active", null);
@@ -27785,23 +27835,23 @@ class LS {
       o != null && o.expressionManager && (o.expressionManager.setValue("A", 0), o.expressionManager.setValue("I", 0), o.expressionManager.setValue("U", 0), o.expressionManager.setValue("E", 0), o.expressionManager.setValue("O", 0));
       return;
     }
-    const n = CS[this.active.phoneme] || "A", i = this.active.weight ?? 1, r = e.vrm;
+    const n = IS[this.active.phoneme] || "A", i = this.active.weight ?? 1, r = e.vrm;
     r != null && r.expressionManager && (["A", "I", "U", "E", "O"].forEach((o) => r.expressionManager.setValue(o, 0)), r.expressionManager.setValue(n, i));
   }
   get isTalking() {
     return this.active !== null || this.queue.length > 0;
   }
 }
-class IS {
+class US {
   constructor(e, t) {
     L(this, "scene", new ov());
     L(this, "camera", new Dt(45, 1, 0.1, 100));
     L(this, "renderer", new zu({ antialias: !0, preserveDrawingBuffer: !0 }));
     L(this, "controls");
     L(this, "clock", new Iv());
-    L(this, "navigation", new wS({ minX: -3.65, maxX: 3.65, minZ: -3.65, maxZ: 3.65 }, 0.22));
+    L(this, "navigation", new AS({ minX: -3.65, maxX: 3.65, minZ: -3.65, maxZ: 3.65 }, 0.22));
     L(this, "face", new ex());
-    L(this, "visemes", new LS());
+    L(this, "visemes", new NS());
     L(this, "objects", /* @__PURE__ */ new Map());
     L(this, "resizeObserver");
     L(this, "ambient");
@@ -27852,13 +27902,13 @@ class IS {
       this.disposeModelIfSafe(e);
       return;
     }
-    this.rig = new AS(e);
+    this.rig = new PS(e);
     const t = this.rig.getVisualSize();
     if (t.y > 100 || t.y < 0.1) {
       const n = 1.7 / Math.max(t.y, 1e-3);
       this.rig.scene.scale.setScalar(n);
     }
-    this.rig.scene.position.set(0, 0, 0.15), this.rig.scene.rotation.y = 0, this.scene.add(this.rig.scene), this.locomotion = new wM(this.rig), this.ardySource = new TS({ rig: this.rig, navigation: this.navigation }), this.face.applyIntent({ face: { expression: "relaxed", intensity: 0.25, talking: !1 } }), this.resize(), this.setCameraMode("room"), this.animate();
+    this.rig.scene.position.set(0, 0, 0.15), this.rig.scene.rotation.y = 0, this.scene.add(this.rig.scene), this.locomotion = new wM(this.rig), this.ardySource = new bS({ rig: this.rig, navigation: this.navigation }), this.face.applyIntent({ face: { expression: "relaxed", intensity: 0.25, talking: !1 } }), this.resize(), this.setCameraMode("room"), this.animate();
   }
   setCameraMode(e) {
     this.cameraMode = e, e === "room" ? (this.camera.position.set(6.4, 4.2, 7.2), this.controls.target.set(0, 1, 0)) : e === "portrait" ? (this.camera.position.set(0.15, 1.58, 1.35), this.controls.target.set(0, 1.48, 0)) : (this.camera.position.set(2.4, 1.9, 3.1), this.controls.target.set(0, 1.05, 0)), this.controls.update();
@@ -27986,7 +28036,7 @@ class IS {
     su(new Blob([t], { type: "application/json" }), `tai-rig-diagnostics-${Date.now()}.json`);
   }
   get roomObjects() {
-    return PS.objects || [];
+    return LS.objects || [];
   }
   destroy() {
     var e, t, n, i, r, o;
@@ -28136,7 +28186,7 @@ function su(s, e) {
   const t = URL.createObjectURL(s), n = document.createElement("a");
   n.href = t, n.download = e, n.click(), setTimeout(() => URL.revokeObjectURL(t), 0);
 }
-const ma = "division.embodiment.tai.rigTuning.v1", NS = ["hips", "spine", "chest", "neck", "head", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand", "leftUpperLeg", "leftLowerLeg", "leftFoot", "rightUpperLeg", "rightLowerLeg", "rightFoot"], US = ["neutral", "relaxed", "happy", "thinking", "surprised", "sad", "angry"], ga = [
+const ma = "division.embodiment.tai.rigTuning.v1", DS = ["hips", "spine", "chest", "neck", "head", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand", "leftUpperLeg", "leftLowerLeg", "leftFoot", "rightUpperLeg", "rightLowerLeg", "rightFoot"], OS = ["neutral", "relaxed", "happy", "thinking", "surprised", "sad", "angry"], ga = [
   { key: "breathScale", label: "Breath", min: 0, max: 0.14, step: 5e-3 },
   { key: "idleLife", label: "Idle sway", min: 0, max: 0.12, step: 5e-3 },
   { key: "armDrop", label: "Arm rest", min: 0.7, max: 1.7, step: 0.01 },
@@ -28145,7 +28195,7 @@ const ma = "division.embodiment.tai.rigTuning.v1", NS = ["hips", "spine", "chest
   { key: "strideScale", label: "Stride", min: 0.2, max: 1.4, step: 0.01 },
   { key: "kneeBend", label: "Knee bend", min: 0, max: 1.2, step: 0.01 },
   { key: "torsoTwist", label: "Torso twist", min: 0, max: 0.3, step: 5e-3 }
-], DS = [
+], FS = [
   { id: "idle", label: "Stop / idle" },
   { id: "walk", label: "Walk cycle" },
   { id: "crouch", label: "Crouch" },
@@ -28157,7 +28207,7 @@ const ma = "division.embodiment.tai.rigTuning.v1", NS = ["hips", "spine", "chest
   { id: "balance-left", label: "Balance L" },
   { id: "balance-right", label: "Balance R" }
 ];
-class OS {
+class BS {
   constructor(e) {
     L(this, "element", document.createElement("aside"));
     L(this, "readout", document.createElement("pre"));
@@ -28198,12 +28248,12 @@ class OS {
     t.input.addEventListener("change", () => this.room.setSkeletonVisible(t.input.checked)), e.append(t.label);
     const n = document.createElement("label");
     n.textContent = "Inspect bone";
-    for (const c of NS) this.boneSelect.add(new Option(c, c));
+    for (const c of DS) this.boneSelect.add(new Option(c, c));
     n.append(this.boneSelect), e.append(n), this.readout.className = "rig-readout", e.append(this.readout), e.append(this.heading("Face preview"));
     const i = document.createElement("div");
     i.className = "rig-inline";
     const r = document.createElement("select");
-    for (const c of US) r.add(new Option(c, c));
+    for (const c of OS) r.add(new Option(c, c));
     r.value = "relaxed";
     const o = document.createElement("input");
     o.type = "range", o.min = "0", o.max = "1", o.step = "0.05", o.value = "0.5";
@@ -28223,7 +28273,7 @@ class OS {
     t.className = "rig-note", t.textContent = "Preview gestures locally. Walk loops until stopped; one-shots return to idle.", e.append(t);
     const n = document.createElement("div");
     n.className = "motion-deck";
-    for (const a of DS) n.append(this.button(a.label, () => this.room.triggerMotion(a.id)));
+    for (const a of FS) n.append(this.button(a.label, () => this.room.triggerMotion(a.id)));
     e.append(n), e.append(this.heading("Procedural tuning"));
     const i = this.readStoredTuning();
     i && this.room.setProceduralTuning(i);
@@ -28290,7 +28340,7 @@ pos ${(o = t.worldPosition) == null ? void 0 : o.join(", ")}` : `${(t == null ? 
     return n.type = "checkbox", t.append(n, document.createTextNode(e)), { label: t, input: n };
   }
 }
-async function FS(s, e, t) {
+async function zS(s, e, t) {
   const n = document.createElement("section");
   n.className = "tai-loft";
   const i = document.createElement("div");
@@ -28303,7 +28353,7 @@ async function FS(s, e, t) {
   a.className = "tai-loft-controls";
   const l = document.createElement("button");
   l.textContent = "← Return to VN", l.addEventListener("click", e), a.append(l), r.append(o, a), n.append(i, r), s.replaceChildren(n);
-  const c = new IS(i, t.vrmUrl);
+  const c = new US(i, t.vrmUrl);
   for (const U of ["room", "follow", "portrait"]) {
     const G = document.createElement("button");
     G.textContent = U[0].toUpperCase() + U.slice(1), G.addEventListener("click", () => c.setCameraMode(U)), a.append(G);
@@ -28419,7 +28469,7 @@ async function FS(s, e, t) {
     M || (M = !0, clearInterval(E), g(), delete A.__ardy, t.development && window.removeEventListener("keydown", F), D == null || D.destroy(), c.destroy(), n.remove());
   };
   try {
-    await c.initialize(), t.development && w && (D = new OS(c), n.append(D.element), w.addEventListener("click", () => D == null ? void 0 : D.toggle()));
+    await c.initialize(), t.development && w && (D = new BS(c), n.append(D.element), w.addEventListener("click", () => D == null ? void 0 : D.toggle()));
   } catch (U) {
     const G = document.createElement("div");
     return G.className = "tai-loft-error", G.textContent = `Embodiment could not start: ${String(U)}`, n.append(G), b;
@@ -28429,16 +28479,16 @@ async function FS(s, e, t) {
   };
   return t.development && window.addEventListener("keydown", F), b;
 }
-const BS = {
+const kS = {
   vrmUrl: "/api/hyrax/assets/tai.embodiment.vrm",
   development: !1
 };
-function HS(s, e, t = {}) {
-  return FS(s, e, {
-    ...BS,
+function GS(s, e, t = {}) {
+  return zS(s, e, {
+    ...kS,
     ...t
   });
 }
 export {
-  HS as mountTaiLoft
+  GS as mountTaiLoft
 };
