@@ -1,0 +1,208 @@
+{
+  "name": "GEVS Level 2 — human motion",
+  "description": "shuffle sequence (from shuffle.json), wave, reach, squat, one-foot balance. Thresholds calibrated from the measured tai-embodiment-v3 baseline runs of 2026-08-02; 'basis' records the measured values each threshold was derived from, with headroom. 'recenter' re-anchors the avatar at the spawn point before the check.",
+  "checks": [
+    {
+      "id": "shuffle",
+      "level": 2,
+      "category": "dance",
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "sequence_file": "shuffle.json",
+      "assertions": [
+        {
+          "metric": "phraseCompletionPct",
+          "op": ">=",
+          "pass": 90,
+          "partial": 60,
+          "basis": "baseline 100% of 10 phrases in both runs showed measurable motion (path ≥0.15 m or |yaw| ≥15° or hips rate ≥2× idle floor)"
+        },
+        {
+          "metric": "quarterTurnYawDeg",
+          "op": "between",
+          "pass": [
+            20,
+            220
+          ],
+          "partial": [
+            10,
+            300
+          ],
+          "basis": "baseline mean |yaw| of the quarter-turn phrases: 127.9° / 25.9° across runs — the model's quarter turn is unreliable at T1 (finding, documented); brackets still catch 'never turned' (<10°) and 'spun' (>300°)"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "basis": "no phrase may reset the stream"
+        },
+        {
+          "metric": "livePct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 80,
+          "basis": "baseline 100%"
+        }
+      ]
+    },
+    {
+      "id": "wave",
+      "level": 2,
+      "category": "hands",
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "prompts": [
+        [
+          "a person waves their right hand",
+          10
+        ]
+      ],
+      "assertions": [
+        {
+          "metric": "rightHandAmpM",
+          "op": ">=",
+          "pass": 0.6,
+          "partial": 0.3,
+          "basis": "baseline 1.07 m right-hand world range"
+        },
+        {
+          "metric": "maxLeanEmaDeg",
+          "op": "<=",
+          "pass": 8,
+          "partial": 12,
+          "basis": "no explosion: baseline 3.6°"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "basis": "wave must not reset the stream"
+        }
+      ]
+    },
+    {
+      "id": "reach",
+      "level": 2,
+      "category": "hands",
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "prompts": [
+        [
+          "a person reaches to the left",
+          8
+        ],
+        [
+          "a person reaches to the right",
+          8
+        ]
+      ],
+      "assertions": [
+        {
+          "metric": "leftHandAmpM",
+          "op": ">=",
+          "pass": 0.4,
+          "partial": 0.2,
+          "basis": "baseline 0.74 m left-hand range on reach-left"
+        },
+        {
+          "metric": "handSymmetry",
+          "op": ">=",
+          "pass": 0.5,
+          "partial": 0.3,
+          "basis": "baseline 0.73 min/max hand amplitude across the two reach segments"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "basis": "reach must not reset the stream"
+        }
+      ]
+    },
+    {
+      "id": "squat",
+      "level": 2,
+      "category": "balance",
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "prompts": [
+        [
+          "a person squats down and stands back up",
+          12
+        ]
+      ],
+      "assertions": [
+        {
+          "metric": "hipsYRangeM",
+          "op": ">=",
+          "pass": 0.5,
+          "partial": 0.25,
+          "basis": "baseline 0.81 m hips range squat→stand"
+        },
+        {
+          "metric": "footSlideM",
+          "op": "<=",
+          "pass": 3.0,
+          "partial": 5.0,
+          "basis": "baseline 1.94 m foot XZ slide while in ground contact (feet skate at T1 — known wrongness, measured not hidden)"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "basis": "squat must not reset the stream"
+        }
+      ]
+    },
+    {
+      "id": "balance-one-foot",
+      "level": 2,
+      "category": "balance",
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "prompts": [
+        [
+          "a person stands on one leg, balancing",
+          12
+        ]
+      ],
+      "assertions": [
+        {
+          "metric": "footLiftM",
+          "op": ">=",
+          "pass": 0.03,
+          "partial": 0.01,
+          "basis": "baseline raised-foot peak 0.057 / 0.036 / 0.038 / 0.012 m over 4 runs — the T1 model often barely lifts (unreliable behavior, documented); brackets catch 'no lift at all' (0.007 m measured with the rejected prompt phrasing)"
+        },
+        {
+          "metric": "maxLeanEmaDeg",
+          "op": "<=",
+          "pass": 11,
+          "partial": 16,
+          "basis": "baseline 6.4–8.9°; sanity-gate drift EMA trips at 12°"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "basis": "balance must not reset the stream"
+        }
+      ]
+    }
+  ]
+}

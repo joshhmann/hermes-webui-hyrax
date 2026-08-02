@@ -1,0 +1,13 @@
+{
+  "name": "GEVS shortened shuffle sequence (data, not choreography)",
+  "description": "step R×2, step L×2, heel R, heel L, quarter turn — repeated ×2. Prompt list + timing only; no motion data. Original line-dance primitives, no copyrighted choreography.",
+  "phraseSeconds": 9,
+  "phrases": [
+    {"label": "step-r2", "prompt": "a person steps to the right twice"},
+    {"label": "step-l2", "prompt": "a person steps to the left twice"},
+    {"label": "heel-r", "prompt": "a person taps their right heel forward"},
+    {"label": "heel-l", "prompt": "a person taps their left heel forward"},
+    {"label": "quarter-turn", "prompt": "a person turns a quarter turn to the left"}
+  ],
+  "repeats": 2
+}

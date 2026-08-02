@@ -4,3 +4,6 @@
 
 # Test build output — never commit or ship this
 /test-output/
+
+# GEVS bench run output — reports get promoted into docs/ deliberately
+/tests/bench/out/

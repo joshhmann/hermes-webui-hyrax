@@ -1,0 +1,161 @@
+{
+ "suite": "GEVS v1",
+ "profile": "tai-embodiment-v3",
+ "vrmUrl": "/api/hyrax/assets/tai.embodiment.vrm",
+ "label": "break-guard control: absorb restored",
+ "startedAt": "2026-08-02T08:08:33",
+ "durationS": 55.0,
+ "gitSha": "4b6dd1df",
+ "gitDirty": true,
+ "service": {
+  "upstream": "ws://192.168.0.17:8791/ws",
+  "contractVersion": "1.0.0",
+  "model": "unknown (not exposed through the loft telemetry)"
+ },
+ "idleFloorRateDegS": 0.8570688580107965,
+ "scores": {
+  "categories": {
+   "foot-contact": {
+    "score": 100.0,
+    "checks": [
+     "foot-contact"
+    ],
+    "unmeasured": []
+   },
+   "locomotion": {
+    "score": 100.0,
+    "checks": [
+     "wall-absorb"
+    ],
+    "unmeasured": []
+   }
+  },
+  "overall": 100.0
+ },
+ "checks": [
+  {
+   "id": "wall-absorb",
+   "category": "locomotion",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "streamResets",
+     "op": "<=",
+     "pass": 0,
+     "partial": 1,
+     "basis": "BREAK-GUARD: sustained slide hits the room bound \u22487 s in; without treadmill absorb the residual clamp resets the stream every ~2 s (14 in 65 s measured pre-fix) (a single stochastic stream teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade \u2192 partial)",
+     "value": 0,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "navAbsorbs",
+     "op": ">=",
+     "pass": 1,
+     "partial": null,
+     "basis": "baseline 78 / 42 / 50 absorb events at the boundary",
+     "value": 44,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "livePct",
+     "op": ">=",
+     "pass": 95,
+     "partial": 80,
+     "basis": "baseline 100% \u2014 stream stays live dancing at the wall",
+     "value": 100.0,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": 100.0,
+    "gateHoldSamples": 0,
+    "maxLeanEmaDeg": 4.7,
+    "streamResets": 0,
+    "navAbsorbs": 44,
+    "travelM": 3.972,
+    "pathM": 5.174,
+    "straightness": 0.768,
+    "netX": 3.658,
+    "netZ": 1.548,
+    "yawDeltaDeg": -19.3,
+    "yawAbsDeg": 19.3,
+    "swayRangeM": 3.075,
+    "hipsYMin": 0.668,
+    "hipsYMax": 0.936,
+    "hipsYRangeM": 0.268,
+    "leftHandAmpM": 4.425,
+    "rightHandAmpM": 3.958,
+    "handSymmetry": null,
+    "footMinY": -0.099,
+    "footP5Y": -0.092,
+    "footSlideM": 12.578,
+    "footLiftM": 0.108
+   }
+  },
+  {
+   "id": "foot-contact",
+   "category": "foot-contact",
+   "level": 1,
+   "verdict": "pass",
+   "score": 1.0,
+   "assertions": [
+    {
+     "metric": "footP5Y",
+     "op": ">=",
+     "pass": -0.12,
+     "partial": -0.2,
+     "basis": "baseline p5 of lowest foot-bone Y across the whole run: -0.074 m (mild floor penetration at T1 \u2014 measured, not hidden)",
+     "value": -0.092,
+     "verdict": "pass",
+     "score": 1.0
+    },
+    {
+     "metric": "footMinY",
+     "op": ">=",
+     "pass": -0.3,
+     "partial": -0.45,
+     "basis": "baseline min lowest foot-bone Y: -0.21 m (worst-frame penetration during sit/squat)",
+     "value": -0.099,
+     "verdict": "pass",
+     "score": 1.0
+    }
+   ],
+   "metrics": {
+    "livePct": null,
+    "gateHoldSamples": null,
+    "maxLeanEmaDeg": null,
+    "streamResets": null,
+    "navAbsorbs": null,
+    "travelM": 3.966,
+    "pathM": 5.262,
+    "straightness": 0.754,
+    "netX": 3.638,
+    "netZ": 1.58,
+    "yawDeltaDeg": -18.6,
+    "yawAbsDeg": 18.6,
+    "swayRangeM": 2.712,
+    "hipsYMin": 0.668,
+    "hipsYMax": 0.936,
+    "hipsYRangeM": 0.268,
+    "leftHandAmpM": 4.442,
+    "rightHandAmpM": 3.979,
+    "handSymmetry": null,
+    "footMinY": -0.099,
+    "footP5Y": -0.092,
+    "footSlideM": 12.867,
+    "footLiftM": 0.108
+   }
+  }
+ ],
+ "console": [
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "info: [ardy] profiled retarget calibrated (rest frame 20, hipsScale 0.989)",
+  "info: [ardy] retargeter ready (path profiled)",
+  "error: Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+ ]
+}
