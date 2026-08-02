@@ -458,6 +458,79 @@ test('malformed source_rest fails closed: profiled init throws, gestalt fallback
   source.dispose()
 })
 
+// ── T2: calibration scope across stream resets ──────────────────────
+
+test('prompt reset does NOT re-trigger calibration: rest is session-scoped (embedded source_rest)', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const vrm = makeFakeVrm('1.0')
+  const source = makeSource(client, rig, vrm, Promise.resolve(PROFILE), nowRef)
+
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
+  assert.equal(vrm.resets, 1, 'calibration ran once at build (embedded source_rest)')
+
+  client.buffer.push(makeChunk({ t0: 5 }))
+  client.callbacks.onChunk?.()
+  let owned = false
+  for (let i = 0; i < 100 && !owned; i += 1) {
+    owned = source.update(1 / 60)
+    nowRef.now += 20
+  }
+  assert(owned, 'profiled source owns the pose')
+
+  // T1 prompt transition: the service drops history and the fresh generation
+  // arrives as a reset chunk. Rest calibration belongs to the SESSION
+  // handshake, not the generation — it must not re-run.
+  client.buffer.push(makeChunk({ t0: 10, frameSeqStart: 40, reset: true }))
+  owned = false
+  for (let i = 0; i < 100 && !owned; i += 1) {
+    owned = source.update(1 / 60)
+    nowRef.now += 20
+  }
+  assert(owned, 'profiled source keeps posing across the prompt reset')
+  assert.equal(vrm.resets, 1, 'no re-calibration on a prompt reset — rest is session-scoped')
+  assert(source.isLive())
+  source.dispose()
+})
+
+test('legacy feed (no source_rest): a reset mid-feed restarts the settled-frame measurement on the new generation — exactly one calibration', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const vrm = makeFakeVrm('1.0')
+  const source = makeSource(client, rig, vrm, Promise.resolve(legacyProfile()), nowRef)
+
+  client.connected = true
+  client.callbacks.onOpen('s1')
+  client.callbacks.onSkeleton(makeContract())
+  await flushBuild()
+
+  // Partial generation: 10 frames — never reaches the settled rest frame 20.
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 10 }))
+  client.callbacks.onChunk?.()
+  for (let i = 0; i < 60; i += 1) {
+    assert.equal(source.update(1 / 60), false, 'no pose writes before calibration')
+    nowRef.now += 20
+  }
+  assert.equal(vrm.resets, 0, 'not yet calibrated on the partial generation')
+
+  // Prompt reset: the fresh generation must re-measure from ITS settled frame
+  // (the pre-reset frames are gone — the buffer dropped them).
+  client.buffer.push(makeChunk({ t0: 10, frameSeqStart: 10, reset: true }))
+  let owned = false
+  for (let i = 0; i < 400 && !owned; i += 1) {
+    owned = source.update(1 / 60)
+    nowRef.now += 20
+  }
+  assert(owned, 'profiled source poses after calibrating on the new generation')
+  assert.equal(vrm.resets, 1, 'calibrated exactly once, on the new generation')
+  source.dispose()
+})
+
 // ── Parity: live path vs the debug page's validated profiled path ───
 
 /** debug ardy.js:269-279 — VRM 0.x source-side Y180 conjugation, verbatim. */

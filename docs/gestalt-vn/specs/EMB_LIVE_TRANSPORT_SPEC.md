@@ -44,7 +44,10 @@ Tailscale/cellular).
    status dot + hover text surface these verbatim.
 3. **ProceduralLocomotion owns the rig until the retargeter is calibrated**
    (settled frame 20 per profile), then a 0.3s crossfade hands over. Motion
-   never hard-cuts.
+   never hard-cuts — reset chunks (new prompt / drift-watchdog hard reset)
+   crossfade from the current rendered pose into the new stream over ~0.45s,
+   with the root re-anchored at the avatar's current position and the
+   heading difference eased over via a critically damped spring (T2).
 4. **Reconnect forgets nothing important**: on reconnect the client re-sends
    the last prompt (the service idles until prompted and forgets sessions),
    re-fetches/re-uses the cached calibration profile, and re-anchors root

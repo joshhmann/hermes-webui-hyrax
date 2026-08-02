@@ -16,6 +16,19 @@
  * Transitions ramp a 0.3 s crossfade — retargeted quats are blended with
  * node.quaternion.slerp(target, weight) semantics, never hard-cut.
  *
+ * T2 (crossfade across stream resets): the service drops its conditioning
+ * history on every new prompt (ARDY_DROP_HISTORY_ON_PROMPT=1) and on drift
+ * watchdog hard resets, so each reset chunk would otherwise read as a pose
+ * jolt. Instead, a reset restarts the blend ramp at 0: applySampled blends
+ * from the CURRENT rendered bone pose (re-read per frame) into the new
+ * stream over RESET_CROSSFADE_SECONDS, the root re-anchors at the avatar's
+ * current position (no XZ teleport), and the heading difference is carried
+ * in a critically damped spring offset (MotionBricks Eq. 6) so the facing
+ * eases onto the new stream's yaw instead of snapping. Fail-closed is
+ * unchanged: the sanity gate vets every new-stream sample before it may
+ * become the blend target, and the root only re-anchors on a plausible
+ * sample from the NEW stream (a rejected first frame keeps the old anchor).
+ *
  * Reconnect is a FULL session reset (ARDY §4.4): clock re-anchor, retarget
  * re-anchor, exponential backoff.
  *
@@ -105,6 +118,18 @@ const DEFAULT_ARDY_PATH = '/api/hyrax/ardy/ws'
 const DEFAULT_PROFILE_PATH = '/api/hyrax/3d/calibrate/calibration-profiles/tai-embodiment-v3.json'
 const DEFAULT_INITIAL_PROMPT = 'a person stands idle'
 const CROSSFADE_SECONDS = 0.3
+/**
+ * T2: reset chunks (new prompt / drift-watchdog hard reset) fade in over a
+ * slightly longer window than the 0.3 s ownership ramp — the research's
+ * 0.4–0.5 s transition blend (ARDY_TRANSITIONS_AND_DRIFT.md §T2a).
+ */
+const RESET_CROSSFADE_SECONDS = 0.45
+/**
+ * T2 add-on (MotionBricks §6.1 Eq. 6): critically damped spring rate for the
+ * reset heading offset. ω = 4/T settles ≈90 % inside the crossfade window
+ * (residual ≈ (1+ωt)e^(−ωt), ωt = 4 ⇒ 9 %) with no overshoot.
+ */
+const RESET_SPRING_OMEGA = 4 / RESET_CROSSFADE_SECONDS
 const RESET_COOLDOWN_MS = 2000
 
 /**
@@ -141,6 +166,14 @@ const RECOVER_HOLD_MS = 3000
 function quatLeanDeg(q: [number, number, number, number]): number {
   const vy = 1 - 2 * (q[1] * q[1] + q[3] * q[3])
   return (Math.acos(Math.max(-1, Math.min(1, vy))) * 180) / Math.PI
+}
+
+/** Wrap an angle to (-π, π] (mirrors RootMotionAdapter's wrapAngle). */
+function wrapAngle(a: number): number {
+  let r = a % (2 * Math.PI)
+  if (r <= -Math.PI) r += 2 * Math.PI
+  else if (r > Math.PI) r -= 2 * Math.PI
+  return r
 }
 
 /**
@@ -286,9 +319,28 @@ export class ArdyMotionSource {
   private blendBones: Object3DLike[] = []
   private hipsNode: Object3DLike | null = null
   private blendWeight = 0
+  /** Fade-in ramp duration: CROSSFADE_SECONDS normally, RESET_CROSSFADE_SECONDS
+   * while a reset crossfade is still ramping (restored when the ramp tops out). */
+  private fadeInSeconds = CROSSFADE_SECONDS
   private needsAnchor = true
   private originOffset: [number, number] = [0, 0]
   private lastSample: SampledPose | null = null
+  /**
+   * Stream generation counter: bumped on every reset chunk. The root only
+   * re-anchors on a sample from the CURRENT generation — a rejected garbage
+   * frame during the reset crossfade leaves the held old-stream pose in
+   * lastSample, and anchoring on it would mis-map the new stream's origin.
+   */
+  private streamGeneration = 0
+  private lastSampleGeneration = 0
+  /** Last yaw actually written to the rig (reset heading continuity). */
+  private lastFacingYaw: number | null = null
+  /** Spring-decayed offset between the rendered facing and the new stream's
+   * approved yaw after a reset (T2 / MotionBricks Eq. 6). */
+  private yawJumpOffset = 0
+  private yawJumpVelocity = 0
+  /** Armed by beginResetCrossfade; consumed when the new stream anchors. */
+  private yawContinuityArmed = false
   private everOpened = false
   private disposed = false
   private readonly backoff: typeof ARDY_BACKOFF
@@ -470,7 +522,9 @@ export class ArdyMotionSource {
       buffer.resetPending = false
       this.clock.notifyReset()
       this.needsAnchor = true
+      this.streamGeneration += 1
       this.profiled?.resetFeed()
+      this.beginResetCrossfade()
     }
     this.clock.update(buffer)
 
@@ -570,10 +624,30 @@ export class ArdyMotionSource {
       if (this.profiled?.calibrated) this.finishProfiledCalibration()
       pose = null
     }
-    if (pose !== null) this.lastSample = pose
+    if (pose !== null) {
+      this.lastSample = pose
+      this.lastSampleGeneration = this.streamGeneration
+    }
 
-    const ramp = (this.currentState === 'live' ? dt : -dt) / CROSSFADE_SECONDS
+    const ramp = this.currentState === 'live'
+      ? dt / this.fadeInSeconds
+      : -dt / CROSSFADE_SECONDS
     this.blendWeight = Math.min(1, Math.max(0, this.blendWeight + ramp))
+    if (this.blendWeight >= 1) this.fadeInSeconds = CROSSFADE_SECONDS
+
+    // T2 (MotionBricks Eq. 6): critically damped spring on the reset heading
+    // offset — the facing eases onto the new stream's yaw with no overshoot.
+    if (this.yawJumpOffset !== 0 || this.yawJumpVelocity !== 0) {
+      const accel =
+        -2 * RESET_SPRING_OMEGA * this.yawJumpVelocity -
+        RESET_SPRING_OMEGA * RESET_SPRING_OMEGA * this.yawJumpOffset
+      this.yawJumpVelocity += accel * dt
+      this.yawJumpOffset += this.yawJumpVelocity * dt
+      if (Math.abs(this.yawJumpOffset) < 1e-3 && Math.abs(this.yawJumpVelocity) < 1e-2) {
+        this.yawJumpOffset = 0
+        this.yawJumpVelocity = 0
+      }
+    }
 
     if (
       this.blendWeight <= 0 ||
@@ -598,6 +672,24 @@ export class ArdyMotionSource {
   }
 
   // ── internals ──────────────────────────────────────────────────────
+
+  /**
+   * T2a: crossfade ACROSS a reset chunk (new prompt / drift-watchdog hard
+   * reset) instead of hard-cutting. Restarting the blend ramp at 0 makes
+   * applySampled blend from the CURRENT rendered bone pose (re-read from the
+   * bones each frame) into the new stream over RESET_CROSSFADE_SECONDS; the
+   * root re-anchors at the avatar's current position and the heading offset
+   * spring keeps the facing continuous (see applySampled). Fail-closed is
+   * untouched: the sanity gate vets every new-stream sample before it may
+   * become the blend target. No-op when there is no rendered pose worth
+   * blending from (session start — the normal fade-in covers that case).
+   */
+  private beginResetCrossfade(): void {
+    if (this.lastSample === null || !this.posingReady()) return
+    this.blendWeight = 0
+    this.fadeInSeconds = RESET_CROSSFADE_SECONDS
+    this.yawContinuityArmed = true
+  }
 
   private resolveState(sampleState: SampleState): ArdyMotionState {
     if (!this.client.connected) return this.everOpened ? 'offline' : 'connecting'
@@ -781,10 +873,13 @@ export class ArdyMotionSource {
   private applySampled(sample: SampledPose, weight: number): void {
     const rootMotion = this.rootMotion!
 
-    if (this.needsAnchor) {
+    if (this.needsAnchor && this.lastSampleGeneration === this.streamGeneration) {
       // Map the stream's starting point onto the avatar's current spot so a
       // session start never teleports her across the room (the host owns the
-      // world transform; ARDY root positions are proposals, §3.1).
+      // world transform; ARDY root positions are proposals, §3.1). The same
+      // continuity applies across resets (T2): the anchor only happens on a
+      // plausible sample from the NEW stream (generation gate above) — a
+      // rejected garbage frame keeps the held pose and the old anchor.
       this.originOffset = [
         this.rig.scene.position.x - sample.rootPos[0],
         this.rig.scene.position.z - sample.rootPos[2],
@@ -794,8 +889,17 @@ export class ArdyMotionSource {
         sample.rootPos[1],
         sample.rootPos[2] + this.originOffset[1],
       ]
-      rootMotion.anchor(anchored, qyaw(sample.rootQuat))
+      const streamYaw = qyaw(sample.rootQuat)
+      rootMotion.anchor(anchored, streamYaw)
       this.approval.reset(anchored[0], anchored[2])
+      if (this.yawContinuityArmed && this.lastFacingYaw !== null) {
+        // T2: the new stream's heading differs from the current facing —
+        // carry the difference in a spring-decayed offset (decayed in
+        // update()) so the rendered facing never snaps at the reset.
+        this.yawJumpOffset = wrapAngle(this.lastFacingYaw - streamYaw)
+        this.yawJumpVelocity = 0
+      }
+      this.yawContinuityArmed = false
       this.needsAnchor = false
     }
 
@@ -807,9 +911,15 @@ export class ArdyMotionSource {
     const out = rootMotion.update(proposed, sample.rootQuat)
 
     // Navigation owns the AvatarRoot XZ + yaw; hips bone carries only the
-    // bounded residual plus scaled vertical (RootMotionAdapter §3.1).
+    // bounded residual plus scaled vertical (RootMotionAdapter §3.1). The
+    // yaw offset keeps the rendered facing continuous across a reset; the
+    // hips strip below still uses the APPROVED yaw, so the hips global
+    // orientation = streamYaw + offset starts at the pre-reset facing and
+    // converges to the stream heading as the spring settles.
+    const renderedYaw = out.sceneRootYaw + this.yawJumpOffset
     this.rig.setRootPosition(out.sceneRootPos[0], out.sceneRootPos[2])
-    this.rig.setFacingYaw(out.sceneRootYaw)
+    this.rig.setFacingYaw(renderedYaw)
+    this.lastFacingYaw = renderedYaw
 
     if (out.resetRequested && this.nowMs() - this.lastResetSentAtMs > RESET_COOLDOWN_MS) {
       // Proposed/approved divergence > 0.3 m: clamp residual (already done by

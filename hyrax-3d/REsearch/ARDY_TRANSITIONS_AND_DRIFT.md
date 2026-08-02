@@ -535,3 +535,61 @@ today.
   ("neurally generated keyframes" is mentioned without detail).
 - The "~1 month" full-release timeline is from the April/May roadmap; no
   update was found confirming or slipping it.
+
+---
+
+## T1 verdict (2026-08-02, live A/B on 192.168.0.17)
+
+Deployed: `ARDY_HISTORY_BUDGET_S=1.0` (was 10.0) + `ARDY_DROP_HISTORY_ON_PROMPT=1`
+(env knobs added to ardy_runner.py; defaults preserve old behavior; systemd
+drop-in at /etc/systemd/system/gestalt-ardy.service.d/t1-drift.conf).
+
+Measured (same probe, same yaw-invariant hips-lean metric, idle prompt, 200s+):
+
+| t | T1 config | old config |
+|---|---|---|
+| 80s | 3.2° mean, 7.4° max | 12° mean, 21° max |
+| 120s | 5.5° mean, 10.0° max | 27° |
+| 200s | 4.3° mean, 7.8° max | 40-55° mean, 80° max |
+
+Drift flatlined: 3-5° natural idle sway, no monotonic growth. The 10s
+self-history window was the compounding channel; 1s starves it. T1 CONFIRMED
+as the drift fix. T2 (crossfade across resets) remains worthwhile for
+transition smoothness but drops from necessity to polish. Note: probes must
+import gestalt-motion from src/ (node type-stripping) — dist/ is a stale
+legacy artifact slated for deletion (t_319500d1).
+
+---
+
+## T2 verdict (2026-08-02, implemented + live-verified)
+
+Deployed (client, `ArdyMotionSource.ts`): reset chunks (new prompt under
+`ARDY_DROP_HISTORY_ON_PROMPT=1`, drift-watchdog hard resets, residual-clamp
+resets) no longer hard-cut. On `resetPending` the source restarts the blend
+ramp at 0 so `applySampled` blends from the CURRENT rendered bone pose into
+the new stream over `RESET_CROSSFADE_SECONDS = 0.45`; the root re-anchors at
+the avatar's current position (same mapping as session start — no XZ
+teleport), and the heading difference is carried in a critically damped
+spring offset (MotionBricks §6.1 Eq. 6, ω = 4/T — settles ≈90 % inside the
+window, no overshoot) on the rendered facing. Fail-closed preserved: the
+sanity gate vets every new-stream sample before it may become the blend
+target, and the root only re-anchors on a plausible sample from the NEW
+stream (a `streamGeneration` gate — a garbage frame opening the new
+generation keeps the held pose and the old anchor; covered by test).
+Rest calibration stays session-scoped: `ProfiledLiveRetargeter.resetFeed()`
+only drops ground-correction state once calibrated (embedded source_rest
+profiles never re-calibrate on prompt resets; legacy mid-feed profiles
+restart the settled-frame measurement on the new generation — exactly one
+calibration per session either way).
+
+Live check (headless Chromium + real service, isolated WebUI, sequence
+idle → wave → idle → walk → idle, prompt every ~10 s; per-frame pose probe
+on `window.__ardy.poseProbe()`, rate-normalized because swiftshader renders
+at ~5 fps): worst bone angular rate 287°/s (rightUpperArm mid-wave —
+natural gesture speed; a hard cut reads as thousands of °/s), worst yaw
+rate 67°/s 1.1 s after the wave prompt (the heading spring easing over),
+worst root speed 0.57 m/s (walk). State `live` throughout, 0 reconnects, 0
+frames dropped, 0 watchdog releases; the walk-into-bounds residual-clamp
+resets (3×) crossfaded invisibly. Suite: 81/81 (6 new: reset-crossfade
+continuity, anchor continuity, garbage-during-crossfade rejection, late
+anchor on garbage-opened generation, calibration scope ×2). T2 CONFIRMED.

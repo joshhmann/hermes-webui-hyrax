@@ -101,6 +101,7 @@ export async function mountTaiLoft(
     getTelemetry: () => room.getArdyTelemetry(),
     setPrompt: (text: string) => room.setArdyPrompt(text),
     hipsWorldY: () => room.getHipsWorldY(),
+    poseProbe: (bones?: string[]) => room.getArdyPoseProbe(bones),
   }
   let workbenchButton: HTMLButtonElement | null = null
   if (configuration.development) {

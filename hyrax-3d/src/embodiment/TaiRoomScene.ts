@@ -214,6 +214,32 @@ export class TaiRoomScene {
     return bone.getWorldPosition(this.diagnosticVector).y
   }
 
+  /**
+   * ARDY E2E probe (T2): one rendered-pose sample for discontinuity
+   * measurement — scene-root XZ/yaw plus the normalized bone quats (xyzw)
+   * the retarget path writes. Null when there is no rig/humanoid.
+   */
+  getArdyPoseProbe(boneNames: string[] = ['hips', 'spine', 'leftUpperArm', 'rightUpperArm']): {
+    x: number
+    z: number
+    yaw: number
+    bones: Record<string, [number, number, number, number] | null>
+  } | null {
+    const humanoid = this.rig?.vrm?.humanoid
+    if (!this.rig || !humanoid) return null
+    const bones: Record<string, [number, number, number, number] | null> = {}
+    for (const name of boneNames) {
+      const q = humanoid.getNormalizedBoneNode(name as any)?.quaternion
+      bones[name] = q ? [q.x, q.y, q.z, q.w] : null
+    }
+    return {
+      x: this.rig.scene.position.x,
+      z: this.rig.scene.position.z,
+      yaw: this.rig.scene.rotation.y,
+      bones,
+    }
+  }
+
   getProceduralTuning(): ProceduralTuning {
     return this.locomotion?.getTuning() ?? { ...DEFAULT_PROCEDURAL_TUNING }
   }
