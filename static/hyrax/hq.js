@@ -539,8 +539,15 @@
         if (!h || !h.kind) return;
         var item = document.createElement('li');
         var what = h.kind === 'whim_fulfilled' ? 'fulfilled'
-          : h.kind === 'whim_expired' ? 'expired' : 'dismissed';
-        var parts = [what + ': ' + (h.text || h.whimId || '')];
+          : h.kind === 'whim_expired' ? 'expired'
+          : h.kind === 'op_note_sent' ? 'note'
+          : h.kind === 'op_note_received' ? 'note' : 'dismissed';
+        // Op-notes lane: direction first — the sender sees "told mai",
+        // the recipient "heard from tai" (OP_NOTES_SPEC.md).
+        var subject = (h.direction ? h.direction : (h.text || h.whimId || ''));
+        var parts = [what + ': ' + subject];
+        if (h.about) parts.push(h.about);
+        else if (h.direction && h.text) parts.push(h.text);
         if (h.moodlet) parts.push('moodlet ' + h.moodlet);
         var when = _fmtWhimTs(h.ts);
         if (when) parts.push(when);

@@ -938,6 +938,10 @@ MAX_WHIM_ID_LENGTH = 64
 MAX_WHIM_HISTORY = 5
 _WHIM_HISTORY_KINDS = frozenset({
     "whim_fulfilled", "whim_expired", "whim_dismissed",
+    # Op-notes lane (OP_NOTES_SPEC.md): op→op notes appear in history
+    # with a direction — the sender sees "told mai", the recipient
+    # "heard from tai".
+    "op_note_sent", "op_note_received",
 })
 # Journal tail read for the whim history (bounded; the file is append-only
 # and can grow unbounded, so only the tail window is ever read).
@@ -1047,6 +1051,21 @@ def _whim_history(profile: str) -> list:
         actor = _bounded_str(entry.get("actor"), 64)
         if actor is not None:
             item["actor"] = actor
+        if kind in ("op_note_sent", "op_note_received"):
+            # Direction for the whims panel (OP_NOTES_SPEC.md): the
+            # sender's panel shows "told mai", the recipient's "heard
+            # from tai" — both bounded, both from the journal entry.
+            about = _bounded_str(entry.get("about"), 80)
+            if about is not None:
+                item["about"] = about
+            sender = _bounded_str(entry.get("sender"), 32)
+            recipient = _bounded_str(entry.get("recipient"), 32)
+            if kind == "op_note_sent" and recipient is not None:
+                item["direction"] = f"told {recipient}"
+                item["peer"] = recipient
+            elif kind == "op_note_received" and sender is not None:
+                item["direction"] = f"heard from {sender}"
+                item["peer"] = sender
         out.append(item)
     return out
 

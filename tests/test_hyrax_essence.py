@@ -1234,6 +1234,41 @@ class TestPresenceDerivedState:
         assert history[2]["moodlet"] == "whim-fulfilled"
         assert "moodlet" not in history[1]  # expired carries no moodlet
 
+    def test_whim_history_op_notes_direction(self, monkeypatch,
+                                             profile_home):
+        """Op-notes lane: history entries carry a direction — the sender
+        sees 'told mai', the recipient 'heard from tai' (OP_NOTES_SPEC)."""
+        home = profile_home("tai", None)
+        self._write_derived(home, _derived_state_payload())
+        lines = [
+            {"kind": "op_note_sent", "whim_id": "tell-mai-share-1",
+             "note_id": "opn-abc", "sender": "tai", "recipient": "mai",
+             "about": 'the blocked task "contract index cleanup"',
+             "text": "hey mai — heads up on the index",
+             "ts": "2026-08-02T04:00:00+00:00"},
+            {"kind": "op_note_received", "note_id": "opn-def",
+             "sender": "nei", "recipient": "tai",
+             "about": "the gateway map",
+             "text": "tai, mapped the gateway for you",
+             "ts": "2026-08-02T05:00:00+00:00"},
+        ]
+        journal = home / "essence" / "outreach_journal.jsonl"
+        journal.write_text("".join(json.dumps(e) + "\n" for e in lines))
+        self._patch(monkeypatch, [])
+        _, handler = _call_essence_get("/api/hyrax/presence")
+        item = self._items_by_operator(handler)["tai"]
+        history = item["derivedState"]["whimHistory"]
+        assert [h["kind"] for h in history] == [
+            "op_note_received", "op_note_sent"]
+        heard = history[0]
+        assert heard["direction"] == "heard from nei"
+        assert heard["peer"] == "nei"
+        assert heard["about"] == "the gateway map"
+        told = history[1]
+        assert told["direction"] == "told mai"
+        assert told["peer"] == "mai"
+        assert told["about"] == 'the blocked task "contract index cleanup"'
+
     def test_whim_history_bounded_at_five(self, monkeypatch, profile_home):
         home = profile_home("tai", None)
         self._write_derived(home, _derived_state_payload())
