@@ -11,6 +11,11 @@ Endpoints (dispatched from api.hyrax_routes):
   - GET  /api/hyrax/presence             — per-sister live aggregation
   - POST /api/hyrax/essence/frames/register — register a manually dropped
                                            authored frame image
+  - GET  /api/hyrax/essence/approvals    — D3 Josh approval-tier: pending
+                                           essenced G8 approval requests
+  - POST /api/hyrax/essence/approvals/respond — record Josh's approve/deny
+                                           decision (actor josh:webui,
+                                           server-stamped)
 
 Design contract: docs/gestalt-vn/ESSENCE_RUNTIME_SPEC.md (§4 signatures,
 §6 expression enum, §7 registry) and GESTALT_VN_API_CONTRACTS.md (§2/§6/§7).
@@ -1417,6 +1422,185 @@ _PRESENCE_PATH = "/api/hyrax/presence"
 _FRAMES_PATH = "/api/hyrax/essence/frames"
 _FRAME_FILE_PREFIX = "/api/hyrax/essence/frames/file/"
 _REGISTER_PATH = "/api/hyrax/essence/frames/register"
+_APPROVALS_PATH = "/api/hyrax/essence/approvals"
+_APPROVALS_RESPOND_PATH = "/api/hyrax/essence/approvals/respond"
+
+# ── D3 Josh approval-tier surface (essenced G8 approval requests) ────────────
+#
+# essenced's autonomy runtime files approval requests for approval-tier
+# proposals (risk classes external_resource / config_write / code_edit /
+# destructive — the G8 gate) into the append-only governance store
+# <fleet>/governance/josh_approvals.jsonl. This surface is Josh's decision
+# point: GET lists pending requests; POST respond appends his decision.
+# The actor is ALWAYS stamped "josh:webui" — the only actor essenced's G8
+# gate and the execution lease manager trust for approval-tier leases —
+# and only authenticated WebUI sessions reach this handler (api.routes
+# auth + CSRF run before dispatch). essenced polls the store on every
+# autonomy tick and executes ONLY from a stored approve.
+#
+# The store module (governance/josh_approval.py) owns the event shape; it
+# is loaded from the fleet governance dir so this surface never re-
+# implements the append-only format. Fail closed: an unavailable store is
+# a 503, never an exception or an empty-looking success.
+
+JOSH_APPROVAL_ACTOR = "josh:webui"
+"""The only decision actor essenced's G8 gate honors (hyrax-governor.yaml
+proposal_governor.trusted_approval_actors). Stamped here, never taken
+from the request body."""
+
+MAX_APPROVALS_LISTED = 50
+MAX_APPROVAL_DECISIONS_LISTED = 20
+_APPROVAL_REQUEST_ID_RE = _re.compile(r"^japr-[0-9a-f]{12}$")
+_JOSH_STORE_MODULE_CACHE: dict[str, object] = {}
+
+
+def _fleet_governance_dir() -> Path:
+    """The fleet-level governance dir (sibling of kanban.db).
+
+    api/config's init_profile_state() rewrites HERMES_HOME to the active
+    profile home (.../profiles/<name>) before import, so mirror
+    api.hyrax_routes._fleet_kanban_db and climb back to the fleet root.
+    """
+    home = Path(os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes"))
+    if home.parent.name == "profiles":
+        home = home.parent.parent
+    return home / "governance"
+
+
+def _josh_store_module():
+    """Load governance/josh_approval.py (the store's owner). Cached.
+
+    Returns None on any failure (fail closed). Tests monkeypatch this
+    function to inject a tmp-store instance — never the filesystem.
+    """
+    cached = _JOSH_STORE_MODULE_CACHE.get("module")
+    if cached is not None:
+        return cached
+    import importlib.util
+
+    path = _fleet_governance_dir() / "josh_approval.py"
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "hyrax_josh_approval_store", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except (OSError, ValueError, ImportError):
+        return None
+    _JOSH_STORE_MODULE_CACHE["module"] = module
+    return module
+
+
+def _bounded_approval_str(value, max_len: int = 512) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()[:max_len]
+
+
+def _sanitize_approval_request(request: dict) -> dict:
+    """Bounded, allowlisted view of one pending approval request."""
+    return {
+        "request_id": _bounded_approval_str(request.get("request_id"), 64),
+        "proposal_id": _bounded_approval_str(request.get("proposal_id"), 64),
+        "operator": _bounded_approval_str(request.get("operator"), 32),
+        "proposal_type": _bounded_approval_str(
+            request.get("proposal_type"), 64),
+        "risk": _bounded_approval_str(request.get("risk"), 64),
+        "summary": _bounded_approval_str(request.get("summary"), 280),
+        "subject": _bounded_approval_str(request.get("subject"), 160),
+        "created_at": _bounded_approval_str(request.get("created_at"), 64),
+        "expires_at": _bounded_approval_str(request.get("expires_at"), 64),
+    }
+
+
+def _sanitize_approval_decision(event: dict) -> dict:
+    return {
+        "request_id": _bounded_approval_str(event.get("request_id"), 64),
+        "decision": _bounded_approval_str(event.get("decision"), 16),
+        "actor": _bounded_approval_str(event.get("actor"), 64),
+        "decided_at": _bounded_approval_str(event.get("decided_at"), 64),
+    }
+
+
+def _serve_josh_approvals(handler, parsed) -> bool:
+    """GET /api/hyrax/essence/approvals — pending Josh approval requests
+    plus the most recent decisions (bounded, sanitized)."""
+    module = _josh_store_module()
+    if module is None:
+        _j(handler, {"error": "approval store unavailable"}, status=503)
+        return True
+    try:
+        pending = [
+            _sanitize_approval_request(r)
+            for r in (module.pending_requests() or [])
+        ][:MAX_APPROVALS_LISTED]
+        decisions = [
+            _sanitize_approval_decision(d)
+            for d in (module.decisions() or [])
+        ][-MAX_APPROVAL_DECISIONS_LISTED:]
+    except Exception:  # never leak store internals; fail closed
+        _j(handler, {"error": "approval store unavailable"}, status=503)
+        return True
+    _j(handler, {
+        "pending": pending,
+        "pending_count": len(pending),
+        "recent_decisions": decisions,
+        "respond_to": _APPROVALS_RESPOND_PATH,
+    })
+    return True
+
+
+def _handle_josh_approval_respond(handler, body) -> bool:
+    """POST /api/hyrax/essence/approvals/respond — record Josh's decision.
+
+    Body: {"request_id": "japr-xxxxxxxxxxxx", "decision": "approve"|"deny"}.
+    The decision is appended to the store ONLY when the request is still
+    pending (unknown/decided/expired ids fail closed with 404 — a replayed
+    or crafted respond cannot rewrite a decision). The actor is stamped
+    server-side as josh:webui; essenced's poller takes it from there.
+    """
+    if not isinstance(body, dict):
+        _j(handler, {"error": "invalid body"}, status=400)
+        return True
+    request_id = body.get("request_id")
+    decision = body.get("decision")
+    if not isinstance(request_id, str) \
+            or not _APPROVAL_REQUEST_ID_RE.match(request_id):
+        _j(handler, {"error": "invalid request_id"}, status=400)
+        return True
+    if decision not in ("approve", "deny"):
+        _j(handler, {"error": "decision must be 'approve' or 'deny'"},
+           status=400)
+        return True
+    module = _josh_store_module()
+    if module is None:
+        _j(handler, {"error": "approval store unavailable"}, status=503)
+        return True
+    try:
+        pending_ids = {
+            str(r.get("request_id"))
+            for r in (module.pending_requests() or [])
+        }
+        if request_id not in pending_ids:
+            _j(handler, {"error": "not found"}, status=404)
+            return True
+        result = module.respond(request_id, decision,
+                                actor=JOSH_APPROVAL_ACTOR)
+    except Exception:
+        _j(handler, {"error": "approval store unavailable"}, status=503)
+        return True
+    if not isinstance(result, dict) or result.get("ok") is not True:
+        _j(handler, {"error": "decision refused"}, status=400)
+        return True
+    _j(handler, {
+        "recorded": True,
+        "request_id": request_id,
+        "decision": decision,
+        "actor": JOSH_APPROVAL_ACTOR,
+        "decided_at": _bounded_approval_str(result.get("decided_at"), 64),
+    })
+    return True
 
 
 def handle_essence_get(handler, parsed) -> bool:
@@ -1425,6 +1609,9 @@ def handle_essence_get(handler, parsed) -> bool:
 
     if path == _PRESENCE_PATH:
         return _serve_presence(handler)
+
+    if path == _APPROVALS_PATH:
+        return _serve_josh_approvals(handler, parsed)
 
     if path == _FRAMES_PATH:
         return _serve_frames_registry(handler, parsed)
@@ -1452,5 +1639,7 @@ def handle_essence_post(handler, parsed, body) -> bool:
     """Dispatch POST /api/hyrax/essence/* requests (body pre-read by caller)."""
     if parsed.path == _REGISTER_PATH:
         return _handle_frame_register(handler, body)
+    if parsed.path == _APPROVALS_RESPOND_PATH:
+        return _handle_josh_approval_respond(handler, body)
     _j(handler, {"error": "not found"}, status=404)
     return True

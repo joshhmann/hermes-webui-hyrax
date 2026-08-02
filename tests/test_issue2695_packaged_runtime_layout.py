@@ -24,6 +24,14 @@ def _copy_repo_without_heavy_dirs(dst: Path) -> Path:
             ".pytest_cache",
             ".ruff_cache",
             "__pycache__",
+            # Local-only heavy trees that are not package content. Without
+            # these the repo copy is ~18G per full-suite run and /tmp fills
+            # the disk (2026-08-01 disk-full incident).
+            "hyrax-assets",
+            "graphify-out",
+            "dogfood-output",
+            "test-output",
+            ".hermes",
         ),
     )
     return repo_copy
