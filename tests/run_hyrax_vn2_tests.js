@@ -261,7 +261,14 @@ globalThis.api = function(url, opts) {
   for (let i = 0; i < apiRoutes.length; i++) {
     if (apiRoutes[i].match(url, opts)) {
       const r = typeof apiRoutes[i].reply === 'function' ? apiRoutes[i].reply(url, opts) : apiRoutes[i].reply;
-      if (r && r.__reject) return Promise.reject(new Error(r.__reject));
+      if (r && r.__reject) {
+        // Mimic workspace.js api: Error with .status and raw-text .body —
+        // GestaltVN.api (vnEvents.js) normalizes the payload fields from it.
+        const e = new Error(r.__reject);
+        if (r.__status) e.status = r.__status;
+        if (r.__body !== undefined) e.body = typeof r.__body === 'string' ? r.__body : JSON.stringify(r.__body);
+        return Promise.reject(e);
+      }
       return Promise.resolve(r);
     }
   }
@@ -652,6 +659,115 @@ async function testComposer() {
   assert(container._form === null || container._form === undefined, 'composer.dispose removes the form');
 }
 
+async function testComposerConflictRecovery() {
+  console.log('\n── vnComposer: 409 active_stream recovery / draft restore ──');
+
+  // Case A: genuinely active stream — composer adopts it (reconnect), the
+  // recovered id is wired into cancel, and the unsent text stays in the box.
+  globalThis.location = { search: '', hash: '', pathname: '/' };
+  apiRoutes = [
+    { match: function(url, opts) { return url === '/api/hyrax/vn/conversations' && isPost(opts); },
+      reply: { conversation: { session_id: 'vn409', profile_id: 'nei', messages: [] } } },
+    { match: function(url, opts) { return url.indexOf('/turns') !== -1 && isPost(opts); },
+      reply: { __reject: 'conflict', __status: 409,
+        __body: { error: 'conflict', reason: 'active_stream', active_stream_id: 'st_live' } } },
+    { match: function(url, opts) { return url === '/api/hyrax/vn/conversations/vn409' && isGet(opts); },
+      reply: { conversation: { session_id: 'vn409', profile_id: 'nei', active_stream_id: 'st_live', messages: [] } } },
+    { match: function(url) { return url.indexOf('/api/chat/cancel') === 0; }, reply: { ok: true } },
+  ];
+  await GestaltVN.session.open({ operatorId: 'nei' });
+
+  const containerA = makeEl('div');
+  assert(GestaltVN.composer.init({ container: containerA }) === true, 'composer.init builds (case A)');
+  const textareaA = containerA.querySelector('textarea');
+  const sendBtnA = containerA.querySelector('.vn2-btn--send');
+
+  apiCalls.length = 0;
+  toasts.length = 0;
+  textareaA.value = 'are you there?';
+  sendBtnA.click();
+  await flush();
+
+  assert(toasts.some(function(t) { return t.indexOf('mid-reply') !== -1; }),
+    'active_stream 409 toasts a truthful reconnect note');
+  assert(apiCalls.some(function(c) { return c.url === '/api/hyrax/vn/conversations/vn409' && isGet(c.opts); }),
+    'recovery reloads the conversation via the GET path');
+  assert(sendBtnA.disabled === true, 'genuinely active stream is adopted as busy');
+  assert(textareaA.value === 'are you there?', 'unsent text stays in the composer');
+
+  await GestaltVN.composer.cancel();
+  const cancelLive = apiCalls.find(function(c) { return c.url.indexOf('/api/chat/cancel') === 0; });
+  assert(!!cancelLive && cancelLive.url.indexOf('stream_id=st_live') !== -1,
+    'cancel uses the recovered active stream id');
+  GestaltVN.composer.dispose();
+
+  // Case B: stale stream — refresh shows nothing active, the turn is
+  // retried once automatically and succeeds.
+  let turnAttempts = 0;
+  apiRoutes = [
+    { match: function(url, opts) { return url === '/api/hyrax/vn/conversations' && isPost(opts); },
+      reply: { conversation: { session_id: 'vn409', profile_id: 'nei', messages: [] } } },
+    { match: function(url, opts) { return url.indexOf('/turns') !== -1 && isPost(opts); },
+      reply: function() {
+        turnAttempts += 1;
+        if (turnAttempts === 1) {
+          return { __reject: 'conflict', __status: 409,
+            __body: { error: 'conflict', reason: 'active_stream', active_stream_id: 'st_stale' } };
+        }
+        return { stream_id: 'st_new', pending: true, status: 200 };
+      } },
+    { match: function(url, opts) { return url === '/api/hyrax/vn/conversations/vn409' && isGet(opts); },
+      reply: { conversation: { session_id: 'vn409', profile_id: 'nei', messages: [] } } },
+    { match: function(url) { return url.indexOf('/api/chat/cancel') === 0; }, reply: { ok: true } },
+  ];
+  await GestaltVN.session.open({ operatorId: 'nei' });
+
+  const containerB = makeEl('div');
+  GestaltVN.composer.init({ container: containerB });
+  const textareaB = containerB.querySelector('textarea');
+
+  apiCalls.length = 0;
+  textareaB.value = 'retry me';
+  containerB.querySelector('.vn2-btn--send').click();
+  await flush();
+
+  assert(turnAttempts === 2, 'stale active_stream 409 retries the turn exactly once (got ' + turnAttempts + ')');
+  assert(textareaB.value === '', 'retried send clears the textarea on success');
+  const cancelNew = await GestaltVN.composer.cancel().then(function() {
+    return apiCalls.find(function(c) { return c.url.indexOf('/api/chat/cancel') === 0; });
+  });
+  assert(!!cancelNew && cancelNew.url.indexOf('stream_id=st_new') !== -1,
+    'retried turn adopts its own stream id');
+  GestaltVN.composer.dispose();
+
+  // Case C: generic 409 without a reason — no recovery, draft restored,
+  // composer not stuck busy.
+  apiRoutes = [
+    { match: function(url, opts) { return url === '/api/hyrax/vn/conversations' && isPost(opts); },
+      reply: { conversation: { session_id: 'vn409', profile_id: 'nei', messages: [] } } },
+    { match: function(url, opts) { return url.indexOf('/turns') !== -1 && isPost(opts); },
+      reply: { __reject: 'conflict', __status: 409, __body: { error: 'conflict' } } },
+  ];
+  await GestaltVN.session.open({ operatorId: 'nei' });
+
+  const containerC = makeEl('div');
+  GestaltVN.composer.init({ container: containerC });
+  const textareaC = containerC.querySelector('textarea');
+  const sendBtnC = containerC.querySelector('.vn2-btn--send');
+
+  apiCalls.length = 0;
+  toasts.length = 0;
+  textareaC.value = 'keep this';
+  sendBtnC.click();
+  await flush();
+
+  assert(toasts.some(function(t) { return t.indexOf('conflict') !== -1; }),
+    'generic 409 surfaces the error message');
+  assert(textareaC.value === 'keep this', 'failed send restores the draft');
+  assert(sendBtnC.disabled === false, 'generic 409 does not leave the composer busy');
+  GestaltVN.composer.dispose();
+}
+
 async function testApprovals() {
   console.log('\n── vnApprovals: poll + respond ──');
   apiRoutes = [
@@ -815,6 +931,7 @@ async function testShell() {
   await testEvents();
   await testSession();
   await testComposer();
+  await testComposerConflictRecovery();
   await testApprovals();
   await testShell();
 })().then(function() {

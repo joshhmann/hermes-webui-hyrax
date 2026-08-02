@@ -26,6 +26,9 @@ const path = require('path');
 
 const STATIC = path.join(__dirname, '..', 'static', 'hyrax');
 const FILES = [
+  // vnEvents first: it registers GestaltVN.api, the shared JSON transport
+  // the essence/vn modules delegate to.
+  path.join(STATIC, 'vn', 'vnEvents.js'),
   path.join(STATIC, 'essence', 'essenceState.js'),
   path.join(STATIC, 'essence', 'essenceFrames.js'),
   path.join(STATIC, 'essence', 'essenceIntents.js'),
