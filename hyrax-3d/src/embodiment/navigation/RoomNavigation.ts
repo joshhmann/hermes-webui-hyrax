@@ -202,7 +202,12 @@ export class RoomNavigation {
     return { position, hit, obstacleId };
   }
 
-  private resolveStandingPoint(point: Vector3): Vector3 {
+  /** Push a point out of every obstacle AABB (up to 6 passes) and clamp to
+   * the room bounds — the WALKABLE version of a goal spot. Public for the
+   * goal planner: interaction spots may sit inside collision AABBs (the
+   * daybed's spot is its center), and the planner targets the standing
+   * point while keeping the authored spot as the goal's identity. */
+  resolveStandingPoint(point: Vector3): Vector3 {
     let resolved = point.clone();
     resolved.x = clamp(resolved.x, this.bounds.minX, this.bounds.maxX);
     resolved.z = clamp(resolved.z, this.bounds.minZ, this.bounds.maxZ);

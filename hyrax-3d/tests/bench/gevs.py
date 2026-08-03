@@ -78,6 +78,9 @@ def load_checks(selected):
                     for ph in data["phrases"]:
                         prompts.append([ph["prompt"], data["phraseSeconds"], ph["label"]])
                 c["prompts"] = prompts
+            # Goal-driven checks (spatial layer 3b) carry `goal` instead of a
+            # prompt schedule — the runner drives __ardy.setGoal.
+            c["prompts"] = c.get("prompts") or []
             c["prompts"] = [p if len(p) == 3 else [p[0], p[1], f"{c['id']}-{i}"]
                             for i, p in enumerate(c["prompts"])]
             checks.append(c)
@@ -159,7 +162,9 @@ def write_markdown(path, report):
         m = c["metrics"]
         key = ", ".join(f"{k}={fmt(m[k])}" for k in
                         ("travelM", "yawDeltaDeg", "livePct", "streamResets", "navAbsorbs",
-                         "maxLeanEmaDeg", "footP5Y", "phraseCompletionPct")
+                         "maxLeanEmaDeg", "footP5Y", "phraseCompletionPct",
+                         "arrivalM", "facingErrDegAtInteract", "goalCompleted",
+                         "interactionSeen", "replans")
                         if m.get(k) is not None)
         score = fmt(round(c["score"], 2) if c["score"] is not None else None)
         L.append(f"| {c['id']} | {c['level']} | {c['category']} | {c['verdict']} | {score} | {key} |")
@@ -266,6 +271,35 @@ def main():
                 page.screenshot(path=str(shots_dir / f"{check['id']}.jpg"), type="jpeg", quality=60)
                 return segments
 
+            def run_goal_check(check):
+                """Goal-driven check (spatial layer 3b): __ardy.setGoal → sample
+                telemetry + probe until the planner finishes (or times out)."""
+                spot = check.get("recenter")
+                if spot and page.evaluate(
+                        "(s) => window.__ardy.recenterRoot ? window.__ardy.recenterRoot(s[0], s[1]) : false",
+                        spot):
+                    print(f"  [recenter] {check['id']} → ({spot[0]}, {spot[1]})", flush=True)
+                page.evaluate("(p) => window.__ardy.setPrompt(p)", "a person stands idle")
+                page.wait_for_timeout(int(check.get("settleS", 3)) * 1000)
+                mark = page.evaluate("() => window.__gevs.frames.length")
+                tel_before = page.evaluate("() => ({ ...window.__ardy.getTelemetry() })")
+                page.evaluate("(g) => window.__ardy.setGoal(g)", check["goal"])
+                print(f"  [goal] t={time.time()-t_run0:6.1f} {check['goal']}", flush=True)
+                deadline = time.time() + int(check.get("goalTimeoutS", 90))
+                tels = []
+                while time.time() < deadline:
+                    tels.append(page.evaluate(
+                        "() => ({ state: window.__ardy.getState(), ...window.__ardy.getTelemetry() })"))
+                    planner = (tels[-1].get("planner") or {})
+                    if planner.get("goal") is None and len(tels) >= 2:
+                        break  # goal completed / failed / cancelled — journaled in tel
+                    page.wait_for_timeout(500)
+                segments = [{"label": check["id"], "prompt": f"goal:{check['goal']}",
+                             "seconds": round(time.time() - deadline + int(check.get("goalTimeoutS", 90)), 1),
+                             "frame_mark": mark, "tel_before": tel_before, "tels": tels}]
+                page.screenshot(path=str(shots_dir / f"{check['id']}.jpg"), type="jpeg", quality=60)
+                return segments
+
             # Idle motion floor for the dance phrase-completion metric.
             print("[gevs] measuring idle motion floor (6 s)", flush=True)
             idle_seg = run_segments({"id": "idle-floor", "settleS": 2,
@@ -276,7 +310,7 @@ def main():
             raw = {}
             for check in checks:
                 print(f"[gevs] check {check['id']} ({check['category']})", flush=True)
-                raw[check["id"]] = run_segments(check)
+                raw[check["id"]] = run_goal_check(check) if check.get("goal") else run_segments(check)
 
             frames = page.evaluate("() => window.__gevs.frames")
             tel_final = page.evaluate("() => ({ ...window.__ardy.getTelemetry() })")
@@ -307,9 +341,13 @@ def main():
         agg_check = {"id": "foot-contact", "level": 1, "category": "foot-contact",
                      "prompts": [], "assertions": [
                          {"metric": "footP5Y", "op": ">=", "pass": -0.12, "partial": -0.20,
-                          "basis": "baseline p5 of lowest foot-bone Y across the whole run: -0.074 m (mild floor penetration at T1 — measured, not hidden)"},
+                          "basis": "baseline p5 of lowest foot-bone Y across the whole run: -0.074 m pre ground-fix; -0.017 m post-fix 2026-08-03 (threshold kept from the pre-fix calibration)"},
                          {"metric": "footMinY", "op": ">=", "pass": -0.30, "partial": -0.45,
-                          "basis": "baseline min lowest foot-bone Y: -0.21 m (worst-frame penetration during sit/squat)"},
+                          "basis": "baseline min lowest foot-bone Y: -0.21 m pre-fix (worst-frame penetration during sit/squat); -0.101 m post-fix"},
+                         {"metric": "toeP5Y", "op": ">=", "pass": -0.05, "partial": -0.09,
+                          "basis": "toe-floor clearance p5: -0.055 m pre-fix (cha-cha benchmark), -0.017 m post-fix 2026-08-03; residual dips are transient lowpass-lag beats in fast moves"},
+                         {"metric": "footMedianY", "op": ">=", "pass": 0.01, "partial": -0.01,
+                          "basis": "median lowest foot-bone Y: -0.010 m pre-fix (systematic clip), +0.041 m post-fix (feet at normalized-rest silhouette ≈ planted)"},
                      ]}
         agg_metrics = gevs_checks.compute_metrics(
             {"id": "foot-contact"},

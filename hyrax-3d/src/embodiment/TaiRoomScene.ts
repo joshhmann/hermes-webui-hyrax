@@ -31,6 +31,8 @@ import {
   type ProceduralTuning,
 } from './locomotion/ProceduralLocomotion'
 import { ArdyMotionSource, type ArdyMotionState, type ArdyTelemetry } from './motion/ArdyMotionSource'
+import { GoalPlanner, type GoalPlannerPolicy, type GoalPlannerTelemetry } from './planning/GoalPlanner'
+import type { SelfCollisionTargetReport } from './collision/SelfCollision.ts'
 import { RoomNavigation } from './navigation/RoomNavigation'
 import { AvatarRig } from './rig/AvatarRig'
 import roomManifest from './room/roomObjects.json'
@@ -86,6 +88,7 @@ export class TaiRoomScene {
   private rig: AvatarRig | null = null
   private locomotion: ProceduralLocomotion | null = null
   private ardySource: ArdyMotionSource | null = null
+  private planner: GoalPlanner | null = null
   private skeletonHelper: SkeletonHelper | null = null
   private frame = 0
   private destroyed = false
@@ -100,7 +103,13 @@ export class TaiRoomScene {
   constructor(
     private readonly container: HTMLElement,
     private readonly vrmUrl: string,
-    manifest: SceneManifest,
+    private readonly manifest: SceneManifest,
+    /**
+     * Test/dev seam: goal-planner policy overrides (compressed cadence —
+     * e.g. AMBIENT_AFTER_S: 10 for live ambient-driver verification).
+     * Production mounts omit it; all policy defaults stay in GOAL_PLANNER.
+     */
+    private readonly plannerPolicy: Partial<GoalPlannerPolicy> = {},
   ) {
     // Collision is data now (SCENE_MANIFEST_SPEC.md): bounds + obstacles
     // come from the manifest. LOFT_ACTOR_RADIUS is avatar geometry, not
@@ -170,6 +179,24 @@ export class TaiRoomScene {
     this.scene.add(this.rig.scene)
     this.locomotion = new ProceduralLocomotion(this.rig)
     this.ardySource = new ArdyMotionSource({ rig: this.rig, navigation: this.navigation })
+    // Goal planner (spatial layer 3b): intents → motion sequences. The
+    // source satisfies PlannerPromptChannel structurally; the probe reads
+    // the ACTUAL rendered root (never dead-reckon). Ambient idle driver is
+    // the lowest-priority prompt owner.
+    if (this.ardySource) {
+      this.planner = new GoalPlanner({
+        navigation: this.navigation,
+        manifest: this.manifest,
+        channel: this.ardySource,
+        policy: this.plannerPolicy,
+        probe: () => {
+          const rig = this.rig
+          return rig
+            ? { x: rig.scene.position.x, z: rig.scene.position.z, yaw: rig.scene.rotation.y }
+            : { x: 0, z: 0.15, yaw: 0 }
+        },
+      })
+    }
     this.face.applyIntent({ face: { expression: 'relaxed', intensity: 0.25, talking: false } })
     this.resize()
     this.setCameraMode('room')
@@ -207,13 +234,42 @@ export class TaiRoomScene {
     this.ardySource?.setPrompt(text)
   }
 
+  /** Live toggle for the bounded self-collision pass (__ardy debug seam). */
+  setArdySelfCollision(enabled: boolean): void {
+    this.ardySource?.setSelfCollisionEnabled(enabled)
+  }
+
+  /** Debug probe: current per-target self-collision penetration. */
+  getArdySelfCollisionReport(): SelfCollisionTargetReport[] | null {
+    return this.ardySource?.selfCollisionReport() ?? null
+  }
+
   getArdyState(): ArdyMotionState {
     return this.ardySource?.state ?? 'offline'
   }
 
-  /** EMB-1: latency/buffer/reconnect telemetry for the debug overlay. */
-  getArdyTelemetry(): ArdyTelemetry | null {
-    return this.ardySource?.getTelemetry() ?? null
+  /** EMB-1: latency/buffer/reconnect telemetry for the debug overlay.
+   * Merges the goal planner's telemetry under `planner` (spatial layer 3b). */
+  getArdyTelemetry(): (ArdyTelemetry & { planner: GoalPlannerTelemetry | null }) | null {
+    const base = this.ardySource?.getTelemetry() ?? null
+    if (!base) return null
+    return { ...base, planner: this.planner?.getTelemetry() ?? null }
+  }
+
+  /** Goal planner seam (spatial layer 3b): start a manifest interaction goal
+   * (e.g. "desk.work"). Returns false when the interaction is unknown. */
+  setGoal(interactionId: string): boolean {
+    return this.planner?.setGoal(interactionId) ?? false
+  }
+
+  /** Cancel the active goal (journaled). No-op when idle. */
+  clearGoal(): void {
+    this.planner?.clearGoal()
+  }
+
+  /** Current goal id (null when idle). */
+  getGoal(): string | null {
+    return this.planner?.getGoal() ?? null
   }
 
   /**
@@ -384,6 +440,7 @@ export class TaiRoomScene {
     this.locomotion = null
     this.ardySource?.dispose()
     this.ardySource = null
+    this.planner = null
     this.skeletonHelper = null
 
     // Dispose face/viseme/gaze
@@ -487,6 +544,10 @@ export class TaiRoomScene {
         ardyOwned = this.ardySource.update(dt)
         this.rig.endPoseAuditPhase()
       }
+      // Goal planner (spatial layer 3b): prompt-driven, stepped every frame
+      // regardless of pose ownership (it only sends prompts; the source
+      // owns the stream).
+      this.planner?.update(dt)
       if (!ardyOwned) {
         this.rig.beginPoseAuditPhase('proceduralIdle')
         this.locomotion.update(dt, this.motionInput())

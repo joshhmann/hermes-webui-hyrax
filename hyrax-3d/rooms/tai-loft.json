@@ -50,7 +50,7 @@
         {
           "id": "sit",
           "kind": "sit",
-          "spot": [0, 2.25],
+          "spot": [-1.7, 2.2],
           "facingDeg": 180,
           "prompt": "a person sits on a couch"
         }
@@ -90,7 +90,7 @@
       "baked": true
     },
     {
-      "id": "workstation",
+      "id": "desk",
       "label": "her desk",
       "position": [-3.83, 1.38, -1.35],
       "baked": true,

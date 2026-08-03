@@ -85,7 +85,15 @@ _active_upstreams_lock = threading.Lock()
 # Text frames carrying {"type": "prompt"} are validated at the proxy; a
 # rejected prompt closes the session with 1008 (policy violation) + reason.
 PROMPT_MAX_CHARS = 512
-PROMPT_RATE_MAX = 5          # prompts per window per connection
+# Rate cap calibration (2026-08-02, live evidence): the cap was 5/10s, sized
+# for human/shuffle input before the goal planner (spatial layer 3b) existed.
+# The SYSTEM is now a first-party prompt source: planner turn/walk steering
+# bursts ~4/10s, plus reflex reaction+restore (2), reconnect re-kicks (1),
+# and user prompts (1-2) — legitimate combined traffic reaches ~9/10s, and
+# the 5/10s cap was killing healthy sessions mid-goal (1008 → offline →
+# reconnect re-kick storm, measured live). 12/10s covers first-party traffic
+# with margin while still binding abuse (each prompt costs a GPU re-encode).
+PROMPT_RATE_MAX = 12         # prompts per window per connection
 PROMPT_RATE_WINDOW_S = 10.0
 PROMPT_REJECT_CLOSE_CODE = 1008  # policy violation (RFC 6455 §7.4.1)
 _MAX_CLOSE_REASON_BYTES = 123    # close payload cap is 125; 2 bytes are the code

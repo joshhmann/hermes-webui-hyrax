@@ -81,9 +81,27 @@ def compute_metrics(check, segments, idle_floor_rate):
             m["navAbsorbs"] = last["navAbsorbCount"] - first["navAbsorbCount"]
         else:
             m["navAbsorbs"] = None
+        # Bounded self-collision: penetration statistics over the 1 s
+        # telemetry peaks. PEAK is evidence-only: budget-limited residual
+        # bursts (by design, deep sustained penetration is left) overlap the
+        # raw distribution (measured 61-107 mm corrected vs 68-90+ mm raw).
+        # The MEDIAN separates cleanly (corrected ~10-30 mm vs raw 40-60 mm).
+        pens = [(t.get("selfCollision") or {}).get("maxPenetrationM") for t in tels]
+        pens = sorted(p for p in pens if p is not None)
+        m["selfCollisionMaxPenM"] = round(pens[-1], 3) if pens else None
+        m["selfCollisionMedianPenM"] = round(pens[len(pens) // 2], 3) if pens else None
+        corrs = [(t.get("selfCollision") or {}).get("correctionsTotal") for t in tels]
+        corrs = [c for c in corrs if c is not None]
+        first_corr = (first.get("selfCollision") or {}).get("correctionsTotal")
+        m["selfCollisionCorrections"] = (
+            round(corrs[-1] - first_corr, 1)
+            if corrs and first_corr is not None else None
+        )
     else:
         m.update(livePct=None, gateHoldSamples=None, maxLeanEmaDeg=None,
-                 streamResets=None, navAbsorbs=None)
+                 streamResets=None, navAbsorbs=None,
+                 selfCollisionMaxPenM=None, selfCollisionMedianPenM=None,
+                 selfCollisionCorrections=None)
 
     # ── root kinematics ───────────────────────────────────────────
     if len(frames) >= 2:
@@ -156,8 +174,23 @@ def compute_metrics(check, segments, idle_floor_rate):
         lowest.sort()
         m["footMinY"] = round(lowest[0], 3)
         m["footP5Y"] = round(lowest[max(0, len(lowest) // 20)], 3)
+        m["footMedianY"] = round(lowest[len(lowest) // 2], 3)
     else:
-        m.update(footMinY=None, footP5Y=None)
+        m.update(footMinY=None, footP5Y=None, footMedianY=None)
+
+    # Toe-floor clearance: p5/median of the per-frame lowest TOE bone
+    # (the residual the ground-contact fix targets — ankles were always fine).
+    toes = [min(v for v in (f["foot"].get("leftToes"), f["foot"].get("rightToes"))
+                if v is not None)
+            for f in frames
+            if f.get("foot") and (f["foot"].get("leftToes") is not None
+                                  or f["foot"].get("rightToes") is not None)]
+    if toes:
+        toes.sort()
+        m["toeP5Y"] = round(toes[max(0, len(toes) // 20)], 3)
+        m["toeMedianY"] = round(toes[len(toes) // 2], 3)
+    else:
+        m.update(toeP5Y=None, toeMedianY=None)
 
     slide = 0.0
     for a, b in zip(frames, frames[1:], strict=False):
@@ -195,6 +228,50 @@ def compute_metrics(check, segments, idle_floor_rate):
         qt = [abs(sm.get("yawDeltaDeg", 0)) for s, sm in zip(segments, seg_metrics, strict=True)
               if "quarter-turn" in s.get("label", "")]
         m["quarterTurnYawDeg"] = round(sum(qt) / len(qt), 1) if qt else None
+
+    # ── goal planner (spatial layer 3b) ───────────────────────────
+    if check.get("goal"):
+        planner_tels = [(t.get("planner") or {}) for t in tels]
+        phases = [p.get("phase") for p in planner_tels]
+        interact_idx = next((i for i, ph in enumerate(phases) if ph in ("interact", "done")), None)
+        if interact_idx is not None:
+            # Arrival/facing measured at the moment the interaction prompt
+            # fired (first interact/done phase sample — the honest arrival).
+            d = planner_tels[interact_idx].get("distanceToSpot")
+            m["arrivalM"] = round(d, 3) if d is not None else None
+            fe = planner_tels[interact_idx].get("facingErrDeg")
+            m["facingErrDegAtInteract"] = round(fe, 1) if fe is not None else None
+        else:
+            m["arrivalM"] = None
+            m["facingErrDegAtInteract"] = None
+        distances = [p.get("distanceToSpot") for p in planner_tels
+                     if p.get("distanceToSpot") is not None]
+        m["minDistanceM"] = round(min(distances), 3) if distances else None
+        m["goalCompleted"] = 1 if interact_idx is not None else 0
+        replans = [p.get("replans") for p in planner_tels if p.get("replans") is not None]
+        m["replans"] = max(replans) if replans else None
+        expected = check.get("interactionPromptContains", "")
+        # The prompt log is a persistent journal — dedupe across 2 Hz samples
+        # so the same entry is never counted twice.
+        seen_entries = set()
+        log_prompts = []
+        log_kinds = []
+        for p in planner_tels:
+            for e in (p.get("promptLog") or []):
+                key = (e.get("t"), e.get("kind"), e.get("prompt"))
+                if key not in seen_entries:
+                    seen_entries.add(key)
+                    log_prompts.append(e.get("prompt", ""))
+                    log_kinds.append(e.get("kind"))
+        m["interactionSeen"] = 1 if expected and any(expected in s for s in log_prompts) else 0
+        m["walkPromptCount"] = sum(1 for k in log_kinds if k == "walk")
+        m["turnPromptCount"] = sum(1 for k in log_kinds if k == "turn")
+        m["promptLogSummary"] = [
+            f"{k}:{p[:44]}" for k, p in zip(log_kinds[-8:], log_prompts[-8:], strict=True)
+        ]
+        # Last failure journaled by the planner (why the goal ended, if it failed).
+        failures = [p.get("lastFailure") for p in planner_tels if p.get("lastFailure")]
+        m["lastFailure"] = failures[-1] if failures else None
 
     return m
 

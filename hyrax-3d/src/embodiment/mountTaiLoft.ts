@@ -2,12 +2,15 @@ import './tai-room.css'
 
 import { TaiRoomScene } from './TaiRoomScene'
 import type { TimeOfDayPreset } from './atmosphere/TimeOfDaySystem'
+import type { GoalPlannerPolicy } from './planning/GoalPlanner'
 import { RigDevelopmentPanel } from './debug/RigDevelopmentPanel'
 import { loadSceneManifest } from './room/sceneManifest'
 
 export interface TaiLoftMountConfiguration {
   vrmUrl: string
   development: boolean
+  /** Test/dev seam: goal-planner policy overrides (compressed cadence). */
+  plannerPolicy?: Partial<GoalPlannerPolicy>
 }
 
 export async function mountTaiLoft(
@@ -39,7 +42,7 @@ export async function mountTaiLoft(
   // Fail-closed: a missing/malformed manifest resolves to the default empty
   // room with a console warning — the loft still mounts, just uncluttered.
   const manifest = await loadSceneManifest()
-  const room = new TaiRoomScene(canvas, configuration.vrmUrl, manifest)
+  const room = new TaiRoomScene(canvas, configuration.vrmUrl, manifest, configuration.plannerPolicy)
   for (const mode of ['room', 'follow', 'portrait'] as const) {
     const button = document.createElement('button')
     button.textContent = mode[0].toUpperCase() + mode.slice(1)
@@ -207,10 +210,17 @@ export async function mountTaiLoft(
     getState: () => room.getArdyState(),
     getTelemetry: () => room.getArdyTelemetry(),
     setPrompt: (text: string) => room.setArdyPrompt(text),
+    // Goal planner (spatial layer 3b): intents → motion sequences.
+    setGoal: (goal: string) => room.setGoal(goal),
+    clearGoal: () => room.clearGoal(),
+    getGoal: () => room.getGoal(),
     recenterRoot: (x: number, z: number) => room.recenterArdyRoot(x, z),
     hipsWorldY: () => room.getHipsWorldY(),
     footWorldY: () => room.getFootWorldY(),
     poseProbe: (bones?: string[]) => room.getArdyPoseProbe(bones),
+    // Bounded self-collision (capsule push-out): live toggle + penetration probe.
+    setSelfCollision: (enabled: boolean) => room.setArdySelfCollision(enabled),
+    selfCollisionReport: () => room.getArdySelfCollisionReport(),
   }
   let workbenchButton: HTMLButtonElement | null = null
   if (configuration.development) {

@@ -1,0 +1,70 @@
+{
+  "name": "GEVS Level 3b — goal planner (spatial layer 3b)",
+  "description": "planner-desk-work: setGoal desk.work from across the room (spawn 0,0.15 — the desk's resolved standing point sits at ≈(-2.83, -0.35)) → the planner turns, walks, arrives within tolerance of the spot, faces the desk, and plays the manifest work prompt. Evidence comes from the planner telemetry merged into window.__ardy.getTelemetry().planner (goal/phase/distanceToSpot/facingErrDeg/replans/promptLog) sampled at 2 Hz plus the per-frame root probe (position trace). Assertions: arrival measured at the first 'interact'/'done' phase sample (the moment the interaction prompt fired); facing error at the same sample; the interaction prompt observed in the planner prompt log; no watchdog gate trips; no stream resets beyond the expected prompt transitions (streamResets counts residual-clamp resets only, so prompt sends do not count); at most one path replan; stream stays live. Thresholds calibrated from the first live run of 2026-08-02 (see 'basis' notes); the spec pins ARRIVE_TOLERANCE_M 0.35 and one-replan-then-fail.",
+  "checks": [
+    {
+      "id": "planner-desk-work",
+      "level": 3,
+      "category": "planner",
+      "goal": "desk.work",
+      "interactionPromptContains": "sits at a desk working",
+      "recenter": [0, 0.15],
+      "settleS": 3,
+      "goalTimeoutS": 120,
+      "assertions": [
+        {
+          "metric": "goalCompleted",
+          "op": "==",
+          "pass": 1,
+          "basis": "planner must reach the interact/done phase (telemetry phase at the first interact sample)"
+        },
+        {
+          "metric": "arrivalM",
+          "op": "<=",
+          "pass": 0.45,
+          "partial": 0.6,
+          "basis": "spec ARRIVE_TOLERANCE_M 0.35 against the RESOLVED standing point, +0.1 m 2 Hz sampling slack"
+        },
+        {
+          "metric": "facingErrDegAtInteract",
+          "op": "<=",
+          "pass": 25,
+          "partial": 40,
+          "basis": "spec TURN_TOLERANCE_DEG 20 + slack; manifest facingDeg -90 (faces the desk)"
+        },
+        {
+          "metric": "interactionSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the manifest work prompt ('a person sits at a desk working') must appear in the planner prompt log"
+        },
+        {
+          "metric": "replans",
+          "op": "<=",
+          "pass": 1,
+          "basis": "spec: one replan then fail with reason; a clean run should use 0"
+        },
+        {
+          "metric": "gateHoldSamples",
+          "op": "<=",
+          "pass": 0,
+          "basis": "no drift-watchdog gate trips during the goal"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "partial": 1,
+          "basis": "no residual-clamp stream resets beyond the expected prompt transitions (a single stochastic teleport, observed 1 in ~50 check-windows, recovers via the T2 crossfade → partial)"
+        },
+        {
+          "metric": "livePct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 80,
+          "basis": "stream stays live through turn/walk/arrive/interact"
+        }
+      ]
+    }
+  ]
+}
