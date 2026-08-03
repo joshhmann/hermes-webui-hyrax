@@ -57,13 +57,14 @@ gate D4)
 - Roadmap: specs/EMBODIMENT_PLATFORM_ARCHITECTURE.md (codex proposal + kimi
   amendments: semantic canonical layer, explicit transport phase, world
   ownership, validation-as-you-go, behavior slice pulled forward)
-- B0 confirm profile-driven loft in browser, commit (embryo already landed)
-- B1 live transport: specs/EMB_LIVE_TRANSPORT_SPEC.md READY
-- B2 canonical semantics: specs/EMB_CANONICAL_SEMANTICS_SPEC.md READY
-- B3 studio MVP (graduate debug tooling) → B4 world ownership → B5 parity
-  harness → B6 essence → loft motion slice
+- Done: B0 profile-driven runtime ✓ B1 transport ✓ B2 semantic layer ✓
+  T1 drift fix ✓ T2 crossfades ✓ sanity gate ✓ treadmill absorb ✓
+  GEVS v1 (Tai 99.3) ✓ reflex layer ✓ scene manifest ✓
+- Spatial stack order (josh 2026-08-02: polish before expansion):
+  goal planner (t_0ae02818, in flight) → essence-driven goals →
+  THEN expand the 3D space (multi-room, minimap/war-room view)
 - Parked: advanced IK, animation studio, motion library, scene studio,
-  creator SDK (trigger: B1–B6 stable)
+  creator SDK, minimap overlay (trigger: layers proven on GEVS)
 
 ### 8. Graph layer (someday)
 - Operational knowledge graph: kanban + contracts + essence as traversable
