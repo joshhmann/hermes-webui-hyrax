@@ -35,11 +35,13 @@ Tune thresholds from the journals, not from vibes.
 approvals API, 290 essenced tests; 5 conditions filed as t_8fc662dc,
 gate D4)
 
-### 4. Phase D4 — graduation — SPEC READY
-- Spec: specs/D4_GRADUATION_SPEC.md (journal-based checklist, scorecard
-  section, widening protocol, rollback drills)
-- Enable per operator after a week of clean journals each
-- Widen lease classes deliberately, one at a time
+### 4. Phase D4 — graduation — MAI GRADUATED (2026-08-03)
+- Josh signed off: mai is the division's first graduated operator
+  (8d clean streak, 16 proposals, 12/12 executions, 8/12 report-backs,
+  zero anomalies — scorecard `eligible`)
+- tai/rei/nei enabled for SHADOW proposals 2026-08-03 (autonomy.enabled;
+  execution remains mai-only) — their evidence clocks are running;
+  each graduates after their checklist passes (≥3 proposals, clean week)
 
 ### 5. Whims layer + Mai's playground
 - Sims-style object-wants: per-operator decks from personality + events
