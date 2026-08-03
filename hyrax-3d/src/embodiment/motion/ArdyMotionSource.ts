@@ -123,7 +123,7 @@ export interface ArdyTelemetry {
    * null on the gestalt fallback). */
   groundCorrectionM: number | null
   /** Reflex layer: active reaction prompt (variant or null) + lifetime count. */
-  reflex: { active: boolean; variant: ArdyReflexDirection | null; count: number }
+  reflex: { active: boolean; variant: ArdyReflexDirection | null; count: number; lastBlockerLabel: string | null }
 }
 
 const DEFAULT_ARDY_PATH = '/api/hyrax/ardy/ws'
@@ -313,6 +313,10 @@ export interface ArdyNavigationLike {
     hit?: boolean
     obstacleId?: string
   }
+  /** Human-readable label for a blocker id (manifest labels; the reflex
+   * layer reports "coffee table" not "coffee-table"). Optional so mocks
+   * that only implement constrainMovement keep working. */
+  labelForBlockerId?(id: string): string
 }
 
 /**
@@ -351,6 +355,11 @@ export class RoomNavigationApproval implements NavigationInterface {
     this.lastRejected = [to.x - this.x, to.z - this.z]
     this.lastBlockerId = resolved.hit ? (resolved.obstacleId ?? 'unknown') : null
     return { deltaXZ: [this.x - from.x, this.z - from.z], deltaYaw }
+  }
+
+  /** Blocker id → manifest label via the wrapped navigation (reflex layer). */
+  labelForBlockerId(id: string): string {
+    return this.navigation.labelForBlockerId?.(id) ?? id
   }
 }
 
@@ -473,6 +482,8 @@ export class ArdyMotionSource {
   private lastReflexAtMs = -Infinity
   private rejectAccum = 0
   private reflexCount = 0
+  /** Manifest label of the blocker at the last reflex (reflex telemetry). */
+  private reflexLastBlockerLabel: string | null = null
   /** A reflex was cancelled by the watchdog hold — restore intent on recovery. */
   private pendingIntentRestore = false
   private readonly slerpFrom = new Quaternion()
@@ -606,6 +617,7 @@ export class ArdyMotionSource {
         active: this.reflexActive !== null,
         variant: this.reflexActive?.variant ?? null,
         count: this.reflexCount,
+        lastBlockerLabel: this.reflexLastBlockerLabel,
       },
     }
   }
@@ -1135,13 +1147,20 @@ export class ArdyMotionSource {
         this.nowMs() - this.lastReflexAtMs >= this.reflexConfig.COOLDOWN_MS
       ) {
         const variant = classifyReflexDirection(this.approval.lastRejected, out.sceneRootYaw)
+        // Blocker id → manifest label ("coffee table" not "coffee-table";
+        // room_boundary → "the wall"). Falls back to the raw id when the
+        // navigation has no label mapping (legacy/mock navs).
+        const blockerId = this.approval.lastBlockerId
+        this.reflexLastBlockerLabel = blockerId === null
+          ? null
+          : this.approval.labelForBlockerId(blockerId)
         this.reflexActive = { variant, restoreAtMs: this.nowMs() + this.reflexConfig.DURATION_MS }
         this.lastReflexAtMs = this.nowMs()
         this.reflexCount += 1
         this.rejectAccum = 0
         console.info(
           `[ardy] nav reflex (${variant}` +
-          (this.approval.lastBlockerId !== null ? `, ${this.approval.lastBlockerId}` : '') +
+          (this.reflexLastBlockerLabel !== null ? `, ${this.reflexLastBlockerLabel}` : '') +
           ')',
         )
         // Direct client send: lastPrompt stays the INTENT prompt (restore

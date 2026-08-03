@@ -34,11 +34,15 @@ import { ArdyMotionSource, type ArdyMotionState, type ArdyTelemetry } from './mo
 import { RoomNavigation } from './navigation/RoomNavigation'
 import { AvatarRig } from './rig/AvatarRig'
 import roomManifest from './room/roomObjects.json'
+import type { SceneManifest } from './room/sceneManifest'
 import type { RoomObjectDefinition } from './types'
 import { VisemeController } from './voice/VisemeController'
 
 export type CameraMode = 'room' | 'follow' | 'portrait'
 export type MotionPreview = 'idle' | 'crouch' | 'kick-left' | 'kick-right' | 'balance-left' | 'balance-right' | 'jumping-jacks' | 'jump' | 'bend' | 'walk'
+
+/** Avatar footprint radius (m) — geometry, not room data; added to manifest obstacle padding. */
+const LOFT_ACTOR_RADIUS = 0.22
 
 export type RigDiagnosticSnapshot = {
   capturedAt: string
@@ -68,7 +72,7 @@ export class TaiRoomScene {
   private readonly renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
   private readonly controls: OrbitControls
   private readonly clock = new Clock()
-  private readonly navigation = new RoomNavigation({ minX: -3.65, maxX: 3.65, minZ: -3.65, maxZ: 3.65 }, 0.22)
+  private readonly navigation: RoomNavigation
   private readonly face = new FaceController()
   private readonly visemes = new VisemeController()
   private readonly objects = new Map<string, Mesh>()
@@ -96,7 +100,12 @@ export class TaiRoomScene {
   constructor(
     private readonly container: HTMLElement,
     private readonly vrmUrl: string,
+    manifest: SceneManifest,
   ) {
+    // Collision is data now (SCENE_MANIFEST_SPEC.md): bounds + obstacles
+    // come from the manifest. LOFT_ACTOR_RADIUS is avatar geometry, not
+    // room data, so it stays here (matches the pre-manifest 0.22).
+    this.navigation = RoomNavigation.fromManifest(manifest, LOFT_ACTOR_RADIUS)
     this.scene.background = new Color('#0c1220')
     this.scene.fog = new FogExp2('#080c14', 0.018)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -548,10 +557,6 @@ export class TaiRoomScene {
     return mesh
   }
 
-  private obstacle(id: string, position: Vector3, size: Vector3, padding = 0.1): void {
-    this.navigation.addBoxObstacle(id, position, size, padding)
-  }
-
   private seedRoom(): void {
     const floor = new Mesh(new PlaneGeometry(8, 8), this.material('#2b211f', { roughness: 0.9 }))
     floor.rotation.x = -Math.PI / 2
@@ -583,8 +588,6 @@ export class TaiRoomScene {
     right.rotation.y = 0.45
     this.box('coffee-table', new Vector3(0, 0.28, 1.15), new Vector3(1.25, 0.12, 0.62), '#2c1f1a')
     this.cylinder('coffee-mug', new Vector3(0.2, 0.4, 1.15), 0.045, 0.04, 0.1, '#eeeeee')
-    this.obstacle('couch', new Vector3(0, 0, 2.28), new Vector3(2.85, 0.7, 1))
-    this.obstacle('coffee-table', new Vector3(0, 0, 1.15), new Vector3(1.45, 0.35, 0.82))
   }
 
   private addCommandZone(): void {
@@ -593,7 +596,6 @@ export class TaiRoomScene {
     for (const z of [-2.28, -1.98, -1.68]) this.box(`server-slot-${z}`, new Vector3(-3.86, 0.67, z), new Vector3(0.045, 0.065, 0.18), '#69f0ff', { emissive: '#69f0ff', intensity: 0.9 })
     this.box('server-panel', new Vector3(-3.84, 0.9, -0.45), new Vector3(0.055, 1.1, 0.7), '#182533', { emissive: '#2dd4bf', intensity: 0.2 })
     this.cylinder('desk-stool', new Vector3(-2.9, 0.32, -0.35), 0.28, 0.24, 0.62, '#242938')
-    this.obstacle('command-zone', new Vector3(-3.5, 0, -1.35), new Vector3(0.7, 0.8, 2.95))
   }
 
   private addProjectionWall(): void {
@@ -611,7 +613,6 @@ export class TaiRoomScene {
     this.box('kitchen', new Vector3(2.18, 0.48, -3.48), new Vector3(1.62, 0.55, 0.5), '#3b2b20')
     this.box('espresso-machine', new Vector3(1.62, 0.9, -3.44), new Vector3(0.34, 0.28, 0.25), '#11161c', { metalness: 0.35 })
     this.box('vintage-fridge', new Vector3(3.22, 0.7, -3.4), new Vector3(0.46, 1, 0.42), '#4b2430', { emissive: '#ff6a88', intensity: 0.08 })
-    this.obstacle('kitchen', new Vector3(2.18, 0, -3.48), new Vector3(1.82, 0.6, 0.7))
   }
 
   private addResetChamber(): void {
@@ -620,7 +621,6 @@ export class TaiRoomScene {
     this.box('weighted-blanket', new Vector3(2.98, 0.64, 1.92), new Vector3(0.82, 0.14, 0.88), '#6f5364')
     this.box('pillow-a', new Vector3(2.18, 0.71, 2.26), new Vector3(0.34, 0.18, 0.32), '#eee0cc')
     this.box('pillow-b', new Vector3(2.56, 0.72, 2.27), new Vector3(0.34, 0.18, 0.32), '#b9907f')
-    this.obstacle('daybed', new Vector3(2.75, 0, 1.9), new Vector3(1.75, 0.45, 1.25))
   }
 
   private addAnalogAccents(): void {

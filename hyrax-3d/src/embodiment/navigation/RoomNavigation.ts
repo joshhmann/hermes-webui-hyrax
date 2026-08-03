@@ -1,4 +1,5 @@
 import { Vector3 } from "three";
+import type { SceneManifest } from "../room/sceneManifest";
 
 type RoomBounds = {
   minX: number;
@@ -12,7 +13,14 @@ export type RoomObstacle = {
   center: Vector3;
   halfSize: Vector3;
   padding: number;
+  /** Human-readable name from the scene manifest (reflex telemetry). */
+  label?: string;
 };
+
+/** Manifest-literal id used when a move clamps against the room bounds. */
+export const ROOM_BOUNDARY_ID = "room_boundary";
+/** Reflex/reaction label for the room boundary (spec: room_boundary → "the wall"). */
+export const ROOM_BOUNDARY_LABEL = "the wall";
 
 export type MovementConstraintResult = {
   position: Vector3;
@@ -65,6 +73,36 @@ export class RoomNavigation {
     private readonly bounds: RoomBounds,
     private readonly actorRadius = 0.28,
   ) {}
+
+  /**
+   * Build navigation from a scene manifest (the room as data — spec
+   * SCENE_MANIFEST_SPEC.md). Bounds come from `manifest.bounds`, obstacles
+   * from `manifest.obstacles`. Manifest `padding` is the authored clearance
+   * in meters; the actor radius is added on top exactly like addBoxObstacle,
+   * so a manifest authored from the old hardcoded values is behavior-
+   * identical. Each obstacle keeps its manifest `label` for the reflex
+   * layer ("coffee table" not "coffee-table").
+   */
+  static fromManifest(manifest: SceneManifest, actorRadius = 0.28): RoomNavigation {
+    const navigation = new RoomNavigation(manifest.bounds, actorRadius);
+    for (const obstacle of manifest.obstacles) {
+      navigation.obstacles.push({
+        id: obstacle.id,
+        label: obstacle.label,
+        center: new Vector3(obstacle.center[0], 0, obstacle.center[1]),
+        halfSize: new Vector3(obstacle.halfSize[0], 0, obstacle.halfSize[1]),
+        padding: obstacle.padding + actorRadius,
+      });
+    }
+    return navigation;
+  }
+
+  /** Human-readable label for a blocker id: room_boundary → "the wall",
+   * manifest obstacles → their authored label, unknown → the raw id. */
+  labelForBlockerId(id: string): string {
+    if (id === ROOM_BOUNDARY_ID) return ROOM_BOUNDARY_LABEL;
+    return this.obstacles.find((obstacle) => obstacle.id === id)?.label ?? id;
+  }
 
   addBoxObstacle(id: string, center: Vector3, size: Vector3, padding = 0.18): void {
     this.obstacles.push({
@@ -142,7 +180,7 @@ export class RoomNavigation {
     position.z = clamp(position.z, this.bounds.minZ, this.bounds.maxZ);
     if (Math.abs(position.x - to.x) > EPSILON || Math.abs(position.z - to.z) > EPSILON) {
       hit = true;
-      obstacleId = "room_boundary";
+      obstacleId = ROOM_BOUNDARY_ID;
     }
 
     for (const obstacle of this.obstacles) {

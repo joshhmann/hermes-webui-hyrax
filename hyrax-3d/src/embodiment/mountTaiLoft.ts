@@ -3,6 +3,7 @@ import './tai-room.css'
 import { TaiRoomScene } from './TaiRoomScene'
 import type { TimeOfDayPreset } from './atmosphere/TimeOfDaySystem'
 import { RigDevelopmentPanel } from './debug/RigDevelopmentPanel'
+import { loadSceneManifest } from './room/sceneManifest'
 
 export interface TaiLoftMountConfiguration {
   vrmUrl: string
@@ -33,7 +34,12 @@ export async function mountTaiLoft(
   shell.append(canvas, chrome)
   host.replaceChildren(shell)
 
-  const room = new TaiRoomScene(canvas, configuration.vrmUrl)
+  // The room is DATA now (SCENE_MANIFEST_SPEC.md): bounds, collision, and
+  // prop positions come from rooms/tai-loft.json served via /api/hyrax/3d/.
+  // Fail-closed: a missing/malformed manifest resolves to the default empty
+  // room with a console warning — the loft still mounts, just uncluttered.
+  const manifest = await loadSceneManifest()
+  const room = new TaiRoomScene(canvas, configuration.vrmUrl, manifest)
   for (const mode of ['room', 'follow', 'portrait'] as const) {
     const button = document.createElement('button')
     button.textContent = mode[0].toUpperCase() + mode.slice(1)

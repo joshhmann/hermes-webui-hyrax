@@ -22,6 +22,9 @@
  * mirrors tests/ardy_motion.test.mjs fixtures.
  */
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 import { ChunkBuffer } from 'gestalt-motion/ChunkBuffer.ts'
@@ -29,6 +32,10 @@ import { CSKEL27_SOURCE_JOINT_NAMES, CSKEL27_BUILTIN_MAP } from 'gestalt-motion/
 import { SEMANTIC_V1 } from 'gestalt-motion/semanticV1.ts'
 
 import { ArdyMotionSource, ARDY_REFLEX } from '../src/embodiment/motion/ArdyMotionSource.ts'
+import { RoomNavigation } from '../src/embodiment/navigation/RoomNavigation.ts'
+import { parseSceneManifest } from '../src/embodiment/room/sceneManifest.ts'
+
+const packageRoot = fileURLToPath(new URL('..', import.meta.url))
 
 // ── Fixtures (mirrors tests/ardy_motion.test.mjs) ───────────────────
 
@@ -376,4 +383,76 @@ test('no reflex while the watchdog holds the pose', async () => {
   assert.equal(source.getTelemetry().reflex.count, 0, 'no reflex while held')
   assert.equal(client.prompts.filter((p) => BUMP_VARIANTS.includes(p)).length, 0)
   source.dispose()
+})
+
+test('manifest labels: room boundary reacts as "the wall", furniture by its label', async () => {
+  // The REAL loft navigation, built from the authored manifest — the same
+  // collision + label mapping the mount uses (SCENE_MANIFEST_SPEC.md).
+  const raw = await readFile(join(packageRoot, 'rooms/tai-loft.json'), 'utf8')
+  const { manifest } = parseSceneManifest(JSON.parse(raw))
+  assert.ok(manifest, 'authored manifest must validate')
+  const loftNav = RoomNavigation.fromManifest(manifest, 0.22)
+
+  // ── Boundary contact: spawn (0, 0.15), walk −z 1 m/s → the z=−3.65 wall
+  // (the x=0 lane to +z is blocked by the coffee table first, so −z is the
+  // clean wall run).
+  {
+    const nowRef = { now: 1000 }
+    const client = makeMockClient()
+    const rig = makeMockRig()
+    const source = new ArdyMotionSource({
+      rig,
+      navigation: loftNav,
+      url: 'ws://test.invalid/ws',
+      clientFactory: (callbacks) => { client.callbacks = callbacks; return client },
+      vrmLikeFactory: () => makeFakeVrm(),
+      autoConnect: true,
+      nowMs: () => nowRef.now,
+      profileFetcher: () => Promise.resolve(null),
+    })
+    await connectAndBuild(client, source)
+    client.buffer.push(makeChunk({ t0: 5, frameCount: 300, frameSeqStart: 0, walk: [0, -1.0] }))
+    tick(source, nowRef, 5.5) // contact ≈3.8 s, reflex ≈4.0 s
+    assert.equal(source.getTelemetry().reflex.count, 1, 'boundary reflex fired')
+    assert.equal(
+      source.getTelemetry().reflex.lastBlockerLabel,
+      'the wall',
+      'room_boundary is reported as "the wall", not the raw id',
+    )
+    assert.equal(
+      client.prompts.filter((p) => BUMP_VARIANTS.includes(p))[0],
+      ARDY_REFLEX.PROMPTS.front,
+      'frontal wall contact → front variant',
+    )
+    source.dispose()
+  }
+
+  // ── Furniture contact: the coffee table blocks z ∈ [0.42, 1.88] on the
+  // x=0 lane → contact ≈0.3 s.
+  {
+    const nowRef = { now: 1000 }
+    const client = makeMockClient()
+    const rig = makeMockRig()
+    const source = new ArdyMotionSource({
+      rig,
+      navigation: loftNav,
+      url: 'ws://test.invalid/ws',
+      clientFactory: (callbacks) => { client.callbacks = callbacks; return client },
+      vrmLikeFactory: () => makeFakeVrm(),
+      autoConnect: true,
+      nowMs: () => nowRef.now,
+      profileFetcher: () => Promise.resolve(null),
+    })
+    await connectAndBuild(client, source)
+    assert.equal(source.getTelemetry().reflex.lastBlockerLabel, null, 'no contact yet')
+    client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0] }))
+    tick(source, nowRef, 1.5) // contact ≈0.27 s, reflex ≈0.5 s
+    assert.equal(source.getTelemetry().reflex.count, 1, 'furniture reflex fired')
+    assert.equal(
+      source.getTelemetry().reflex.lastBlockerLabel,
+      'coffee table',
+      'blocker id resolves to the manifest label ("coffee table" not "coffee-table")',
+    )
+    source.dispose()
+  }
 })

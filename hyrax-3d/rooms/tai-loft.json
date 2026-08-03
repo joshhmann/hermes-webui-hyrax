@@ -1,0 +1,172 @@
+{
+  "manifest_version": "1.0",
+  "room_id": "tai-loft",
+  "name": "The Synthesis Loft",
+  "bounds": { "minX": -3.65, "maxX": 3.65, "minZ": -3.65, "maxZ": 3.65 },
+  "obstacles": [
+    {
+      "id": "couch",
+      "label": "the couch",
+      "center": [0, 2.28],
+      "halfSize": [1.425, 0.5],
+      "padding": 0.1
+    },
+    {
+      "id": "coffee-table",
+      "label": "coffee table",
+      "center": [0, 1.15],
+      "halfSize": [0.725, 0.41],
+      "padding": 0.1
+    },
+    {
+      "id": "command-zone",
+      "label": "the command zone",
+      "center": [-3.5, -1.35],
+      "halfSize": [0.35, 1.475],
+      "padding": 0.1
+    },
+    {
+      "id": "kitchen",
+      "label": "the kitchen",
+      "center": [2.18, -3.48],
+      "halfSize": [0.91, 0.35],
+      "padding": 0.1
+    },
+    {
+      "id": "daybed",
+      "label": "the daybed",
+      "center": [2.75, 1.9],
+      "halfSize": [0.875, 0.625],
+      "padding": 0.1
+    }
+  ],
+  "objects": [
+    {
+      "id": "couch",
+      "label": "the couch",
+      "position": [0, 0.23, 2.25],
+      "baked": true,
+      "interactions": [
+        {
+          "id": "sit",
+          "kind": "sit",
+          "spot": [0, 2.25],
+          "facingDeg": 180,
+          "prompt": "a person sits on a couch"
+        }
+      ]
+    },
+    {
+      "id": "chair",
+      "label": "the mismatched armchair",
+      "position": [-2.25, 0.34, 1.25],
+      "baked": true,
+      "interactions": [
+        {
+          "id": "sit",
+          "kind": "sit",
+          "spot": [-2.25, 1.25],
+          "facingDeg": 160,
+          "prompt": "a person sits in an armchair"
+        }
+      ]
+    },
+    {
+      "id": "chair-right",
+      "label": "the tan armchair",
+      "position": [2, 0.34, 1],
+      "baked": true
+    },
+    {
+      "id": "coffee-table",
+      "label": "coffee table",
+      "position": [0, 0.28, 1.15],
+      "baked": true
+    },
+    {
+      "id": "walnut-credenza",
+      "label": "the walnut credenza",
+      "position": [-3.63, 0.55, -1.35],
+      "baked": true
+    },
+    {
+      "id": "workstation",
+      "label": "her desk",
+      "position": [-3.83, 1.38, -1.35],
+      "baked": true,
+      "interactions": [
+        {
+          "id": "work",
+          "kind": "sit",
+          "spot": [-2.9, -0.35],
+          "facingDeg": -90,
+          "prompt": "a person sits at a desk working"
+        }
+      ]
+    },
+    {
+      "id": "desk-stool",
+      "label": "the desk stool",
+      "position": [-2.9, 0.32, -0.35],
+      "baked": true
+    },
+    {
+      "id": "projection-surface",
+      "label": "the projection wall",
+      "position": [0, 1.65, -3.91],
+      "baked": true
+    },
+    {
+      "id": "library-wall",
+      "label": "the library wall",
+      "position": [2.15, 1.32, -3.92],
+      "baked": true
+    },
+    {
+      "id": "kitchen",
+      "label": "the kitchen",
+      "position": [2.18, 0.48, -3.48],
+      "baked": true
+    },
+    {
+      "id": "espresso-machine",
+      "label": "the espresso machine",
+      "position": [1.62, 0.9, -3.44],
+      "baked": true
+    },
+    {
+      "id": "vintage-fridge",
+      "label": "the vintage fridge",
+      "position": [3.22, 0.7, -3.4],
+      "baked": true
+    },
+    {
+      "id": "daybed",
+      "label": "the daybed",
+      "position": [2.75, 0.28, 1.9],
+      "baked": true,
+      "interactions": [
+        {
+          "id": "nap",
+          "kind": "lie",
+          "spot": [2.75, 1.9],
+          "facingDeg": 0,
+          "prompt": "a person lies down on a daybed"
+        }
+      ]
+    },
+    {
+      "id": "record-console",
+      "label": "the record console",
+      "position": [-1.55, 0.42, 3.58],
+      "baked": true
+    },
+    {
+      "id": "plant-pot",
+      "label": "the big plant",
+      "position": [3.25, 0.28, -0.28],
+      "baked": true
+    }
+  ],
+  "vn": { "background": "vn/backgrounds/tai-loft.png" }
+}
