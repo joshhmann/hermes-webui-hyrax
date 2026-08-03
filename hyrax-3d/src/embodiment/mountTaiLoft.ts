@@ -124,6 +124,79 @@ export async function mountTaiLoft(
   })
   controls.append(shuffleButton)
 
+  // Goal picker: sends her to a manifest interaction point (spatial
+  // layer 3b). Buttons from rooms/tai-loft.json with a fallback list;
+  // shows the active goal and offers Clear. User prompts cancel goals
+  // (pilot wins); this is the same seam as __ardy.setGoal.
+  const goalButton = document.createElement('button')
+  goalButton.textContent = 'Go to'
+  goalButton.title = 'Send her to an interaction point (goal planner)'
+  const goalPanel = document.createElement('div')
+  goalPanel.className = 'tai-loft-goals'
+  goalPanel.style.display = 'none'
+  let goalsLoaded = false
+  const renderGoalPanel = (interactions: { id: string; label: string }[]): void => {
+    goalsLoaded = true
+    goalPanel.replaceChildren()
+    const active = room.getGoal()
+    const head = document.createElement('div')
+    head.className = 'tai-loft-goals-head'
+    head.textContent = active ? `Goal: ${active}` : 'No active goal'
+    goalPanel.append(head)
+    for (const it of interactions) {
+      const b = document.createElement('button')
+      b.textContent = `${it.label} · ${it.id}`
+      b.addEventListener('click', () => {
+        room.setGoal(it.id)
+        renderGoalPanel(interactions)
+      })
+      goalPanel.append(b)
+    }
+    if (active) {
+      const clear = document.createElement('button')
+      clear.textContent = 'Clear goal'
+      clear.addEventListener('click', () => {
+        room.clearGoal()
+        renderGoalPanel(interactions)
+      })
+      goalPanel.append(clear)
+    }
+  }
+  goalButton.addEventListener('click', () => {
+    const show = goalPanel.style.display === 'none'
+    goalPanel.style.display = show ? '' : 'none'
+    if (!show) return
+    interface ManifestInteraction { id: string }
+    interface ManifestObject { id: string; label?: string; interactions?: ManifestInteraction[] }
+    const fallback = [
+      { id: 'couch.sit', label: 'the couch' },
+      { id: 'chair.sit', label: 'the armchair' },
+      { id: 'desk.work', label: 'her desk' },
+      { id: 'daybed.nap', label: 'the daybed' },
+    ]
+    fetch('/api/hyrax/3d/rooms/tai-loft.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((manifest) => {
+        let items = fallback
+        if (manifest && Array.isArray(manifest.objects)) {
+          const found = (manifest.objects as ManifestObject[]).flatMap((o) =>
+            (o.interactions ?? []).map((i) => ({ id: `${o.id}.${i.id}`, label: o.label ?? o.id })),
+          )
+          if (found.length) items = found
+        }
+        renderGoalPanel(items)
+      })
+      .catch(() => { if (!goalsLoaded) renderGoalPanel(fallback) })
+  })
+  controls.append(goalButton)
+  shell.append(goalPanel)
+  // Keep the header honest while a goal runs.
+  const goalStatusTimer = setInterval(() => {
+    if (goalPanel.style.display === 'none' || !goalsLoaded) return
+    const head = goalPanel.querySelector('.tai-loft-goals-head')
+    if (head) head.textContent = room.getGoal() ? `Goal: ${room.getGoal()}` : 'No active goal'
+  }, 1000)
+
   // GEVS scoreboard: toggle panel showing the latest bench report
   // (hyrax-3d/tests/bench/scoreboard.json — promoted from the newest run;
   // see tests/bench/README.md). Read-only; fetch failures hide the panel.
@@ -248,6 +321,7 @@ export async function mountTaiLoft(
     if (destroyed) return
     destroyed = true
     clearInterval(ardyStatusTimer)
+    clearInterval(goalStatusTimer)
     stopShuffle()
     delete debugWindow.__ardy
     if (configuration.development) window.removeEventListener('keydown', onKeyDown)

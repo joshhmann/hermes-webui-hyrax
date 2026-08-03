@@ -25,6 +25,10 @@
 .tai-loft-scoreboard-row { display: flex; justify-content: space-between; gap: 18px; padding: 2.5px 0; border-top: 1px solid #21262d; }
 .tai-loft-scoreboard-row b { color: #6ecbf5; }
 .tai-loft-scoreboard-partials { margin-top: 8px; color: #d29922; font-size: 11px; }
+.tai-loft-goals { position: absolute; top: 84px; right: 18px; z-index: 4; min-width: 210px; padding: 12px 14px; color: #c9d1d9; background: rgba(8, 12, 20, .94); border: 1px solid rgba(110, 203, 245, .42); border-radius: 12px; box-shadow: 0 20px 55px rgba(0, 0, 0, .45); backdrop-filter: blur(14px); font-size: 12px; display: grid; gap: 6px; }
+.tai-loft-goals-head { color: #6ecbf5; font: 10px ui-monospace, monospace; letter-spacing: .08em; padding-bottom: 4px; border-bottom: 1px solid #21262d; }
+.tai-loft-goals button { color: #c9d1d9; background: rgba(13, 17, 23, .88); border: 1px solid #30363d; border-radius: 8px; padding: 8px 10px; cursor: pointer; text-align: left; }
+.tai-loft-goals button:hover, .tai-loft-goals button:focus-visible { border-color: #6ecbf5; }
 .rig-workbench { position: absolute; z-index: 4; top: 84px; right: 18px; bottom: 18px; width: min(390px, calc(100vw - 36px)); display: flex; flex-direction: column; color: #c9d1d9; background: rgba(8, 12, 20, .96); border: 1px solid rgba(110, 203, 245, .42); border-radius: 12px; box-shadow: 0 20px 55px rgba(0, 0, 0, .45); backdrop-filter: blur(16px); transform: translateX(calc(100% + 36px)); opacity: 0; pointer-events: none; transition: transform .18s ease, opacity .18s ease; }
 .rig-workbench.is-open { transform: none; opacity: 1; pointer-events: auto; }
 .rig-workbench header { display: flex; justify-content: space-between; gap: 16px; padding: 14px 16px 11px; border-bottom: 1px solid #26313b; }
