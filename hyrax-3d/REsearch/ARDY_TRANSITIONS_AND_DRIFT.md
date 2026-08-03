@@ -593,3 +593,56 @@ frames dropped, 0 watchdog releases; the walk-into-bounds residual-clamp
 resets (3×) crossfaded invisibly. Suite: 81/81 (6 new: reset-crossfade
 continuity, anchor continuity, garbage-during-crossfade rejection, late
 anchor on garbage-opened generation, calibration scope ×2). T2 CONFIRMED.
+
+---
+
+## Sanity-gate acrobatics exemption + generation pacing (2026-08-02, implemented + live-verified)
+
+**Bug:** acrobatic moves (cartwheel, backflip) visibly CUT mid-animation in
+the loft. Raw-stream sniff (prompt "a person does a cartwheel", 14 stream
+seconds, FK envelope): the raw stream contains COMPLETE cartwheels —
+repeated cycles, root lean sweeping 9°→172° and landing upright every ~2 s
+— so the model was not the problem (T1's 1 s history does not taper
+multi-second moves). The cut was the CLIENT drift gate: frames with root
+lean > 45° are hard-rejected (95 of 241 cartwheel frames — the flip froze
+at its first inverted frame) and the drift watchdog (lean EMA > 12° while
+upright for 2 s) fired 3.1 s into the move and hard-reset the stream.
+
+**Discriminator (measured):** a flip rotates the ROOT itself — root angular
+speed 3.3–7 rad/s sustained while inverted (min 3.3 over 95 inverted
+cartwheel frames) — versus drift garbage, which creeps at ≤0.11 rad/s
+(idle p95) or sits statically tilted. And drift never returns to upright on
+its own; acrobatics land (< 8° lean) every cycle.
+
+**Fix (client, `ArdyMotionSource.ts`):**
+- Lean hard-reject suspended only while the root has been spinning above
+  `ROOT_SPIN_RAD_S = 1.5` for `MOVE_ACCUM_S = 0.25` (leaky accumulator,
+  fills 1×/drains 2× — a one-frame sampling spike at a chunk boundary never
+  qualifies; root-height bounds always apply; accumulator resets on stream
+  resets so a new stream's first frames stay fail-closed).
+- Drift timer resets on any plausible sampled frame with lean < 8°
+  (instantaneous, not EMA — a landing proves the lean was a move).
+- Reflex prompts defer to a natural boundary: fired mid-move a reflex's
+  reset chunk discards all unplayed buffered motion. A triggered reflex
+  now waits for a grounded, near-upright frame (all four foot contacts,
+  lean < 25°) or `ARDY_REFLEX.DEFER_MAX_MS = 1000`, whichever first; a
+  user prompt cancels the deferral (pilot wins), a watchdog hold drops it.
+  The pending reflex keeps its original deadline — sustained grinding
+  cannot extend the cap.
+
+**Fix (service, `gestalt-ardy-service`):** `ARDY_PACE_REALTIME` env knob
+(default 0 = free-run, the old behavior). The producer free-ran at ~22×
+realtime (~450 f/s against a 20 fps consumer): unbounded client backlog
+(`ChunkBuffer` rebuilds its flat index per push — GC churn), wasted GPU,
+and every prompt/reset discarded seconds of unplayed motion. Deployed
+`pace.conf` drop-in with 1.0 on 192.168.0.17: chunk generation holds at
+stream realtime (2 s chunks every 2 s; prompts/resets wake the pacer
+immediately via `SessionState.control_event`, so control latency is never
+paced). Verified live: steady-state chunk gaps 2.0 s, cartwheel stream
+unchanged (lean to 167°).
+
+Live verification (isolated WebUI + headless Chromium, real service):
+cartwheel prompt played 30 s — inversion reached the bones repeatedly,
+cycles completed, watchdog never released, state `live` throughout,
+backlog bounded. Suite: 130/130 hyrax-3d (6 new), 96/96 gestalt-motion,
+37+9 service (4 new pacing), GEVS wall-absorb 1.0.

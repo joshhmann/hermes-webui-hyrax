@@ -44,11 +44,13 @@
  *
  * Sanity gate (fail-closed): long autoregressive generations drift — the
  * source itself starts emitting a progressive hips lean, then joint garbage.
- * Implausible frames (lean > 45°, root height out of bounds) are never
- * written; sustained drift (lean EMA > 12° while upright) releases the pose
- * to ProceduralLocomotion via the stale crossfade and requests one hard
- * stream reset; ownership is reclaimed after sustained sanity or a new user
- * prompt. See the policy block at the gate constants.
+ * Implausible frames (lean > 45° while the root is not mid-flip, root height
+ * out of bounds) are never written; sustained drift (lean EMA > 12° while
+ * upright, with no instantaneous return to upright — acrobatics land every
+ * cycle, drift does not) releases the pose to ProceduralLocomotion via the
+ * stale crossfade and requests one hard stream reset; ownership is
+ * reclaimed after sustained sanity or a new user prompt. See the policy
+ * block at the gate constants.
  */
 import { Quaternion, Vector3 } from 'three'
 
@@ -71,6 +73,8 @@ import type { Object3DLike, VrmLike } from 'gestalt-motion/vrmLike.ts'
 import { wrapThreeVrm } from 'gestalt-motion/threeAdapter.ts'
 
 import { ProfiledLiveRetargeter } from './ProfiledLiveRetargeter.ts'
+import { SelfCollision, SELF_COLLISION_CONFIG } from '../collision/SelfCollision.ts'
+import type { SelfCollisionTargetReport } from '../collision/SelfCollision.ts'
 import type { AvatarRetargeterProfile } from '../../../calibrate/AvatarRetargeter.js'
 import type { AvatarRig } from '../rig/AvatarRig'
 import type { RoomNavigation } from '../navigation/RoomNavigation'
@@ -124,6 +128,17 @@ export interface ArdyTelemetry {
   groundCorrectionM: number | null
   /** Reflex layer: active reaction prompt (variant or null) + lifetime count. */
   reflex: { active: boolean; variant: ArdyReflexDirection | null; count: number; lastBlockerLabel: string | null }
+  /** Bounded self-collision (capsule push-out): corrections rate, recent
+   * deepest penetration, per-frame cost. enabled=false when toggled off or
+   * before the retargeter is built. */
+  selfCollision: {
+    enabled: boolean
+    correctionsPerSec: number
+    correctionsTotal: number
+    maxPenetrationM: number
+    avgCostUs: number
+    capsuleCount: number
+  }
 }
 
 const DEFAULT_ARDY_PATH = '/api/hyrax/ardy/ws'
@@ -179,6 +194,15 @@ const TELEPORT_RESIDUAL_M = 1.0
  *    reaction forever after recovery. The gate itself is untouched:
  *    implausible reflex frames are still hard-rejected, drift still
  *    releases (fail-closed).
+ *  - NATURAL BOUNDARY: a reflex prompt arrives as a reset chunk, which
+ *    DISCARDS every unplayed buffered frame — fired mid-move (a cartwheel
+ *    traveling into a wall) it visibly cuts the move. A triggered reflex
+ *    therefore defers while the avatar is airborne/tilted and fires at the
+ *    next grounded, near-upright frame (all four foot contacts down, lean
+ *    < SAFE_LAND_LEAN_DEG), or when DEFER_MAX_MS elapses — responsiveness
+ *    is bounded at ~1 s and wall-grind feedback still lands. A user prompt
+ *    cancels a pending reflex like an active one; a watchdog hold DROPS a
+ *    pending reflex (procedural owns the rig — the bump never happened).
  * Prompt sends go through the normal T1 path (the service drops history on
  * prompt), so a reflex arrives as a reset chunk and blends via the T2
  * 0.45 s crossfade — no hard cut, no sendReset (the history is not drifted).
@@ -192,6 +216,11 @@ export const ARDY_REFLEX = {
   DURATION_MS: 3000,
   /** Minimum wall time between reflexes (wall-grinding cadence cap). */
   COOLDOWN_MS: 5000,
+  /** Max time a triggered reflex waits for a grounded, upright frame. */
+  DEFER_MAX_MS: 1000,
+  /** "Safely landed": all four foot-contact bits down and lean below this. */
+  SAFE_CONTACTS: 0b1111,
+  SAFE_LAND_LEAN_DEG: 25,
   /** Reaction prompt per contact direction (avatar-relative). */
   PROMPTS: {
     front: 'a person bumps into something and stops, steadying themselves',
@@ -209,20 +238,48 @@ export type ArdyReflexDirection = keyof typeof ARDY_REFLEX.PROMPTS
  * (verified on the live stream: hips lean-from-vertical grows past 25-50°
  * while the root stays at standing height; a hard reset recovers sanity for
  * only a few seconds). Policy:
- *  - a single implausible frame (lean > HARD_LEAN_REJECT_DEG, or root height
- *    outside [ROOT_Y_REJECT_MIN, ROOT_Y_REJECT_MAX]) is NEVER written to the
- *    rig — the last plausible sample is held instead;
+ *  - a single implausible frame (lean > HARD_LEAN_REJECT_DEG while the root
+ *    is NOT mid-flip, or root height outside
+ *    [ROOT_Y_REJECT_MIN, ROOT_Y_REJECT_MAX]) is NEVER written to the rig —
+ *    the last plausible sample is held instead;
  *  - sustained drift (lean EMA > DRIFT_LEAN_DEG while upright — rootY EMA >
  *    DRIFT_ROOT_Y_MIN, which protects crouches: a crouch leans but sits low)
  *    releases the pose to ProceduralLocomotion (crossfade via the stale
  *    ramp) and requests ONE hard stream reset (drops the service's drifted
- *    conditioning history);
+ *    conditioning history). Drift never returns to upright on its own, so a
+ *    single sampled frame with lean < RECOVER_LEAN_DEG resets the drift
+ *    timer — acrobatics land upright every cycle, drift does not;
  *  - ownership is reclaimed after RECOVER_LEAN_DEG sanity holds for
  *    RECOVER_HOLD_MS, or when the user sends a new prompt (which also gets a
  *    hard reset so the command starts a fresh rollout).
  * Lean is yaw-invariant: a 180° turn reads 0°, only pitch/roll count.
+ *
+ * Acrobatics exemption (measured on the live stream, 2026-08 sniff): a
+ * cartwheel/backflip rotates the ROOT ITSELF through inversion — sustained
+ * root angular speed 3.3-7 rad/s, returning upright every ~2 s — while the
+ * drift garbage this gate exists for creeps at ≤0.11 rad/s (idle p95) or
+ * sits statically tilted. Without the exemption the gate froze every flip
+ * at its first inverted frame (95 of 241 cartwheel frames rejected) and the
+ * watchdog hard-reset the stream 3.1 s in — the visible "cut mid-move".
+ * While the root has been spinning above ROOT_SPIN_RAD_S for MOVE_ACCUM_S
+ * (leaky accumulator: fills 1x, drains 2x, so a one-frame sampling spike at
+ * a chunk boundary never qualifies), the lean hard-reject is suspended and
+ * the flip plays through. Root-height bounds ALWAYS apply, the accumulator
+ * resets on stream resets (a new stream's first frames stay fail-closed),
+ * and a tilted root that stops spinning drains the accumulator in
+ * MOVE_ACCUM_S/2 — static garbage is rejected exactly as before.
  */
 const HARD_LEAN_REJECT_DEG = 45
+const ROOT_SPIN_RAD_S = 1.5
+const MOVE_ACCUM_S = 0.25
+/** A single-sample root angular speed above this is a discontinuity (a
+ * chunk-boundary cut / teleport), not a move — the live flip measures
+ * 3.3-7 rad/s, so a jump 2x+ above that is never a real spin. It RESETS
+ * the accumulator (fail-closed: a static garbage frame that starts with a
+ * huge angular jump from the last spin frame must not inherit the
+ * exemption — the acrobatics test 'stops spinning at a garbage tilt'
+ * caught exactly that leak). */
+const ROOT_SPIN_DISCONTINUITY_RAD_S = 15
 const ROOT_Y_REJECT_MIN = 0.4
 const ROOT_Y_REJECT_MAX = 1.3
 const DRIFT_LEAN_DEG = 12
@@ -237,6 +294,12 @@ const RECOVER_HOLD_MS = 3000
 function quatLeanDeg(q: [number, number, number, number]): number {
   const vy = 1 - 2 * (q[1] * q[1] + q[3] * q[3])
   return (Math.acos(Math.max(-1, Math.min(1, vy))) * 180) / Math.PI
+}
+
+/** Absolute angle (rad) between two w-first unit quaternions. */
+function quatAngleRad(a: [number, number, number, number], b: [number, number, number, number]): number {
+  const d = Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])
+  return 2 * Math.acos(Math.max(-1, Math.min(1, d)))
 }
 
 /** Wrap an angle to (-π, π] (mirrors RootMotionAdapter's wrapAngle). */
@@ -400,6 +463,11 @@ export interface ArdyMotionSourceOptions {
    * pinned ARDY_REFLEX constants; only the fields present are overridden.
    */
   reflex?: Partial<typeof ARDY_REFLEX>
+  /**
+   * Self-collision policy override (tests). Defaults to the pinned
+   * SELF_COLLISION_CONFIG constants; only the fields present are overridden.
+   */
+  selfCollision?: Partial<typeof SELF_COLLISION_CONFIG>
 }
 
 function defaultUrl(): string {
@@ -455,6 +523,9 @@ export class ArdyMotionSource {
   private disposed = false
   private readonly backoff: typeof ARDY_BACKOFF
   private readonly reflexConfig: typeof ARDY_REFLEX
+  private readonly selfCollisionConfig: Partial<typeof SELF_COLLISION_CONFIG> | undefined
+  private selfCollision: SelfCollision | null = null
+  private selfCollisionEnabled: boolean = SELF_COLLISION_CONFIG.ENABLED
   private backoffMs: number
   private reconnectAttempts = 0
   private reconnectCount = 0
@@ -467,6 +538,9 @@ export class ArdyMotionSource {
   private suppressNextClose = false
   private lastResetSentAtMs = -Infinity
   private lastPrompt: string | null = null
+  /** Wall-clock ms of the last USER/shuffle prompt (setPrompt only; the goal
+   * planner's prompts go through sendPlannerPrompt and never bump this). */
+  private lastUserPromptWallMs = -Infinity
   private readonly initialPrompt: string
   private readonly profileReady: Promise<unknown | null>
   private buildSeq = 0
@@ -477,6 +551,11 @@ export class ArdyMotionSource {
   private insaneSinceMs: number | null = null
   private recoveredSinceMs: number | null = null
   private sanityHold = false
+  // Acrobatics exemption state (policy at ROOT_SPIN_RAD_S): leaky sustained-
+  // spin accumulator over the root's own angular speed between samples.
+  private prevRootQuat: [number, number, number, number] | null = null
+  private prevSampleAtMs: number | null = null
+  private moveAccum = 0
   // Reflex layer state (policy block at ARDY_REFLEX).
   private reflexActive: { variant: ArdyReflexDirection; restoreAtMs: number } | null = null
   private lastReflexAtMs = -Infinity
@@ -486,6 +565,13 @@ export class ArdyMotionSource {
   private reflexLastBlockerLabel: string | null = null
   /** A reflex was cancelled by the watchdog hold — restore intent on recovery. */
   private pendingIntentRestore = false
+  /** Triggered reflex waiting for a grounded, near-upright frame (natural
+   * boundary — a mid-move prompt hard-cuts the move via the reset chunk). */
+  private pendingReflex: {
+    variant: ArdyReflexDirection
+    blockerLabel: string | null
+    deadlineMs: number
+  } | null = null
   private readonly slerpFrom = new Quaternion()
   private readonly slerpTo = new Quaternion()
 
@@ -496,6 +582,8 @@ export class ArdyMotionSource {
     this.initialPrompt = options.initialPrompt ?? DEFAULT_INITIAL_PROMPT
     this.backoff = { ...ARDY_BACKOFF, ...options.backoff }
     this.reflexConfig = { ...ARDY_REFLEX, ...options.reflex }
+    this.selfCollisionConfig = options.selfCollision
+    this.selfCollisionEnabled = options.selfCollision?.ENABLED ?? SELF_COLLISION_CONFIG.ENABLED
     this.backoffMs = this.backoff.INITIAL_MS
     this.clock = new PlaybackClock({ nowMs: this.nowMs })
     this.approval = new RoomNavigationApproval(options.navigation)
@@ -619,6 +707,14 @@ export class ArdyMotionSource {
         count: this.reflexCount,
         lastBlockerLabel: this.reflexLastBlockerLabel,
       },
+      selfCollision: this.selfCollision?.telemetry() ?? {
+        enabled: this.selfCollisionEnabled,
+        correctionsPerSec: 0,
+        correctionsTotal: 0,
+        maxPenetrationM: 0,
+        avgCostUs: 0,
+        capsuleCount: 0,
+      },
     }
   }
 
@@ -656,7 +752,15 @@ export class ArdyMotionSource {
     // The pilot wins: a user/shuffle prompt cancels any active reflex and
     // any restore the watchdog deferred — nothing queues behind it.
     this.reflexActive = null
+    this.pendingReflex = null
     this.pendingIntentRestore = false
+    // The old grind context is gone with the cancelled intent — stale
+    // rejection must not re-trigger a reflex against the new command.
+    this.rejectAccum = 0
+    // Planner seam: this is the USER/shuffle path (planner prompts go
+    // through sendPlannerPrompt and never bump this) — the goal planner
+    // cancels its active goal when this timestamp passes its start.
+    this.lastUserPromptWallMs = this.nowMs()
     this.client.sendPrompt(trimmed)
     if (this.sanityHold || this.leanEma > DRIFT_LEAN_DEG) {
       // The service retains its (drifted) conditioning history across prompts
@@ -670,6 +774,49 @@ export class ArdyMotionSource {
         // Disconnected — the reconnect path owns recovery.
       }
     }
+  }
+
+  /**
+   * Goal-planner seam (spatial layer 3b). Sends a prompt as the planner's
+   * INTENT: updates lastPrompt (so a reflex restore / reconnect re-kick
+   * resumes the planner's segment) but does NOT cancel an active reflex and
+   * does NOT clear a watchdog hold — priority is reflex > planner and
+   * watchdog > planner, so the planner itself gates on isReflexActive /
+   * isWatchdogHolding before sending. User prompts still go through
+   * setPrompt (which cancels reflexes and bumps lastUserPromptAtMs — the
+   * planner's cancel signal).
+   */
+  sendPlannerPrompt(text: string): void {
+    const trimmed = text.trim()
+    if (!trimmed || this.disposed) return
+    this.lastPrompt = trimmed
+    this.client.sendPrompt(trimmed)
+  }
+
+  /** True while a reflex reaction prompt is playing (planner must wait). */
+  isReflexActive(): boolean {
+    return this.reflexActive !== null
+  }
+
+  /** True while the drift watchdog holds the pose (planner suspends). */
+  isWatchdogHolding(): boolean {
+    return this.sanityHold
+  }
+
+  /** Live toggle for the bounded self-collision pass (__ardy debug seam). */
+  setSelfCollisionEnabled(enabled: boolean): void {
+    this.selfCollisionEnabled = enabled
+    this.selfCollision?.setEnabled(enabled)
+  }
+
+  /** Debug probe: current per-target penetration (no correction applied). */
+  selfCollisionReport(): SelfCollisionTargetReport[] | null {
+    return this.selfCollision?.report() ?? null
+  }
+
+  /** Wall-clock ms of the last user/shuffle prompt (planner cancel signal). */
+  lastUserPromptAtMs(): number {
+    return this.lastUserPromptWallMs
   }
 
   /**
@@ -688,6 +835,11 @@ export class ArdyMotionSource {
       this.needsAnchor = true
       this.streamGeneration += 1
       this.profiled?.resetFeed()
+      // A new stream's first frames stay fail-closed: the acrobatics
+      // accumulator does not carry across a reset boundary.
+      this.prevRootQuat = null
+      this.prevSampleAtMs = null
+      this.moveAccum = 0
       this.beginResetCrossfade()
     }
     this.clock.update(buffer)
@@ -705,6 +857,23 @@ export class ArdyMotionSource {
         this.pendingIntentRestore = true
       } else {
         this.restoreIntentPrompt()
+      }
+    }
+
+    // Natural boundary: a triggered reflex holds until the avatar is
+    // grounded and near-upright (a mid-move prompt would hard-cut the move
+    // via the reset chunk) or the defer cap forces it. A watchdog hold
+    // drops the pending reflex — procedural owns the rig.
+    if (this.pendingReflex !== null) {
+      if (this.sanityHold) {
+        this.pendingReflex = null
+      } else if (
+        this.landedSafely() ||
+        this.nowMs() >= this.pendingReflex.deadlineMs
+      ) {
+        const pending = this.pendingReflex
+        this.pendingReflex = null
+        this.fireReflex(pending.variant, pending.blockerLabel)
       }
     }
 
@@ -730,16 +899,45 @@ export class ArdyMotionSource {
     // lean, then joint garbage. Implausible frames never reach the bones;
     // sustained drift releases the pose to ProceduralLocomotion.
     if (pose !== null) {
+      // Acrobatics exemption bookkeeping: the root's own angular speed
+      // between samples feeds a leaky sustained-spin accumulator (fills 1x,
+      // drains 2x — a one-frame sampling spike never qualifies).
+      const sampleAtMs = this.nowMs()
+      if (this.prevRootQuat !== null && this.prevSampleAtMs !== null) {
+        const spinDtS = Math.max(1 / 240, (sampleAtMs - this.prevSampleAtMs) / 1000)
+        const rootSpin = quatAngleRad(this.prevRootQuat, pose.rootQuat) / spinDtS
+        if (rootSpin > ROOT_SPIN_DISCONTINUITY_RAD_S) {
+          // A discontinuity (chunk cut / teleport / static garbage that
+          // starts with a huge jump from the last spin frame) breaks the
+          // sustained-spin story: fail-closed, the exemption does not
+          // carry across it.
+          this.moveAccum = 0
+        } else if (rootSpin > ROOT_SPIN_RAD_S) {
+          this.moveAccum = Math.min(MOVE_ACCUM_S, this.moveAccum + spinDtS)
+        } else {
+          this.moveAccum = Math.max(0, this.moveAccum - 2 * spinDtS)
+        }
+      }
+      this.prevRootQuat = pose.rootQuat
+      this.prevSampleAtMs = sampleAtMs
+
       const leanDeg = quatLeanDeg(pose.rootQuat)
       const emaAlpha = Math.min(1, dt * LEAN_EMA_RATE)
       this.leanEma += (leanDeg - this.leanEma) * emaAlpha
       this.rootYEma += (pose.rootPos[1] - this.rootYEma) * emaAlpha
+      // A fast-spinning root is a flip, not drift: suspend the lean reject
+      // only while the spin is sustained. Root-height bounds always apply.
+      const midFlip = this.moveAccum >= MOVE_ACCUM_S
       if (
-        leanDeg > HARD_LEAN_REJECT_DEG ||
+        (leanDeg > HARD_LEAN_REJECT_DEG && !midFlip) ||
         pose.rootPos[1] < ROOT_Y_REJECT_MIN ||
         pose.rootPos[1] > ROOT_Y_REJECT_MAX
       ) {
         pose = null // hold the last plausible sample
+      } else if (leanDeg < RECOVER_LEAN_DEG) {
+        // Drift never returns to upright on its own; acrobatics land every
+        // cycle. A plausible upright frame proves the lean was a move.
+        this.insaneSinceMs = null
       }
     }
     const drifting = this.leanEma > DRIFT_LEAN_DEG && this.rootYEma > DRIFT_ROOT_Y_MIN
@@ -844,6 +1042,10 @@ export class ArdyMotionSource {
       return false
     }
     this.applySampled(this.lastSample, this.blendWeight)
+    // Bounded self-collision: post-retarget capsule push-out (no-op when
+    // disabled or clean). Runs after the pose write so the retarget keeps
+    // full bone ownership; the correction is capped per frame.
+    this.selfCollision?.correct(dt)
     return true
   }
 
@@ -867,6 +1069,34 @@ export class ArdyMotionSource {
    */
   private restoreIntentPrompt(): void {
     this.client.sendPrompt(this.lastPrompt ?? this.initialPrompt)
+  }
+
+  /** Natural-boundary predicate: the last sampled pose is grounded (all
+   * four foot contacts down) and near-upright — a prompt here crossfades at
+   * a moment the body could plausibly start something new. */
+  private landedSafely(): boolean {
+    return (
+      this.lastSample !== null &&
+      this.lastSample.contacts === this.reflexConfig.SAFE_CONTACTS &&
+      quatLeanDeg(this.lastSample.rootQuat) < this.reflexConfig.SAFE_LAND_LEAN_DEG
+    )
+  }
+
+  /** Fire a triggered reflex: bookkeeping + the reaction prompt itself.
+   * Direct client send: lastPrompt stays the INTENT prompt (restore target
+   * + reconnect re-kick). A disconnect no-ops the send; the reconnect path
+   * re-kicks the intent and the restore is a no-op too. */
+  private fireReflex(variant: ArdyReflexDirection, blockerLabel: string | null): void {
+    this.reflexLastBlockerLabel = blockerLabel
+    this.reflexActive = { variant, restoreAtMs: this.nowMs() + this.reflexConfig.DURATION_MS }
+    this.lastReflexAtMs = this.nowMs()
+    this.reflexCount += 1
+    console.info(
+      `[ardy] nav reflex (${variant}` +
+      (blockerLabel !== null ? `, ${blockerLabel}` : '') +
+      ')',
+    )
+    this.client.sendPrompt(this.reflexConfig.PROMPTS[variant])
   }
 
   /**
@@ -990,6 +1220,10 @@ export class ArdyMotionSource {
         hipsScale = this.retargeter!.hipsScale
       }
       this.jointCount = contract.joint_names.length
+      // Bounded self-collision (capsule push-out): derived per handshake from
+      // the rig's normalized bones; the enabled flag survives reconnects.
+      this.selfCollision = new SelfCollision(vrmLike, this.selfCollisionConfig)
+      this.selfCollision.setEnabled(this.selfCollisionEnabled)
       this.needsAnchor = true
       console.info(
         `[ardy] retargeter ready (path ${path}` +
@@ -1142,6 +1376,7 @@ export class ArdyMotionSource {
       this.rejectAccum += out.residualMagnitude
       if (
         this.reflexActive === null &&
+        this.pendingReflex === null && // a pending reflex keeps its original deadline
         !this.sanityHold &&
         this.rejectAccum >= this.reflexConfig.TRIGGER_ACCUM_M &&
         this.nowMs() - this.lastReflexAtMs >= this.reflexConfig.COOLDOWN_MS
@@ -1151,22 +1386,23 @@ export class ArdyMotionSource {
         // room_boundary → "the wall"). Falls back to the raw id when the
         // navigation has no label mapping (legacy/mock navs).
         const blockerId = this.approval.lastBlockerId
-        this.reflexLastBlockerLabel = blockerId === null
+        const blockerLabel = blockerId === null
           ? null
           : this.approval.labelForBlockerId(blockerId)
-        this.reflexActive = { variant, restoreAtMs: this.nowMs() + this.reflexConfig.DURATION_MS }
-        this.lastReflexAtMs = this.nowMs()
-        this.reflexCount += 1
         this.rejectAccum = 0
-        console.info(
-          `[ardy] nav reflex (${variant}` +
-          (this.reflexLastBlockerLabel !== null ? `, ${this.reflexLastBlockerLabel}` : '') +
-          ')',
-        )
-        // Direct client send: lastPrompt stays the INTENT prompt (restore
-        // target + reconnect re-kick). A disconnect no-ops the send; the
-        // reconnect path re-kicks the intent and the restore is a no-op too.
-        this.client.sendPrompt(this.reflexConfig.PROMPTS[variant])
+        if (this.landedSafely()) {
+          this.fireReflex(variant, blockerLabel)
+        } else {
+          // Mid-move (airborne / tilted): the reaction prompt arrives as a
+          // reset chunk and would hard-cut the move — hold it for the next
+          // grounded frame (or the defer cap) in update().
+          this.pendingReflex = {
+            variant,
+            blockerLabel,
+            deadlineMs: this.nowMs() + this.reflexConfig.DEFER_MAX_MS,
+          }
+          console.info(`[ardy] nav reflex (${variant}) deferred to a natural boundary`)
+        }
       }
     }
 

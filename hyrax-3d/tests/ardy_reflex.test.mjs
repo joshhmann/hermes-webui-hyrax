@@ -142,7 +142,7 @@ function qAxisAngle(axis, rad) {
 const LEAN20 = qAxisAngle([1, 0, 0], (20 * Math.PI) / 180) // drift-zone lean
 const LEAN80 = qAxisAngle([1, 0, 0], (80 * Math.PI) / 180) // hard-reject garbage
 
-function makeChunk({ t0, frameCount, frameSeqStart, fps = 20, rootQuat = QIDENT, rootY = 0.95, walk = [0, 0], reset = false }) {
+function makeChunk({ t0, frameCount, frameSeqStart, fps = 20, rootQuat = QIDENT, rootY = 0.95, walk = [0, 0], reset = false, contactsAll = 0b1111, groundAfterS = null }) {
   const jointCount = JOINT_NAMES.length
   const timestamps = new Float32Array(frameCount)
   const localRots = new Float32Array(frameCount * jointCount * 4)
@@ -158,6 +158,9 @@ function makeChunk({ t0, frameCount, frameSeqStart, fps = 20, rootQuat = QIDENT,
     for (let j = 0; j < jointCount; j += 1) localRots[(i * jointCount + j) * 4] = 1
     // Hips (joint 0, parent -1): its local rotation IS its global rotation.
     localRots.set(rootQuat, (i * jointCount) * 4)
+    // groundAfterS: airborne (no contacts) until s seconds in, then grounded —
+    // a continuous "traveling move lands" segment for the deferral tests.
+    contacts[i] = groundAfterS !== null && t - t0 < groundAfterS ? 0 : contactsAll
   }
   return {
     session_id: 's1',
@@ -227,7 +230,7 @@ test('sustained wall contact: fires ONE front bump, then restores the intent pro
   assert.deepEqual(client.prompts, [IDLE], 'kick-off prompt on handshake')
 
   // 1 m/s straight +z into the z=1.0 wall (spawn z=0.15 → contact ≈0.85 s).
-  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0] }))
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0b1111 }))
   tick(source, nowRef, 4.5) // fire ≈1.05 s, restore at +3 s, still inside cooldown
 
   assert.equal(source.getTelemetry().reflex.count, 1, 'exactly one reflex')
@@ -251,7 +254,7 @@ test('cooldown cadence: grinding re-fires only after COOLDOWN; absorbs continue 
   const source = makeSource(client, rig, nowRef)
   await connectAndBuild(client, source)
 
-  client.buffer.push(makeChunk({ t0: 5, frameCount: 400, frameSeqStart: 0, walk: [0, 1.0] }))
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 400, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0b1111 }))
   tick(source, nowRef, 4.5) // first reflex + restore
   const promptsAfterFirst = client.prompts.length
   const absorbsAfterRestore = source.getTelemetry().navAbsorbCount
@@ -275,7 +278,7 @@ test('direction: lateral contact picks the matching side variant', async () => {
   await connectAndBuild(client, source)
 
   // Facing +z (identity yaw), walking +x: +X is her LEFT (right-handed Y-up).
-  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [1.0, 0] }))
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [1.0, 0], contactsAll: 0b1111 }))
   tick(source, nowRef, 3.0)
   const bumps = client.prompts.filter((p) => BUMP_VARIANTS.includes(p))
   assert.equal(bumps.length, 1)
@@ -290,7 +293,7 @@ test('the pilot wins: a user prompt during a reflex cancels it — no restore qu
   const source = makeSource(client, rig, nowRef)
   await connectAndBuild(client, source)
 
-  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0] }))
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0b1111 }))
   tick(source, nowRef, 2.0) // reflex fired ≈1.05 s, restore due ≈4.05 s
   assert.equal(source.getTelemetry().reflex.active, true)
 
@@ -328,7 +331,7 @@ test('the watchdog wins: garbage during a reflex is still hard-rejected; hold de
   await connectAndBuild(client, source)
 
   // Walk to the wall and fire the reflex (≈1.05 s in).
-  client.buffer.push(makeChunk({ t0: 5, frameCount: 100, frameSeqStart: 0, walk: [0, 1.0] }))
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 100, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0b1111 }))
   tick(source, nowRef, 2.0)
   assert.equal(source.getTelemetry().reflex.active, true)
   assert.equal(source.getTelemetry().reflex.variant, 'front')
@@ -378,7 +381,7 @@ test('no reflex while the watchdog holds the pose', async () => {
 
   // Now the (drifted) stream grinds into the wall: rejection must absorb
   // silently — the watchdog owns the rig, reflexes stay OFF.
-  client.buffer.push(makeChunk({ t0: 15, frameCount: 300, frameSeqStart: 200, rootQuat: LEAN20, walk: [0, 1.0] }))
+  client.buffer.push(makeChunk({ t0: 15, frameCount: 300, frameSeqStart: 200, rootQuat: LEAN20, walk: [0, 1.0], contactsAll: 0b1111 }))
   tick(source, nowRef, 8.0)
   assert.equal(source.getTelemetry().reflex.count, 0, 'no reflex while held')
   assert.equal(client.prompts.filter((p) => BUMP_VARIANTS.includes(p)).length, 0)
@@ -411,7 +414,7 @@ test('manifest labels: room boundary reacts as "the wall", furniture by its labe
       profileFetcher: () => Promise.resolve(null),
     })
     await connectAndBuild(client, source)
-    client.buffer.push(makeChunk({ t0: 5, frameCount: 300, frameSeqStart: 0, walk: [0, -1.0] }))
+    client.buffer.push(makeChunk({ t0: 5, frameCount: 300, frameSeqStart: 0, walk: [0, -1.0], contactsAll: 0b1111 }))
     tick(source, nowRef, 5.5) // contact ≈3.8 s, reflex ≈4.0 s
     assert.equal(source.getTelemetry().reflex.count, 1, 'boundary reflex fired')
     assert.equal(
@@ -445,7 +448,7 @@ test('manifest labels: room boundary reacts as "the wall", furniture by its labe
     })
     await connectAndBuild(client, source)
     assert.equal(source.getTelemetry().reflex.lastBlockerLabel, null, 'no contact yet')
-    client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0] }))
+    client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0b1111 }))
     tick(source, nowRef, 1.5) // contact ≈0.27 s, reflex ≈0.5 s
     assert.equal(source.getTelemetry().reflex.count, 1, 'furniture reflex fired')
     assert.equal(
@@ -455,4 +458,144 @@ test('manifest labels: room boundary reacts as "the wall", furniture by its labe
     )
     source.dispose()
   }
+})
+
+test('natural boundary: an airborne trigger defers; the prompt fires at the first grounded frame', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = new ArdyMotionSource({
+    rig,
+    navigation: CLAMP_NAV,
+    url: 'ws://test.invalid/ws',
+    clientFactory: (callbacks) => { client.callbacks = callbacks; return client },
+    vrmLikeFactory: () => makeFakeVrm(),
+    autoConnect: true,
+    nowMs: () => nowRef.now,
+    profileFetcher: () => Promise.resolve(null),
+    // Long defer cap so the grounded frame, not the cap, wins the race.
+    reflex: { DEFER_MAX_MS: 20000 },
+  })
+  await connectAndBuild(client, source)
+
+  // Airborne grind: 1 m/s +z into the z=1.0 wall, feet off the ground for
+  // the first 6 s (a traveling move mid-flight), then the move LANDS. The
+  // reflex triggers ≈1.05 s — but the reaction prompt is a reset chunk:
+  // fired mid-flight it would hard-cut the move.
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 400, frameSeqStart: 0, walk: [0, 1.0], groundAfterS: 6 }))
+  tick(source, nowRef, 2.0)
+  assert.equal(source.getTelemetry().reflex.count, 0, 'airborne: the reflex defers instead of cutting the move')
+  assert.equal(client.prompts.filter((p) => BUMP_VARIANTS.includes(p)).length, 0)
+
+  // The next sampled grounded frame (t = 11) is the natural cut point —
+  // the reflex fires there, well before the (overridden) defer cap.
+  tick(source, nowRef, 4.5)
+  assert.equal(source.getTelemetry().reflex.count, 1, 'fired at the first grounded frame')
+  assert.equal(client.prompts.filter((p) => BUMP_VARIANTS.includes(p))[0], ARDY_REFLEX.PROMPTS.front)
+  source.dispose()
+})
+
+test('natural boundary: the defer cap bounds responsiveness — never grounded fires at DEFER_MAX_MS', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 400, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0 }))
+  tick(source, nowRef, 1.6) // trigger ≈1.05 s, deadline ≈2.05 s — not yet
+  assert.equal(source.getTelemetry().reflex.count, 0, 'still deferred inside the cap')
+  tick(source, nowRef, 0.6) // past the 1 s defer cap
+  assert.equal(source.getTelemetry().reflex.count, 1, 'the cap forces the prompt (responsiveness bound)')
+  assert.equal(client.prompts.filter((p) => BUMP_VARIANTS.includes(p)).length, 1)
+  // Sustained airborne grinding must NOT extend the cap: the pending
+  // reflex kept its original deadline (already fired above).
+  tick(source, nowRef, 3.5) // restore deadline passes
+  assert.deepEqual(
+    client.prompts.filter((p) => p === IDLE || BUMP_VARIANTS.includes(p)),
+    [IDLE, ARDY_REFLEX.PROMPTS.front, IDLE],
+    'reaction fires once at the cap, then the intent restores',
+  )
+  source.dispose()
+})
+
+test('the pilot wins over a PENDING reflex: a user prompt cancels the deferral', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 400, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0 }))
+  tick(source, nowRef, 1.6) // triggered, deferred (airborne)
+  assert.equal(source.getTelemetry().reflex.count, 0)
+
+  source.setPrompt('a person waves their right hand')
+  // The service answers the wave with a fresh (reset) idle generation —
+  // the grind is over, nothing may re-trigger or fire the cancelled reflex.
+  client.buffer.push(makeChunk({ t0: 15, frameCount: 200, frameSeqStart: 400, reset: true }))
+  tick(source, nowRef, 2.0) // well past the defer cap — nothing may fire
+  assert.equal(source.getTelemetry().reflex.count, 0, 'pending reflex cancelled by the pilot')
+  assert.equal(client.prompts.filter((p) => BUMP_VARIANTS.includes(p)).length, 0)
+  assert.equal(client.prompts.at(-1), 'a person waves their right hand')
+  source.dispose()
+})
+
+// ── Goal-planner prompt channel contract (spatial layer 3b) ─────────
+// The planner's sendPlannerPrompt is the reflex layer's priority model
+// EXTENDED, not forked: planner prompts must never cancel an active reflex
+// and never clear a watchdog hold (reflex > planner, watchdog > planner),
+// they update the intent prompt (so a reflex restore re-issues the
+// planner's segment — resume for free), and only setPrompt (user/shuffle)
+// bumps lastUserPromptAtMs — the planner's cancel signal.
+
+test('planner prompt during a reflex: reflex survives, restore re-issues the planner segment', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, walk: [0, 1.0], contactsAll: 0b1111 }))
+  // Reflex trigger ≈1.05 s; all four foot contacts down + upright → the
+  // natural-boundary deferral passes immediately (no deferral window).
+  tick(source, nowRef, 2.0)
+  assert.equal(source.getTelemetry().reflex.active, true)
+
+  // A planner segment prompt lands mid-reaction.
+  source.sendPlannerPrompt('a person walks forward with steady steps')
+  assert.equal(source.getTelemetry().reflex.active, true, 'reflex > planner: reaction survives')
+  assert.equal(client.prompts.at(-1), 'a person walks forward with steady steps')
+  // The planner prompt did NOT touch the user-prompt timestamp.
+  assert.equal(source.lastUserPromptAtMs(), -Infinity)
+
+  // Restore deadline passes: the INTENT (now the planner's segment) returns.
+  tick(source, nowRef, 3.0)
+  assert.equal(source.getTelemetry().reflex.active, false)
+  assert.equal(client.prompts.at(-1), 'a person walks forward with steady steps', 'restore re-issues the planner segment')
+  source.dispose()
+})
+
+test('planner prompt during a watchdog hold: hold survives; only setPrompt bumps the user timestamp', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  // Drift-zone lean engages the watchdog (hold ≈2.6 s in).
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 200, frameSeqStart: 0, rootQuat: LEAN20 }))
+  tick(source, nowRef, 5.0)
+  assert.equal(source.state, 'stale')
+  assert.equal(source.isWatchdogHolding(), true)
+
+  // A planner prompt must NOT reclaim the pose from the watchdog.
+  source.sendPlannerPrompt('a person walks forward')
+  assert.equal(source.isWatchdogHolding(), true, 'watchdog > planner: hold survives')
+  assert.equal(source.lastUserPromptAtMs(), -Infinity, 'planner prompts never bump the user timestamp')
+
+  // The user path still wins over everything and IS the cancel signal.
+  source.setPrompt('a person waves their right hand')
+  assert.equal(source.lastUserPromptAtMs(), nowRef.now, 'setPrompt bumps the user timestamp')
+  source.dispose()
 })
