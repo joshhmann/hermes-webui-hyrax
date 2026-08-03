@@ -203,6 +203,48 @@
           "basis": "balance must not reset the stream"
         }
       ]
+    },
+    {
+      "id": "self-contact",
+      "level": 2,
+      "category": "self-collision",
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "prompts": [
+        [
+          "a person hugs herself tightly",
+          12
+        ],
+        [
+          "a person crosses her arms tightly",
+          12
+        ]
+      ],
+      "assertions": [
+        {
+          "metric": "selfCollisionMedianPenM",
+          "op": "<=",
+          "pass": 0.035,
+          "partial": 0.06,
+          "basis": "median of 1 s telemetry penetration peaks separates corrected from raw: corrected ~10-30 mm vs raw 40-60 mm (A/B 2026-08-02). Peak is evidence-only: budget-limited residual bursts (by design) overlap the raw distribution (61-107 mm vs 68-90+ mm)."
+        },
+        {
+          "metric": "selfCollisionCorrections",
+          "op": ">=",
+          "pass": 1,
+          "basis": "the pass must actually engage on self-contact prompts (34-42 corr/s measured on hug/cross)"
+        },
+        {
+          "metric": "livePct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 80,
+          "basis": "stream stays live through corrections"
+        }
+      ]
     }
   ]
 }

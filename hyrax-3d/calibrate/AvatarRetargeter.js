@@ -16,6 +16,27 @@
 
 import * as THREE from 'three'
 
+/**
+ * Ground-contact measurement map (bit order per ARDY_OUTPUT_CONTRACT §2.12:
+ * L-heel | L-toe | R-heel | R-toe). Heel contact reads the ankle bone; toe
+ * contact reads the toe joint with the ankle as fallback for rigs without
+ * toe bones.
+ */
+const GROUND_CONTACT_BONES = [
+  [['leftFoot'], 0],
+  [['leftToes', 'leftFoot'], 1],
+  [['rightFoot'], 2],
+  [['rightToes', 'rightFoot'], 3],
+]
+
+/**
+ * Plausibility gate for contact bits: a "contact" whose silhouette reads
+ * more than this far ABOVE the floor is garbage (bad contact data, airborne
+ * pose) and the lowpass is not updated. 0.15 m — crouches and sit/lie poses
+ * with feet planted read ≈0 and pass.
+ */
+const MAX_CONTACT_FLOAT_M = 0.15
+
 export class AvatarRetargeter {
   /**
    * @param {VRM} vrm  Loaded VRM 1.0 model (must have humanoid)
@@ -40,6 +61,7 @@ export class AvatarRetargeter {
     /** @private */ this.hipsScale = 1.0
     /** @private */ this.hipsNode = null
     /** @private */ this._groundCorr = 0
+    /** @private */ this._restFootY = {}
   }
 
   /**
@@ -93,6 +115,19 @@ export class AvatarRetargeter {
     this.hipsNode = this.vrm.humanoid.getNormalizedBoneNode('hips')
     const hipsWorldY = this.hipsNode.getWorldPosition(new THREE.Vector3()).y
     this.hipsScale = hipsWorldY / this.srcHipsHeight
+
+    // Rest silhouette heights for the ground-contact correction: world Y of
+    // each foot bone at the normalized rest pose (feet flat on y=0). The
+    // correction plants the SOLE (bone Y − rest Y → groundY), not the bone
+    // origin — the ankle sits ~5 cm above the sole, the toe joint ~at it.
+    // Same precondition as hipsScale: the rig is at its normalized rest when
+    // setMotion runs (all construction paths reset it first).
+    this.vrm.scene.updateMatrixWorld(true)
+    this._restFootY = {}
+    for (const bone of ['leftFoot', 'rightFoot', 'leftToes', 'rightToes']) {
+      const node = this.vrm.humanoid.getNormalizedBoneNode(bone)
+      if (node) this._restFootY[bone] = node.getWorldPosition(new THREE.Vector3()).y
+    }
 
     // Reset per-chunk state
     this._groundCorr = 0
@@ -175,20 +210,44 @@ export class AvatarRetargeter {
       snapshot.hipsPos.copy(this.hipsNode.position)
     }
 
-    // Ground contact
+    // Ground contact: plant the LOWEST silhouette point of each contacting
+    // foot on groundY. Silhouette = raw bone Y − rest bone Y (measured at
+    // the normalized rest pose in setMotion): the sole reaches the floor,
+    // not the bone origin. Each contact bit checks the bones that actually
+    // touch (heel bit → ankle; toe bit → toe joint with ankle fallback) —
+    // toe bones included so a pointed toe can't slide under the floor while
+    // the ankle reads fine.
+    // RAW pose measurement: with writeHipsPosition:false (the loft's live
+    // path, where RootMotionAdapter owns the hips) the hips still carry
+    // LAST frame's correction at measurement time, so it is subtracted to
+    // recover the raw pose — without that the lowpass fixed point halves
+    // the correction (the documented ~2× undershoot, live-path only). With
+    // writeHipsPosition:true (debug page) the hips were just rewritten to
+    // the uncorrected pose above, so the measurement is already raw.
+    // The float gate skips garbage contact bits: a "contact" reading far
+    // above the floor is ignored
+    // (crouches/sit/lie read ~0 and pass; airborne feet are left alone).
     if (this.motion.contacts) {
       this.vrm.scene.updateMatrixWorld(true)
-      let minY = Infinity
+      // Deepest penetration drives: err = groundY − min(silhouette). Since
+      // groundY − s decreases with s, that is the MAX of per-bone errors.
+      let err = -Infinity
       const c = this.motion.contacts[frame]
-      for (const [foot, ci] of [['leftFoot', 1], ['rightFoot', 3]]) {
+      for (const [bones, ci] of GROUND_CONTACT_BONES) {
         if (c[ci] > 0.5) {
-          const y = this.vrm.humanoid.getNormalizedBoneNode(foot).getWorldPosition(new THREE.Vector3()).y
-          minY = Math.min(minY, y)
+          for (const bone of bones) {
+            const node = this.vrm.humanoid.getNormalizedBoneNode(bone)
+            if (!node) continue
+            const rawY = node.getWorldPosition(new THREE.Vector3()).y -
+              (writeHipsPosition ? 0 : this._groundCorr)
+            err = Math.max(err, groundY - (rawY - (this._restFootY[bone] ?? 0)))
+          }
         }
       }
-      if (isFinite(minY)) {
-        const err = groundY - minY
-        this._groundCorr += (err - this._groundCorr) * contactSmoothing
+      if (isFinite(err)) {
+        if (err > -MAX_CONTACT_FLOAT_M) {
+          this._groundCorr += (err - this._groundCorr) * contactSmoothing
+        }
         if (writeHipsPosition) this.hipsNode.position.y += this._groundCorr
       }
     }
