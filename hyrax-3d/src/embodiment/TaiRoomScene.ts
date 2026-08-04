@@ -31,7 +31,7 @@ import {
   type ProceduralTuning,
 } from './locomotion/ProceduralLocomotion'
 import { ArdyMotionSource, type ArdyMotionState, type ArdyTelemetry } from './motion/ArdyMotionSource'
-import { GoalPlanner, type GoalPlannerPolicy, type GoalPlannerTelemetry } from './planning/GoalPlanner'
+import { GoalPlanner, type EssenceStateSnapshot, type GoalPlannerPolicy, type GoalPlannerTelemetry } from './planning/GoalPlanner'
 import type { SelfCollisionTargetReport } from './collision/SelfCollision.ts'
 import { RoomNavigation } from './navigation/RoomNavigation'
 import { AvatarRig } from './rig/AvatarRig'
@@ -45,6 +45,47 @@ export type MotionPreview = 'idle' | 'crouch' | 'kick-left' | 'kick-right' | 'ba
 
 /** Avatar footprint radius (m) — geometry, not room data; added to manifest obstacle padding. */
 const LOFT_ACTOR_RADIUS = 0.22
+
+/** Presence poll cadence (ms) — the essence driver's state source cadence
+ * (ESSENCE_GOALS_SPEC.md: "polls it on the presence cadence (~30s)"). */
+const PRESENCE_POLL_MS = 30_000
+
+/** Essence driver options for the tai loft (spatial layer 4). */
+export interface TaiRoomEssenceOptions {
+  /** The operator whose presence drives her goals (tai for the tai-loft; the
+   * mechanism is operator-generic — presence items carry operatorId). */
+  operator?: string
+}
+
+/** Minimal shape of one /api/hyrax/presence item (the fields the essence
+ * driver consumes; anything else is ignored, fail-closed). */
+interface PresenceItem {
+  operatorId?: string
+  activity?: { type?: string }
+  derivedState?: {
+    fresh?: boolean
+    mood?: string | null
+    energy?: number | null
+    focus?: number | null
+    stress?: number | null
+    sociability?: number | null
+  }
+}
+
+/** Map a presence item to the planner's EssenceStateSnapshot. Missing fields
+ * become null (the driver's clauses fail closed on them). */
+function presenceItemToEssenceState(item: PresenceItem): EssenceStateSnapshot {
+  const ds = item.derivedState ?? {}
+  return {
+    fresh: ds.fresh === true,
+    mood: typeof ds.mood === 'string' ? ds.mood : null,
+    energy: typeof ds.energy === 'number' ? ds.energy : null,
+    focus: typeof ds.focus === 'number' ? ds.focus : null,
+    stress: typeof ds.stress === 'number' ? ds.stress : null,
+    sociability: typeof ds.sociability === 'number' ? ds.sociability : null,
+    activity: typeof item.activity?.type === 'string' ? item.activity.type : null,
+  }
+}
 
 export type RigDiagnosticSnapshot = {
   capturedAt: string
@@ -94,6 +135,15 @@ export class TaiRoomScene {
   private destroyed = false
   private reducedMotion = false
   private readonly contextAbort = new AbortController()
+  /** Essence driver: the operator whose presence drives her goals. */
+  private readonly operatorId: string
+  /** Essence driver: latest polled snapshot (fail-closed null on any fetch
+   * problem — no state → no essence goals → ambient deck path unchanged). */
+  private lastEssenceSnapshot: EssenceStateSnapshot | null = null
+  /** Essence driver: test-only presence override (spec AC "test-only presence
+   * override"); while set, the driver reads THIS instead of the poll. */
+  private essenceOverride: EssenceStateSnapshot | null = null
+  private presenceTimer: number | null = null
   private cameraMode: CameraMode = 'room'
   private motionPreview: MotionPreview = 'idle'
   private motionPreviewStartedAt = 0
@@ -110,10 +160,14 @@ export class TaiRoomScene {
      * Production mounts omit it; all policy defaults stay in GOAL_PLANNER.
      */
     private readonly plannerPolicy: Partial<GoalPlannerPolicy> = {},
+    /** Essence driver options (spatial layer 4): which operator's presence
+     * drives her goals. */
+    private readonly essenceOptions: TaiRoomEssenceOptions = {},
   ) {
     // Collision is data now (SCENE_MANIFEST_SPEC.md): bounds + obstacles
     // come from the manifest. LOFT_ACTOR_RADIUS is avatar geometry, not
     // room data, so it stays here (matches the pre-manifest 0.22).
+    this.operatorId = this.essenceOptions.operator ?? 'tai'
     this.navigation = RoomNavigation.fromManifest(manifest, LOFT_ACTOR_RADIUS)
     this.scene.background = new Color('#0c1220')
     this.scene.fog = new FogExp2('#080c14', 0.018)
@@ -182,13 +236,16 @@ export class TaiRoomScene {
     // Goal planner (spatial layer 3b): intents → motion sequences. The
     // source satisfies PlannerPromptChannel structurally; the probe reads
     // the ACTUAL rendered root (never dead-reckon). Ambient idle driver is
-    // the lowest-priority prompt owner.
+    // the lowest-priority prompt owner; the essence driver (spatial layer 4)
+    // reads the operator's presence-derived state through the provider
+    // (override ?? last polled snapshot).
     if (this.ardySource) {
       this.planner = new GoalPlanner({
         navigation: this.navigation,
         manifest: this.manifest,
         channel: this.ardySource,
         policy: this.plannerPolicy,
+        essenceState: () => this.essenceOverride ?? this.lastEssenceSnapshot,
         probe: () => {
           const rig = this.rig
           return rig
@@ -200,6 +257,7 @@ export class TaiRoomScene {
     this.face.applyIntent({ face: { expression: 'relaxed', intensity: 0.25, talking: false } })
     this.resize()
     this.setCameraMode('room')
+    this.startEssencePoller()
     this.animate()
   }
 
@@ -260,6 +318,44 @@ export class TaiRoomScene {
    * (e.g. "desk.work"). Returns false when the interaction is unknown. */
   setGoal(interactionId: string): boolean {
     return this.planner?.setGoal(interactionId) ?? false
+  }
+
+  // ── essence driver (spatial layer 4) ─────────────────────────────
+
+  /** Start the presence poll (spec: ~30s cadence) feeding the planner's
+   * essence driver. Fail-closed: any fetch problem drops the snapshot — no
+   * state → no essence goals → the ambient deck path stays exactly as before. */
+  private startEssencePoller(): void {
+    void this.pollEssencePresence()
+    this.presenceTimer = window.setInterval(() => void this.pollEssencePresence(), PRESENCE_POLL_MS)
+  }
+
+  private async pollEssencePresence(): Promise<void> {
+    try {
+      const response = await fetch('/api/hyrax/presence', { signal: this.contextAbort.signal })
+      if (!response.ok) {
+        this.lastEssenceSnapshot = null
+        return
+      }
+      const body = (await response.json()) as { items?: PresenceItem[] }
+      const item = (body.items ?? []).find((p) => p.operatorId === this.operatorId) ?? null
+      this.lastEssenceSnapshot = item === null ? null : presenceItemToEssenceState(item)
+    } catch {
+      this.lastEssenceSnapshot = null
+    }
+  }
+
+  /** Test/dev seam (spec AC: "a test-only presence override"): while set, the
+   * planner's essence driver reads THIS snapshot instead of the presence
+   * poll. Pass null to clear. Used by the GEVS level-4 check and the
+   * seeded-state live run. */
+  setEssenceOverride(state: EssenceStateSnapshot | null): void {
+    this.essenceOverride = state
+  }
+
+  /** The snapshot the essence driver currently reads (override ?? polled). */
+  getEssenceState(): EssenceStateSnapshot | null {
+    return this.essenceOverride ?? this.lastEssenceSnapshot
   }
 
   /** Cancel the active goal (journaled). No-op when idle. */
@@ -410,7 +506,11 @@ export class TaiRoomScene {
     if (this.destroyed) return
     this.destroyed = true
 
-    // Stop animation loop
+    // Stop the presence poll (essence driver source) and animation loop
+    if (this.presenceTimer !== null) {
+      window.clearInterval(this.presenceTimer)
+      this.presenceTimer = null
+    }
     cancelAnimationFrame(this.frame)
 
     // Disconnect observers

@@ -1,0 +1,83 @@
+{
+  "name": "GEVS Level 4 — essence-driven goals (spatial layer 4)",
+  "description": "essence-daybed-nap: seed the operator's derived state (energy 0.2 via the test-only presence override __ardy.setEssenceState) → the essence driver fires daybed.nap on its poll cadence; planner.goalSource shows {kind:'essence', rule:'energy-low', state snapshot} so the 'she lay down because energy 0.24' story is legible in telemetry + the prompt log. The goal then executes through the normal planner (arrival within tolerance + the manifest nap interaction prompt). Rule matching/cooldown/hysteresis/priority are unit-tested; this check proves the LIVE loop: state in → the body follows. The override is cleared after the check so later checks see the real presence.",
+  "checks": [
+    {
+      "id": "essence-daybed-nap",
+      "level": 4,
+      "category": "essence",
+      "essenceSeed": {
+        "fresh": true,
+        "energy": 0.2,
+        "focus": 0.5,
+        "stress": 0.3,
+        "sociability": 0.3,
+        "mood": "tired",
+        "activity": "idle"
+      },
+      "recenter": [0, 0.15],
+      "settleS": 3,
+      "goalTimeoutS": 120,
+      "interactionPromptContains": "lies down on a daybed",
+      "assertions": [
+        {
+          "metric": "essenceGoalSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the essence driver must fire from the seeded state (planner.goalSource.kind == 'essence')"
+        },
+        {
+          "metric": "essenceRule",
+          "op": "==",
+          "pass": "energy-low",
+          "basis": "energy 0.2 < 0.30 → rule energy-low (the spec's first drive rule)"
+        },
+        {
+          "metric": "essenceStateEnergy",
+          "op": "==",
+          "pass": 0.2,
+          "basis": "goalSource.state must carry the snapshot that matched (the legible 'because energy 0.2')"
+        },
+        {
+          "metric": "goalCompleted",
+          "op": "==",
+          "pass": 1,
+          "basis": "the essence goal must reach the interact/done phase (telemetry phase at the first interact sample)"
+        },
+        {
+          "metric": "arrivalM",
+          "op": "<=",
+          "pass": 0.45,
+          "partial": 0.6,
+          "basis": "spec ARRIVE_TOLERANCE_M 0.35 against the RESOLVED daybed standing point, +0.1 m 2 Hz sampling slack"
+        },
+        {
+          "metric": "interactionSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the manifest nap prompt ('a person lies down on a daybed') must appear in the planner prompt log"
+        },
+        {
+          "metric": "gateHoldSamples",
+          "op": "<=",
+          "pass": 0,
+          "basis": "no drift-watchdog gate trips during the goal"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "partial": 1,
+          "basis": "no residual-clamp stream resets beyond the expected prompt transitions"
+        },
+        {
+          "metric": "livePct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 80,
+          "basis": "stream stays live through the driver-fired turn/walk/arrive/interact"
+        }
+      ]
+    }
+  ]
+}

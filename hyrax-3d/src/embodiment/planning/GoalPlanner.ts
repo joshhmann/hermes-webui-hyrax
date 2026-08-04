@@ -47,7 +47,7 @@ import type { SceneInteraction, SceneManifest } from '../room/sceneManifest'
 export type PlannerSegmentKind = 'walk' | 'turn' | 'arrive'
 export type PlannerPromptKind = PlannerSegmentKind | 'interact'
 export type PlannerPhase = 'planning' | 'turn' | 'walk' | 'arrive' | 'face' | 'interact' | 'done'
-export type PlannerGoalSource = 'debug' | 'ambient'
+export type PlannerGoalSource = 'debug' | 'ambient' | 'essence'
 
 /** Prompt variants per segment kind. Turn templates take {dir}/{deg} slots. */
 export interface PlannerVariants {
@@ -60,6 +60,59 @@ export interface AmbientDeckEntry {
   goal: string
   weight: number
   cooldownS: number
+}
+
+/**
+ * Live derived state snapshot the essence driver consumes (spatial layer 4).
+ * The loft polls /api/hyrax/presence on the presence cadence (~30s) and maps
+ * the operator's derivedState block + activity into this shape. `fresh` is the
+ * server's freshness flag (<120s since essenced wrote derived_state.json) —
+ * only fresh state may drive goals.
+ */
+export interface EssenceStateSnapshot {
+  fresh: boolean
+  energy: number | null
+  focus: number | null
+  stress: number | null
+  sociability: number | null
+  mood: string | null
+  /** Presence activity.type ('idle' | 'conversing' | 'tool-working' | ...). */
+  activity: string | null
+}
+
+export type EssenceDriveField = 'energy' | 'focus' | 'stress' | 'sociability' | 'activity'
+export type EssenceDriveOp = '<' | '<=' | '>' | '>=' | 'eq'
+
+/** One AND-ed condition on the state snapshot (rules are DATA, not code). */
+export interface EssenceDriveClause {
+  field: EssenceDriveField
+  op: EssenceDriveOp
+  value: number | string
+}
+
+export interface EssenceDriveRule {
+  /** Journaled rule id (telemetry goalSource.rule — the legible "why"). */
+  rule: string
+  /** Manifest interaction id (<object>.<interaction>; fail-closed when
+   * unresolved — never crash, never execute, same discipline as the deck). */
+  goal: string
+  /** AND-ed clauses; a missing (null) state field fails the clause. */
+  when: readonly EssenceDriveClause[]
+  /** Per-goal cooldown (s): a goal the driver fired won't re-fire sooner. */
+  cooldownS: number
+  /** Hysteresis (s): a new essence rule can't fire until this long after the
+   * last essence goal STARTED — a fast fail/cancel can't immediately re-fire
+   * a different goal, so a mid-goal state flip never ping-pongs. */
+  minDwellS: number
+}
+
+/** The legible cause of an essence-driven goal ("she lay down because energy
+ * 0.24"): telemetry planner.goalSource. */
+export interface PlannerGoalSourceTelemetry {
+  kind: 'essence'
+  rule: string
+  /** The state snapshot that matched (frozen at fire time). */
+  state: EssenceStateSnapshot
 }
 
 /**
@@ -153,6 +206,17 @@ export interface GoalPlannerPolicy {
   AMBIENT_AFTER_S: number
   /** Ambient deck (data): weighted goals with per-goal cooldowns. */
   AMBIENT_DECK: readonly AmbientDeckEntry[]
+  /** Essence driver: re-evaluate the drive rules at most this often (s) —
+   * the presence cadence the loft polls derived state on (~30s). */
+  ESSENCE_POLL_S: number
+  /** Essence driver: quiet window after a USER prompt before the driver may
+   * fire (s) — user intent outranks the driver (priority model). */
+  ESSENCE_USER_QUIET_S: number
+  /** Drive rules (data, ordered first-match — mirrors the essence thresholds;
+   * thresholds are reviewed data, changed by humans, never self-tuned). The
+   * driver REPLACES the static ambient deck as the lowest tier: unmatched
+   * rules fall through to the deck exactly as before. */
+  ESSENCE_DRIVE_RULES: readonly EssenceDriveRule[]
   /** Segment prompt variants (data; rotated seeded by goal id). */
   PROMPTS: PlannerVariants
 }
@@ -193,6 +257,52 @@ export const GOAL_PLANNER: GoalPlannerPolicy = {
     { goal: 'daybed.nap', weight: 1, cooldownS: 180 },
     { goal: 'couch.sit', weight: 2, cooldownS: 150 },
     { goal: 'desk.work', weight: 2, cooldownS: 150 },
+  ],
+  // Essence driver (spatial layer 4): the body follows the state. Rules are
+  // ordered, first match wins; each goal carries a per-goal cooldown and a
+  // min-dwell hysteresis (no ping-pong on state flips). Data mirrors the
+  // thresholds essenced derives (ESSENCE_GOALS_SPEC.md) — reviewed, human-
+  // edited, never self-tuned. NOTE: `stress-high → window.look` references an
+  // interaction the tai-loft manifest does not have YET — it resolves
+  // fail-closed (skipped) until the manifest grows a window; the rule stays
+  // as the spec's reviewed data.
+  ESSENCE_POLL_S: 30,
+  ESSENCE_USER_QUIET_S: 30,
+  ESSENCE_DRIVE_RULES: [
+    {
+      rule: 'energy-low',
+      goal: 'daybed.nap',
+      when: [{ field: 'energy', op: '<', value: 0.3 }],
+      cooldownS: 600,
+      minDwellS: 45,
+    },
+    {
+      rule: 'energy-focus',
+      goal: 'desk.work',
+      when: [
+        { field: 'energy', op: '>', value: 0.7 },
+        { field: 'focus', op: '>', value: 0.6 },
+      ],
+      cooldownS: 600,
+      minDwellS: 45,
+    },
+    {
+      rule: 'stress-high',
+      goal: 'window.look',
+      when: [{ field: 'stress', op: '>', value: 0.65 }],
+      cooldownS: 600,
+      minDwellS: 45,
+    },
+    {
+      rule: 'sociable-idle',
+      goal: 'couch.sit',
+      when: [
+        { field: 'sociability', op: '>', value: 0.6 },
+        { field: 'activity', op: 'eq', value: 'idle' },
+      ],
+      cooldownS: 600,
+      minDwellS: 45,
+    },
   ],
   PROMPTS: {
     walk: [
@@ -266,6 +376,10 @@ export interface GoalPlannerTelemetry {
   /** Every prompt the planner sent (capped; proof for the GEVS prompt log). */
   promptLog: readonly PlannerPromptLogEntry[]
   ambient: { lastGoal: string | null; lastGoalAtMs: number | null }
+  /** The legible cause of the current/last essence-driven goal — the "she lay
+   * down because energy 0.24" story. Set when an essence goal fires, retained
+   * until a non-essence goal starts (null then, and while nothing fired). */
+  goalSource: PlannerGoalSourceTelemetry | null
 }
 
 export interface GoalPlannerOptions {
@@ -278,6 +392,10 @@ export interface GoalPlannerOptions {
   nowMs?: () => number
   /** RNG override (tests — ambient deck picks). */
   random?: () => number
+  /** Essence state provider (spatial layer 4): the loft's presence poll cache
+   * (operator derivedState + activity). null when unavailable → the driver
+   * stays quiet and the ambient deck path is unchanged. */
+  essenceState?: () => EssenceStateSnapshot | null
   /** Policy override (tests — deterministic timing). */
   policy?: Partial<GoalPlannerPolicy>
 }
@@ -348,6 +466,11 @@ function distanceXZ(ax: number, az: number, bx: number, bz: number): number {
   return Math.hypot(bx - ax, bz - az)
 }
 
+/** Telemetry/log formatting for a possibly-missing state score. */
+function fmtScore(v: number | null): string {
+  return v === null ? '?' : v.toFixed(2)
+}
+
 export class GoalPlanner {
   private readonly navigation: RoomNavigation
   private readonly manifest: SceneManifest
@@ -355,6 +478,7 @@ export class GoalPlanner {
   private readonly probe: () => PlannerRootProbe
   private readonly nowMs: () => number
   private readonly random: () => number
+  private readonly essenceState: () => EssenceStateSnapshot | null
   private readonly policy: GoalPlannerPolicy
 
   private goal: ActiveGoal | null = null
@@ -364,6 +488,16 @@ export class GoalPlanner {
   private readonly promptLog: PlannerPromptLogEntry[] = []
   private lastActivityMs: number
   private readonly ambientLastPickedAt = new Map<string, number>()
+  /** Essence driver: wall clock of the last drive-rule evaluation (poll gate
+   * at ESSENCE_POLL_S — state is re-read on the presence cadence). */
+  private lastEssencePollMs = -Infinity
+  /** Essence driver: per-goal cooldown clock (goal id → last fire). */
+  private readonly essenceLastFiredAt = new Map<string, number>()
+  /** Essence driver: min-dwell hysteresis anchor — wall clock when the last
+   * essence goal STARTED (a new rule waits minDwellS from here). */
+  private essenceLastStartedAtMs = -Infinity
+  /** The legible "why" of the current/last essence goal (telemetry). */
+  private goalSource: PlannerGoalSourceTelemetry | null = null
   /** Wrap-aware EMA of the measured root yaw (policy at YAW_EMA_TAU_S) —
    * every steering/facing decision reads this, never the single-sample yaw
    * (the live root wobbles ±70° around its settled heading mid/after turns). */
@@ -376,6 +510,7 @@ export class GoalPlanner {
     this.probe = options.probe
     this.nowMs = options.nowMs ?? (() => performance.now())
     this.random = options.random ?? (() => Math.random())
+    this.essenceState = options.essenceState ?? (() => null)
     this.policy = { ...GOAL_PLANNER, ...options.policy }
     this.lastActivityMs = this.nowMs()
   }
@@ -435,6 +570,10 @@ export class GoalPlanner {
         this.policy.ARRIVE_TOLERANCE_M + this.policy.ARRIVE_LEAD_MAX_M,
     }
     this.lastActivityMs = this.nowMs()
+    // A non-essence goal replaces the story (the driver's cause no longer
+    // describes what she is doing). Essence-sourced goals set it themselves
+    // after a successful start (see maybeStartEssence).
+    if (source !== 'essence') this.goalSource = null
     console.info(
       `[planner] goal ${interactionId} (${source}) — path ${path.length} waypoint(s), ` +
       `target (${target.x.toFixed(2)}, ${target.z.toFixed(2)})`,
@@ -478,6 +617,10 @@ export class GoalPlanner {
         lastGoal: [...this.ambientLastPickedAt.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
         lastGoalAtMs: [...this.ambientLastPickedAt.values()].sort((a, b) => b - a)[0] ?? null,
       },
+      goalSource:
+        this.goalSource === null
+          ? null
+          : { kind: 'essence', rule: this.goalSource.rule, state: { ...this.goalSource.state } },
     }
   }
 
@@ -494,6 +637,10 @@ export class GoalPlanner {
       this.yawEma = wrapAngle(this.yawEma + alpha * wrapAngle(probe.yaw - this.yawEma))
     }
     if (this.goal === null) {
+      // Lowest tier: the essence driver (live derived state) replaces the
+      // static deck as the goal source; the deck remains the no-rule-match
+      // fallback, exactly as before.
+      this.maybeStartEssence(now)
       this.maybeStartAmbient(now)
       return
     }
@@ -1055,6 +1202,91 @@ export class GoalPlanner {
   }
 
   // ── ambient idle driver ────────────────────────────────────────────
+
+  /**
+   * Essence idle driver (spatial layer 4) — the body follows the state.
+   * Polls the state provider on the presence cadence (ESSENCE_POLL_S); when
+   * nothing else owns the prompt (priority model: watchdog > user > reflex >
+   * planner > essence-driver) and an ordered drive rule matches, starts the
+   * goal and journals WHY (goalSource: rule + state snapshot). Only fresh
+   * state drives goals; unmatched rules fall through to the ambient deck
+   * exactly as before. No threshold tuning, no whims, no new interaction
+   * points — the manifest vocabulary is the only goal space.
+   */
+  private maybeStartEssence(now: number): void {
+    // Poll gate: the state provider is re-read on the presence cadence, not
+    // every frame.
+    if (now - this.lastEssencePollMs < this.policy.ESSENCE_POLL_S * 1000) return
+    this.lastEssencePollMs = now
+    // Only fires when nothing else owns the prompt.
+    if (this.channel.isReflexActive() || this.channel.isWatchdogHolding()) return
+    // User intent outranks the driver: a recent user prompt silences it.
+    if (now - this.channel.lastUserPromptAtMs() < this.policy.ESSENCE_USER_QUIET_S * 1000) return
+    const state = this.essenceState()
+    if (state === null || state.fresh !== true) return
+    const pick = this.pickEssenceGoal(now, state)
+    if (pick === null) return
+    // Record cooldown + dwell anchors BEFORE the attempt so a failed start
+    // (no path) also cools down — the driver never hammers setGoal every poll.
+    this.essenceLastFiredAt.set(pick.goal, now)
+    this.essenceLastStartedAtMs = now
+    if (!this.setGoal(pick.goal, 'essence')) return
+    this.goalSource = { kind: 'essence', rule: pick.rule, state: { ...state } }
+    // Journal the cause in the prompt log (spec: "energy 0.2 → daybed.nap
+    // observed in telemetry + prompt log") — the log stream ties the goal to
+    // the rule that fired it.
+    this.journalPrompt('interact', `[goal] ${pick.goal} (essence: ${pick.rule})`)
+    console.info(
+      `[planner] essence driver: rule "${pick.rule}" → ${pick.goal} ` +
+      `(energy ${fmtScore(state.energy)}, focus ${fmtScore(state.focus)}, ` +
+      `stress ${fmtScore(state.stress)}, sociability ${fmtScore(state.sociability)}, ` +
+      `activity ${state.activity ?? '?'})`,
+    )
+  }
+
+  /**
+   * Ordered first-match drive-rule evaluation. A rule whose goal does not
+   * resolve against the manifest is skipped fail-closed (never crash, never
+   * execute — same discipline as the deck). Per-goal cooldown and the
+   * min-dwell hysteresis gate every rule.
+   */
+  private pickEssenceGoal(
+    now: number,
+    state: EssenceStateSnapshot,
+  ): { rule: string; goal: string } | null {
+    for (const rule of this.policy.ESSENCE_DRIVE_RULES) {
+      if (this.resolveInteraction(rule.goal) === null) continue
+      if (!this.clausesMatch(rule.when, state)) continue
+      const last = this.essenceLastFiredAt.get(rule.goal)
+      if (last !== undefined && now - last < rule.cooldownS * 1000) continue
+      if (now - this.essenceLastStartedAtMs < rule.minDwellS * 1000) continue
+      return { rule: rule.rule, goal: rule.goal }
+    }
+    return null
+  }
+
+  /** AND-ed clause evaluation. A missing (null) state field fails the clause
+   * — no state means no rule fires (fail-closed). */
+  private clausesMatch(clauses: readonly EssenceDriveClause[], state: EssenceStateSnapshot): boolean {
+    for (const clause of clauses) {
+      const value = state[clause.field]
+      if (value === null || value === undefined) return false
+      if (clause.op === 'eq') {
+        if (String(value) !== String(clause.value)) return false
+        continue
+      }
+      const left = Number(value)
+      const right = Number(clause.value)
+      if (!Number.isFinite(left) || !Number.isFinite(right)) return false
+      switch (clause.op) {
+        case '<': if (!(left < right)) return false; break
+        case '<=': if (!(left <= right)) return false; break
+        case '>': if (!(left > right)) return false; break
+        case '>=': if (!(left >= right)) return false; break
+      }
+    }
+    return true
+  }
 
   private maybeStartAmbient(now: number): void {
     const since = Math.max(this.lastActivityMs, this.channel.lastUserPromptAtMs())

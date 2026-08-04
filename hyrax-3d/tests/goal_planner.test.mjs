@@ -34,7 +34,7 @@ import test from 'node:test'
 
 import { Vector3 } from 'three'
 
-import { GoalPlanner } from '../src/embodiment/planning/GoalPlanner.ts'
+import { GoalPlanner, GOAL_PLANNER } from '../src/embodiment/planning/GoalPlanner.ts'
 import { RoomNavigation } from '../src/embodiment/navigation/RoomNavigation.ts'
 import { parseSceneManifest } from '../src/embodiment/room/sceneManifest.ts'
 
@@ -141,6 +141,7 @@ function makePlanner(manifest, navigation, channel, sim, clock, opts = {}) {
     probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw }),
     nowMs: () => clock.ms,
     random: opts.random ?? (() => 0),
+    essenceState: opts.essenceState ?? (() => null),
     // The sim executes turns instantly and exactly; TURN_SETTLE_S is a
     // LIVE-stream prompt-latency guard (reset chunk lands ~1.5-2.5 s after
     // send) and YAW_EMA_TAU_S smooths live root wobble. Neither exists in
@@ -237,6 +238,49 @@ function drive(planner, channel, sim, clock, opts = {}) {
 function waitForAmbientGoal(planner, channel, sim, clock, maxTicks = 20000) {
   let ticks = 0
   while (ticks++ < maxTicks) {
+    clock.ms += 100
+    planner.update(0.1)
+    const goal = planner.getGoal()
+    if (goal !== null) return goal
+  }
+  return null
+}
+
+// ── essence driver helpers (spatial layer 4) ─────────────────────
+
+/** A neutral fresh state snapshot; overrides spread on top. */
+function ESSENCE_STATE(over = {}) {
+  return {
+    fresh: true,
+    energy: 0.5,
+    focus: 0.5,
+    stress: 0.3,
+    sociability: 0.3,
+    mood: 'neutral',
+    activity: 'idle',
+    ...over,
+  }
+}
+
+/** The reviewed drive-rule data with per-rule overrides (tests shrink the
+ * 600 s production cooldowns / 45 s dwell to keep the clock cheap). */
+function driveRulesWith(patch) {
+  return GOAL_PLANNER.ESSENCE_DRIVE_RULES.map((r) => ({ ...r, ...patch }))
+}
+
+/** Step the clock in 100 ms ticks (planner.update each tick). */
+function stepMs(clock, planner, ms) {
+  const deadline = clock.ms + ms
+  while (clock.ms < deadline) {
+    clock.ms += 100
+    planner.update(0.1)
+  }
+}
+
+/** Advance idle time until an essence-driven goal fires (or null). */
+function waitForEssenceGoal(planner, clock, maxMs = 200000) {
+  const deadline = clock.ms + maxMs
+  while (clock.ms < deadline) {
     clock.ms += 100
     planner.update(0.1)
     const goal = planner.getGoal()
@@ -727,6 +771,358 @@ test('ambient driver: unresolvable deck goals are skipped fail-closed', async ()
   assert.equal(planner.getGoal(), null)
   assert.equal(channel.prompts.length, 0)
   assert.equal(planner.getTelemetry().lastFailure, null)
+})
+
+// ── essence idle driver (spatial layer 4) ────────────────────────
+
+test('essence driver: seeded energy 0.2 → daybed.nap fires; goalSource {kind essence, rule energy-low, state} is legible', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const state = ESSENCE_STATE({ energy: 0.2 })
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, { essenceState: () => state })
+
+  // The driver fires on its first poll (nothing else owns the prompt).
+  const picked = waitForEssenceGoal(planner, clock)
+  assert.equal(picked, 'daybed.nap')
+  const tel = planner.getTelemetry()
+  assert.equal(tel.goalSource.kind, 'essence')
+  assert.equal(tel.goalSource.rule, 'energy-low')
+  assert.equal(tel.goalSource.state.energy, 0.2)
+  assert.equal(tel.goalSource.state.fresh, true)
+  // The goal start is journaled in the prompt log.
+  assert.ok(tel.promptLog.some((e) => e.prompt.includes('[goal] daybed.nap')),
+    `prompt log must journal the essence goal: ${tel.promptLog.map((e) => e.prompt).join(' | ')}`)
+
+  // The essence goal EXECUTES through the normal planner (walk → nap prompt).
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.lastFailure, null, `essence goal failed: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person lies down on a daybed'))
+  assert.ok(out.phases.includes('interact'))
+  assert.ok(out.minDistanceM !== null && out.minDistanceM <= 0.35,
+    `arrival ${out.minDistanceM} must be ≤ 0.35`)
+  // The story survives completion (until another goal replaces it).
+  assert.equal(out.tel.goalSource.rule, 'energy-low')
+  assert.equal(out.tel.goalSource.state.energy, 0.2)
+})
+
+test('essence driver: rules are ordered first-match (energy-low beats energy-focus when both match)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  // Several rules would match: energy-low (energy 0.1), stress-high (stress
+  // 0.9, unresolvable goal — skipped fail-closed) and sociable-idle
+  // (sociability 0.9 + idle). First-match order wins: energy-low → daybed.nap.
+  const state = ESSENCE_STATE({ energy: 0.1, focus: 0.9, stress: 0.9, sociability: 0.9 })
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, { essenceState: () => state })
+
+  const picked = waitForEssenceGoal(planner, clock)
+  assert.equal(picked, 'daybed.nap')
+  assert.equal(planner.getTelemetry().goalSource.rule, 'energy-low')
+})
+
+test('essence driver: no rule matches → the ambient deck path is exactly as before', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  // Neutral state matches no drive rule.
+  const state = ESSENCE_STATE({})
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => state,
+    random: () => 0,
+  })
+
+  // Essence polls at 0/30/60/90s find nothing; at 90s idle the weighted deck
+  // fires exactly as before (unchanged fallback behavior).
+  const picked = waitForAmbientGoal(planner, channel, sim, clock)
+  assert.equal(picked, 'daybed.nap', 'deck fallback fires when no rule matches')
+  assert.equal(planner.getTelemetry().goalSource, null, 'not essence-driven')
+})
+
+test('essence driver: per-goal cooldown blocks a re-fire while the state still matches, then allows it', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Start AT the daybed spot (no walk) with a short interaction so the goal
+  // completes fast and the cooldown window is observable.
+  const target = navigation.resolveStandingPoint(new Vector3(2.75, 0, 1.9))
+  const sim = makeSim(target.x, target.z, 0)
+  const clock = { ms: 0 }
+  const state = ESSENCE_STATE({ energy: 0.2 })
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => state,
+    policy: {
+      ESSENCE_DRIVE_RULES: driveRulesWith({ cooldownS: 60 }),
+      INTERACTION_MS: 3000,
+    },
+  })
+
+  const first = waitForEssenceGoal(planner, clock)
+  assert.equal(first, 'daybed.nap')
+  const firedAt = clock.ms
+
+  // After the goal completes, the still-matching state is NOT allowed to
+  // re-fire inside the 60 s cooldown (polls at +30s are blocked).
+  stepMs(clock, planner, 45_000)
+  assert.equal(planner.getGoal(), null, 'no re-fire inside the per-goal cooldown')
+  assert.equal(planner.getTelemetry().goalSource?.rule, 'energy-low', 'story retained')
+
+  // Once the cooldown expires (and the 45 s min-dwell passed), the same rule
+  // fires again — a fresh second goal.
+  const second = waitForEssenceGoal(planner, clock, 40_000)
+  assert.equal(second, 'daybed.nap')
+  assert.ok(clock.ms - firedAt >= 60_000, `second fire at ${clock.ms - firedAt}ms must be ≥ cooldown`)
+})
+
+test('essence driver: min-dwell hysteresis — a mid-goal state flip never preempts; the next rule waits its min-dwell', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const state = ESSENCE_STATE({ energy: 0.2 })
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => state,
+    policy: { ESSENCE_DRIVE_RULES: driveRulesWith({ minDwellS: 60 }), INTERACTION_MS: 5000 },
+  })
+
+  const picked = waitForEssenceGoal(planner, clock)
+  assert.equal(picked, 'daybed.nap')
+  const startedAt = clock.ms
+
+  // Mid-goal the state flips to energized+focused (would match desk.work).
+  let flipped = false
+  const out = drive(planner, channel, sim, clock, {
+    beforeEach: (ms) => {
+      if (!flipped && ms > startedAt + 5000) {
+        flipped = true
+        state.energy = 0.9
+        state.focus = 0.9
+      }
+    },
+  })
+  // The nap goal continued to completion — the flip never preempted it.
+  assert.equal(out.tel.lastFailure, null, `goal failed: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person lies down on a daybed'))
+  assert.equal(out.tel.goalSource.rule, 'energy-low', 'mid-goal flip did not change the running goal story')
+
+  // After completion, desk.work must NOT fire before min-dwell (60 s since
+  // the nap STARTED) — the poll at +30s is dwell-blocked.
+  stepMs(clock, planner, 30_000 - (clock.ms - startedAt))
+  assert.equal(planner.getGoal(), null, 'no new rule before min-dwell elapses')
+  assert.ok(!channel.prompts.some((p) => p.includes('a person sits at a desk working')),
+    'desk.work must wait out the hysteresis window')
+
+  // Past the dwell window the flipped state fires desk.work (rule energy-focus).
+  const second = waitForEssenceGoal(planner, clock, 40_000)
+  assert.equal(second, 'desk.work')
+  assert.equal(planner.getTelemetry().goalSource.rule, 'energy-focus')
+  assert.equal(planner.getTelemetry().goalSource.state.energy, 0.9)
+})
+
+test('essence driver: priority — a user prompt cancels an essence goal (user wins, journaled)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ energy: 0.2 }),
+  })
+
+  assert.equal(waitForEssenceGoal(planner, clock), 'daybed.nap')
+  let userPrompted = false
+  const out = drive(planner, channel, sim, clock, {
+    beforeEach: (ms) => {
+      if (!userPrompted && ms > 4000) {
+        userPrompted = true
+        channel.userPromptAtMs = ms // mid-walk user prompt
+      }
+    },
+  })
+  assert.equal(out.tel.goal, null)
+  assert.match(out.tel.lastFailure ?? '', /cancelled by user prompt/)
+  assert.ok(!out.allPrompts.includes('a person lies down on a daybed'),
+    'cancelled before the nap interaction ever played')
+  assert.ok(out.allPrompts.some((p) => p.includes('cancelled by user prompt')),
+    'the user win is journaled')
+})
+
+test('essence driver: priority — a reflex interrupts a segment; the goal resumes and completes', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ energy: 0.2 }),
+  })
+
+  assert.equal(waitForEssenceGoal(planner, clock), 'daybed.nap')
+  let reflexTriggered = false
+  let reflexUntil = -1
+  let preLen = 0
+  let sentDuringReflex = 0
+  const out = drive(planner, channel, sim, clock, {
+    beforeEach: (ms) => {
+      if (!reflexTriggered && ms >= 5000) {
+        reflexTriggered = true
+        channel.reflexActive = true
+        reflexUntil = ms + 3000
+      }
+      if (channel.reflexActive && ms >= reflexUntil) channel.reflexActive = false
+      preLen = channel.prompts.length
+    },
+    afterEach: () => {
+      if (channel.reflexActive && channel.prompts.length > preLen) sentDuringReflex += 1
+    },
+  })
+  assert.equal(sentDuringReflex, 0, 'planner must not send while the reflex plays')
+  assert.equal(out.tel.lastFailure, null, `unexpected failure: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person lies down on a daybed'))
+  assert.equal(out.tel.goalSource.rule, 'energy-low')
+})
+
+test('essence driver: priority — a watchdog hold suspends the planner; the goal completes after recovery', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ energy: 0.2 }),
+  })
+
+  assert.equal(waitForEssenceGoal(planner, clock), 'daybed.nap')
+  let holdTriggered = false
+  let holdsUntil = -1
+  let preLen = 0
+  let sentDuringHold = 0
+  const out = drive(planner, channel, sim, clock, {
+    beforeEach: (ms) => {
+      if (!holdTriggered && ms >= 6000) {
+        holdTriggered = true
+        channel.watchdogHolding = true
+        holdsUntil = ms + 5000
+      }
+      if (channel.watchdogHolding && ms >= holdsUntil) channel.watchdogHolding = false
+      preLen = channel.prompts.length
+    },
+    afterEach: () => {
+      if (channel.watchdogHolding && channel.prompts.length > preLen) sentDuringHold += 1
+    },
+  })
+  assert.equal(sentDuringHold, 0, 'planner must not send while the watchdog holds')
+  assert.equal(out.tel.lastFailure, null, `unexpected failure: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person lies down on a daybed'))
+})
+
+test('essence driver: stale (unfresh) state never drives a goal — the deck fallback still works', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  // Energy 0.2 would match energy-low, but the file is stale → no rule fires.
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ fresh: false, energy: 0.2 }),
+    random: () => 0,
+  })
+
+  const picked = waitForAmbientGoal(planner, channel, sim, clock)
+  assert.equal(picked, 'daybed.nap', 'deck fallback fires (unchanged)')
+  assert.equal(planner.getTelemetry().goalSource, null, 'stale essence state drove nothing')
+})
+
+test('essence driver: an unresolvable rule goal (window.look) is skipped fail-closed; later resolvable rules still fire', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  // stress 0.9 matches stress-high, but window.look does not exist in the
+  // tai-loft manifest → skipped fail-closed; sociable-idle resolves next.
+  const state = ESSENCE_STATE({ stress: 0.9, sociability: 0.9, activity: 'idle' })
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, { essenceState: () => state })
+
+  const picked = waitForEssenceGoal(planner, clock)
+  assert.equal(picked, 'couch.sit')
+  assert.equal(planner.getTelemetry().goalSource.rule, 'sociable-idle')
+})
+
+test('essence driver: missing state fields fail their clause (never crash, never fire)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  // energy unknown → energy-low/energy-focus clauses fail; stress-high's goal
+  // is unresolvable; sociability unknown → sociable-idle fails.
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ energy: null, stress: 0.9, sociability: null }),
+  })
+
+  stepMs(clock, planner, 60_000) // before the 90s deck gate
+  assert.equal(planner.getGoal(), null)
+  assert.equal(channel.prompts.length, 0)
+  assert.equal(planner.getTelemetry().goalSource, null)
+  assert.equal(planner.getTelemetry().lastFailure, null)
+})
+
+test('essence driver: a state change is noticed only on the poll cadence (ESSENCE_POLL_S)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const state = ESSENCE_STATE({}) // neutral at mount (poll at t=0 finds nothing)
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, { essenceState: () => state })
+
+  stepMs(clock, planner, 5000)
+  state.energy = 0.2 // tired at t=5s — mid-poll-window
+  stepMs(clock, planner, 20_000) // t=25s: still before the t=30s poll
+  assert.equal(planner.getGoal(), null, 'no fire mid-poll-window')
+  const picked = waitForEssenceGoal(planner, clock, 10_000)
+  assert.equal(picked, 'daybed.nap', 'fires on the next poll boundary')
+})
+
+test('essence driver: a recent user prompt silences the driver (ESSENCE_USER_QUIET_S)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const state = ESSENCE_STATE({ energy: 0.2 })
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, { essenceState: () => state })
+  channel.userPromptAtMs = 0 // user prompt at t=0 — the driver must stay quiet
+
+  stepMs(clock, planner, 25_000)
+  assert.equal(planner.getGoal(), null, 'quiet window holds (25s < 30s)')
+  const picked = waitForEssenceGoal(planner, clock, 10_000)
+  assert.equal(picked, 'daybed.nap', 'fires once the quiet window elapsed')
+})
+
+test('essence driver: a non-essence goal replaces the story (goalSource clears)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ energy: 0.2 }),
+  })
+
+  assert.equal(waitForEssenceGoal(planner, clock), 'daybed.nap')
+  assert.equal(planner.getTelemetry().goalSource.rule, 'energy-low')
+  // A user (debug) goal starts → the essence story no longer describes her.
+  assert.equal(planner.setGoal('desk.work'), true)
+  assert.equal(planner.getTelemetry().goalSource, null)
 })
 
 // ── telemetry ──────────────────────────────────────────────────────

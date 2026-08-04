@@ -230,7 +230,10 @@ def compute_metrics(check, segments, idle_floor_rate):
         m["quarterTurnYawDeg"] = round(sum(qt) / len(qt), 1) if qt else None
 
     # ── goal planner (spatial layer 3b) ───────────────────────────
-    if check.get("goal"):
+    # Also covers essence-driven checks (spatial layer 4, `essenceSeed`):
+    # the goal arrives from the driver, not setGoal, but the phase/arrival/
+    # prompt-log evidence is the same.
+    if check.get("goal") or check.get("essenceSeed"):
         planner_tels = [(t.get("planner") or {}) for t in tels]
         phases = [p.get("phase") for p in planner_tels]
         interact_idx = next((i for i, ph in enumerate(phases) if ph in ("interact", "done")), None)
@@ -250,6 +253,15 @@ def compute_metrics(check, segments, idle_floor_rate):
         m["goalCompleted"] = 1 if interact_idx is not None else 0
         replans = [p.get("replans") for p in planner_tels if p.get("replans") is not None]
         m["replans"] = max(replans) if replans else None
+        # Essence evidence (spatial layer 4): goalSource {kind, rule, state}.
+        sources = [p.get("goalSource") for p in planner_tels
+                   if isinstance(p.get("goalSource"), dict)]
+        m["essenceGoalSeen"] = 1 if any(s.get("kind") == "essence" for s in sources) else 0
+        essence = next((s for s in sources if s.get("kind") == "essence"), None)
+        m["essenceRule"] = essence.get("rule") if essence else None
+        est = (essence or {}).get("state") or {}
+        e = est.get("energy")
+        m["essenceStateEnergy"] = round(e, 3) if isinstance(e, (int, float)) else None
         expected = check.get("interactionPromptContains", "")
         # The prompt log is a persistent journal — dedupe across 2 Hz samples
         # so the same entry is never counted twice.

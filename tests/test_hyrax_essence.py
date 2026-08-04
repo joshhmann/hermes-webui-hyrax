@@ -1046,6 +1046,7 @@ class TestPresence:
 # ══════════════════════════════════════════════════════════════════════════
 
 def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
+                           sociability=0.55,
                            expression="smile", intensity=0.7,
                            activity_type="idle",
                            pose_intent="sitting", scene_intent="ops",
@@ -1058,7 +1059,7 @@ def _derived_state_payload(mood="happy", energy=0.62, focus=0.81, stress=0.12,
         "operatorId": "tai",
         "mood": {"primary": leaf(mood), "valence": leaf(0.4)},
         "condition": {"energy": leaf(energy), "focus": leaf(focus),
-                      "stress": leaf(stress)},
+                      "stress": leaf(stress), "sociability": leaf(sociability)},
         "activity": {"type": leaf(activity_type)},
         "presentation": {"expression": leaf(expression),
                          "intensity": leaf(intensity),
@@ -1142,7 +1143,7 @@ class TestPresenceDerivedState:
         # intents that drive the VN stage (Phase B).
         assert item["derivedState"] == {
             "fresh": True, "mood": "happy", "energy": 0.62, "focus": 0.81,
-            "stress": 0.12, "staleness_days": 0,
+            "stress": 0.12, "sociability": 0.55, "staleness_days": 0,
             "poseIntent": "sitting", "sceneIntent": "ops", "tone": "bright",
             "whims": [], "whimHistory": [], "whimFulfilledTotal": 0,
         }
@@ -1340,7 +1341,7 @@ class TestPresenceDerivedState:
         item = self._items_by_operator(handler)["tai"]
         assert item["derivedState"] == {
             "fresh": False, "mood": None, "energy": None, "focus": None,
-            "stress": None, "staleness_days": None,
+            "stress": None, "sociability": None, "staleness_days": None,
             "poseIntent": None, "sceneIntent": None, "tone": None,
             "whims": [], "whimHistory": [], "whimFulfilledTotal": 0,
         }

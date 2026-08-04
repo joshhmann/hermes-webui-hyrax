@@ -11,6 +11,9 @@ export interface TaiLoftMountConfiguration {
   development: boolean
   /** Test/dev seam: goal-planner policy overrides (compressed cadence). */
   plannerPolicy?: Partial<GoalPlannerPolicy>
+  /** Operator whose presence drives her goals (default tai for the tai-loft;
+   * the essence driver mechanism is operator-generic). */
+  operator?: string
 }
 
 export async function mountTaiLoft(
@@ -42,7 +45,9 @@ export async function mountTaiLoft(
   // Fail-closed: a missing/malformed manifest resolves to the default empty
   // room with a console warning — the loft still mounts, just uncluttered.
   const manifest = await loadSceneManifest()
-  const room = new TaiRoomScene(canvas, configuration.vrmUrl, manifest, configuration.plannerPolicy)
+  const room = new TaiRoomScene(canvas, configuration.vrmUrl, manifest, configuration.plannerPolicy, {
+    operator: configuration.operator,
+  })
   for (const mode of ['room', 'follow', 'portrait'] as const) {
     const button = document.createElement('button')
     button.textContent = mode[0].toUpperCase() + mode.slice(1)
@@ -287,6 +292,10 @@ export async function mountTaiLoft(
     setGoal: (goal: string) => room.setGoal(goal),
     clearGoal: () => room.clearGoal(),
     getGoal: () => room.getGoal(),
+    // Essence driver (spatial layer 4): test-only presence override + the
+    // effective state the driver reads (GEVS level-4 check / seeded-state run).
+    setEssenceState: (state: object | null) => room.setEssenceOverride(state as Parameters<typeof room.setEssenceOverride>[0] | null),
+    getEssenceState: () => room.getEssenceState(),
     recenterRoot: (x: number, z: number) => room.recenterArdyRoot(x, z),
     hipsWorldY: () => room.getHipsWorldY(),
     footWorldY: () => room.getFootWorldY(),

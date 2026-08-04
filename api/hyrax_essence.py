@@ -925,6 +925,7 @@ _DERIVED_STATE_UNAVAILABLE = {
     "energy": None,
     "focus": None,
     "stress": None,
+    "sociability": None,
     "staleness_days": None,
     "poseIntent": None,
     "sceneIntent": None,
@@ -1117,6 +1118,7 @@ def _presence_derived_state(profile: str) -> tuple[dict, dict | None]:
             "energy": _bounded_score(_derived_leaf(state, "condition", "energy"), 0.0, 1.0),
             "focus": _bounded_score(_derived_leaf(state, "condition", "focus"), 0.0, 1.0),
             "stress": _bounded_score(_derived_leaf(state, "condition", "stress"), 0.0, 1.0),
+            "sociability": _bounded_score(_derived_leaf(state, "condition", "sociability"), 0.0, 1.0),
             # Fresh state is by definition <120s old → staleness_days 0.
             "staleness_days": 0 if fresh else round(age / 86400.0, 2),
             # Presentation intents (poseIntent/sceneIntent) drive the VN

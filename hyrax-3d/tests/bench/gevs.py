@@ -300,6 +300,46 @@ def main():
                 page.screenshot(path=str(shots_dir / f"{check['id']}.jpg"), type="jpeg", quality=60)
                 return segments
 
+            def run_essence_check(check):
+                """Essence-driven check (spatial layer 4): seed the operator's
+                derived state via the test-only presence override
+                (__ardy.setEssenceState) → the essence driver fires the matching
+                goal on its poll cadence; sample telemetry + probe until the
+                driver-fired goal runs and completes (or times out). No settle
+                prompt here: a user prompt would start the driver's 30 s quiet
+                window and double the check wall time. The override is cleared
+                afterwards so the real presence path is never affected."""
+                spot = check.get("recenter")
+                if spot and page.evaluate(
+                        "(s) => window.__ardy.recenterRoot ? window.__ardy.recenterRoot(s[0], s[1]) : false",
+                        spot):
+                    print(f"  [recenter] {check['id']} → ({spot[0]}, {spot[1]})", flush=True)
+                mark = page.evaluate("() => window.__gevs.frames.length")
+                tel_before = page.evaluate("() => ({ ...window.__ardy.getTelemetry() })")
+                page.evaluate(
+                    "(s) => window.__ardy.setEssenceState ? window.__ardy.setEssenceState(s) : false",
+                    check["essenceSeed"])
+                print(f"  [essence-seed] t={time.time()-t_run0:6.1f} {json.dumps(check['essenceSeed'])[:100]}",
+                      flush=True)
+                deadline = time.time() + int(check.get("goalTimeoutS", 90))
+                tels = []
+                started = False
+                while time.time() < deadline:
+                    tels.append(page.evaluate(
+                        "() => ({ state: window.__ardy.getState(), ...window.__ardy.getTelemetry() })"))
+                    planner = (tels[-1].get("planner") or {})
+                    if planner.get("goal") is not None:
+                        started = True
+                    if started and planner.get("goal") is None and len(tels) >= 4:
+                        break  # the driver-fired goal ran and completed
+                    page.wait_for_timeout(500)
+                page.evaluate("() => window.__ardy.setEssenceState ? window.__ardy.setEssenceState(null) : false")
+                segments = [{"label": check["id"], "prompt": f"essence:{check['essenceSeed']}",
+                             "seconds": round(time.time() - deadline + int(check.get("goalTimeoutS", 90)), 1),
+                             "frame_mark": mark, "tel_before": tel_before, "tels": tels}]
+                page.screenshot(path=str(shots_dir / f"{check['id']}.jpg"), type="jpeg", quality=60)
+                return segments
+
             # Idle motion floor for the dance phrase-completion metric.
             print("[gevs] measuring idle motion floor (6 s)", flush=True)
             idle_seg = run_segments({"id": "idle-floor", "settleS": 2,
@@ -310,7 +350,12 @@ def main():
             raw = {}
             for check in checks:
                 print(f"[gevs] check {check['id']} ({check['category']})", flush=True)
-                raw[check["id"]] = run_goal_check(check) if check.get("goal") else run_segments(check)
+                if check.get("essenceSeed"):
+                    raw[check["id"]] = run_essence_check(check)
+                elif check.get("goal"):
+                    raw[check["id"]] = run_goal_check(check)
+                else:
+                    raw[check["id"]] = run_segments(check)
 
             frames = page.evaluate("() => window.__gevs.frames")
             tel_final = page.evaluate("() => ({ ...window.__ardy.getTelemetry() })")
