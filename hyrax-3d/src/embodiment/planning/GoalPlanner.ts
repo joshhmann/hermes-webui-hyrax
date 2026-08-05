@@ -122,6 +122,18 @@ export interface PlannerGoalSourceTelemetry {
 export interface GoalPlannerPolicy {
   /** Arrival radius (m) around the resolved standing point (spec: 0.35). */
   ARRIVE_TOLERANCE_M: number
+  /**
+   * Final-approach lateral gate (2026-08-04): perpendicular miss (range ×
+   * sin(err)) beyond which the FINAL waypoint walk steers. The coarse
+   * steering threshold (60°) tolerates a residual heading error that the
+   * raw-gate turn phase leaves at ≤25° — at 2-3 m range that is a
+   * 0.5-1.2 m perpendicular miss and the walk line NEVER enters the
+   * arrive band (measured in the unit sim: straight walk, goal failed
+   * arrival at 0.5 m). Sized just under ARRIVE_TOLERANCE_M so the
+   * corrected line crosses the spot with margin for tick/coast
+   * quantization; the no-turn zone still applies inside WALK_NO_TURN_M.
+   */
+  FINAL_APPROACH_LATERAL_M: number
   /** Heading error (deg) above which a turn segment precedes a walk. */
   HEADING_ERROR_TURN_DEG: number
   /** Heading/facing error (deg) at which a turn segment is accepted. */
@@ -129,6 +141,23 @@ export interface GoalPlannerPolicy {
   /** Max turn re-issues per turn segment. Bounds a non-responding stream;
    * sized for the 45° request ceiling (a 180° error needs 4 steps). */
   MAX_TURN_REISSUES: number
+  /**
+   * Wall-clock cap (s) on ONE turn phase (2026-08-04 drift class). The
+   * raw gate (TURN_RAW_*) requires the yaw to SETTLE before the walk may
+   * start — but the live stream's yaw demonstrably does not settle after
+   * a turn ask: the tels sweep 0°→180° continuously for 68+ s with zero
+   * prompts in flight (desk2), the reissue budget never exhausts (the
+   * yaw is never "settled" → the settle-spread wait holds), and the 20 s
+   * TARGET watchdog then consumes the goal's single replan on a TURN
+   * stall (desk1: travelM 0.224 — she never even walked). The cap hands
+   * the phase to the walk: the walk prompt REPLACES the circling stream
+   * (proven live: desk2's walk moved her 3.7 m) and the walk phase's
+   * steering + stall detection own the residual. A healthy turn
+   * (settle + hold) completes in ~4.5 s — far under the cap — so the
+   * fast path is untouched. Sized above settle+hold and below the
+   * TARGET_STALL_S watchdog so the handoff always beats the watchdog.
+   */
+  TURN_PHASE_MAX_S: number
   /** Wait (s) after a turn prompt before measuring the result. The prompt's
    * reset chunk lands ~1.5-2.5 s after send (measured live 2026-08-02) and
    * the yaw mid-execution is spin garbage (swings ±70° around the target
@@ -157,6 +186,53 @@ export interface GoalPlannerPolicy {
    * decisions read garbage, so every steering/facing decision measures the
    * smoothed heading instead. */
   YAW_EMA_TAU_S: number
+  /**
+   * Raw-yaw tolerance (deg) for the turn→walk transition (2026-08-03
+   * drift class). The EMA alone can read "aligned" while the RAW yaw is
+   * still rotating PAST the target — the live stream executes a turn ask
+   * at 79-240% of the request and the execution tail outlives the settle
+   * window (measured: 4×45° asks → the raw crossed the target then kept
+   * rotating 76°+ past; the walk started off-heading into the coffee
+   * table). The walk prompt only goes out when BOTH the smoothed and the
+   * raw yaw are within tolerance of the waypoint. Sized between the 20°
+   * EMA acceptance (noisier raw) and the 60° steering threshold (a walk
+   * starting at 25° still arrives — the braking lead + re-approach own
+   * the residual). */
+  TURN_RAW_TOLERANCE_DEG: number
+  /** Hold (s) of the aligned state (EMA + raw within tolerance) before
+   * the turn→walk transition fires — mirror of FACE_HOLD_S: a transient
+   * crossing must not start a walk. The raw yaw demonstrably settles
+   * next to the target within this window or the hold resets. */
+  TURN_RAW_HOLD_S: number
+  /** |raw − EMA| spread (deg) below which the yaw is considered SETTLED
+   * (the turn finished executing). Re-issues only fire on a settled yaw:
+   * re-issuing onto a still-moving stream compounds the overshoot
+   * (measured live: 4×45° asks executed 79-240% each and the heading
+   * never converged — the walk then went out at ~100° off). */
+  TURN_RAW_SETTLE_SPREAD_DEG: number
+  /**
+   * Walk-prompt landing window (s) — 2026-08-04 never-settling stream
+   * class (desk2 live: goal failed with the yaw sweeping 0°→180° for the
+   * whole goal). After a TURN_PHASE_MAX_S cap hands off to the walk, the
+   * walk prompt takes 1.5-2.5 s to REPLACE the old stream — during that
+   * landing the measured heading is still the OLD stream's garbage, and
+   * a steering check on the same tick yanks the walk back into turn
+   * before it ever moves (measured live: turn↔walk oscillation, each
+   * walk phase ~1 tick, the goal's route length never improves, the
+   * target watchdog consumes the replan). Suppress steering for this
+   * window after each walk prompt so the new walk stream lands and the
+   * yaw re-anchors on the walk; the walk then moves and the steering /
+   * lateral gate decide from an honest heading. The landing window also
+   * does not count as per-waypoint stall time (the body cannot move
+   * until the prompt lands). A healthy stream is unaffected: its walk
+   * prompts follow an aligned turn and steering would not fire anyway.
+   */
+  WALK_SETTLE_S: number
+  /** Yaw-motion spread (deg) at walk-prompt send that decides whether
+   * the landing window is open (see the default's comment — the send
+   * snapshot discriminator between a sweep-handoff and a settled
+   * handoff). */
+  WALK_LANDED_SPREAD_DEG: number
   /** Debounce (s) in the face phase: after the smoothed facing error
    * converges, hold before playing the interaction so the RAW yaw settles
    * next to the smoothed value (the honest-facing sample the GEVS reads). */
@@ -223,6 +299,11 @@ export interface GoalPlannerPolicy {
 
 export const GOAL_PLANNER: GoalPlannerPolicy = {
   ARRIVE_TOLERANCE_M: 0.35,
+  // Final-approach lateral gate (2026-08-04): 0.30 keeps the corrected
+  // walk line within the 0.35 arrival tolerance with margin for the
+  // tick/coast quantization (the arrive trigger + stop coast land up to
+  // ~0.05 m off the ideal line-crossing).
+  FINAL_APPROACH_LATERAL_M: 0.3,
   // Steering is COARSE on purpose (calibrated live 2026-08-02, trace + GEVS
   // runs): the stream's walks curve ~10-16°/s and turns execute 79-240% of
   // the request, so a 30° re-steer threshold fires every ~2 s, each
@@ -234,10 +315,52 @@ export const GOAL_PLANNER: GoalPlannerPolicy = {
   HEADING_ERROR_TURN_DEG: 60,
   TURN_TOLERANCE_DEG: 20,
   TURN_SETTLE_S: 3.0,
+  // Turn-phase wall-clock cap (2026-08-04 drift class): a stream whose
+  // yaw never settles must not hold the phase forever — 10 s beats the
+  // 20 s target watchdog (the handoff must arrive before the watchdog
+  // consumes the goal's single replan on a TURN stall) and is >2× the
+  // healthy settle+hold (~4.5 s), so only a never-settling stream ever
+  // hits it. The walk prompt replaces the circling stream (desk2's walk
+  // moved 3.7 m) and the walk's steering/stall machinery owns the rest.
+  TURN_PHASE_MAX_S: 10,
   TURN_REQUEST_MAX_DEG: 45,
   MAX_TURN_REISSUES: 4,
   WALK_NO_TURN_M: 0.5,
   YAW_EMA_TAU_S: 0.8,
+  // Raw-yaw settle gate for the turn→walk transition (2026-08-03 drift
+  // class): the walk must not start while the raw yaw is still swinging
+  // past the target — the EMA alone reads aligned mid-execution. 25° is
+  // between the 20° EMA acceptance and the 60° steering threshold; the
+  // 1.5 s hold mirrors FACE_HOLD_S (a transient crossing must not fire);
+  // the 20° |raw − EMA| spread says "the yaw stopped moving" before a
+  // re-issue (compounding overshoots is the live failure's second half).
+  TURN_RAW_TOLERANCE_DEG: 25,
+  TURN_RAW_HOLD_S: 1.5,
+  TURN_RAW_SETTLE_SPREAD_DEG: 20,
+  // Walk-prompt landing window (2026-08-04 never-settling stream class):
+  // the walk prompt takes 1.5-2.5 s to replace the old stream (measured
+  // live — the same reset-chunk latency TURN_SETTLE_S covers) AND the
+  // walk must then MOVE at the frozen heading before steering can judge
+  // it (a yank after 0.3 s of movement is a yank before the walk exists
+  // — measured live: turn↔walk oscillation, each walk phase ~1 tick).
+  // 4.0 s = landing (~2.2 s) + ~1.8 s of movement (~1.1 m at walk speed)
+  // — enough displacement for the route-length watchdog to see progress
+  // from a usable frozen heading, and below WALK_STALL_S (6 s) so a
+  // stream that never moves after the window STILL stalls honestly.
+  WALK_SETTLE_S: 4.0,
+  // Walk-landed yaw-spread (deg) — the discriminator at WALK-PROMPT SEND
+  // that decides whether a landing window is needed at all: |raw − EMA|
+  // is the yaw's motion measure (rate × tau), and a prompt sent while the
+  // yaw is MOVING (the never-settling turn sweep is live) is the case the
+  // window exists for — the landing reads the OLD stream's sweep garbage
+  // and the walk must be allowed to land + re-anchor before steering
+  // judges it. A prompt sent from a SETTLED yaw (the normal converged
+  // turn; unit sims land instantly) has no landing risk: the window
+  // stays closed and the correction machinery is never suppressed.
+  // Mirrors the TURN_RAW_SETTLE_SPREAD_DEG "moving vs settled"
+  // discriminator (20 live; the unit sim's compressed-EMA override pins
+  // it to 6 — the sim's sweep spread ≈ rate × tau = 40 × 0.25 = 10°).
+  WALK_LANDED_SPREAD_DEG: 20,
   FACE_HOLD_S: 1.5,
   WALK_WAYPOINT_ARRIVE_M: 0.3,
   SMOOTH_SKIP_M: 1.2,
@@ -396,6 +519,25 @@ export interface GoalPlannerOptions {
    * (operator derivedState + activity). null when unavailable → the driver
    * stays quiet and the ambient deck path is unchanged. */
   essenceState?: () => EssenceStateSnapshot | null
+  /**
+   * Live state of a stateful object (INTERACTABLES_SPEC.md — requires
+   * gate): the host's interactable state machine. An interaction whose
+   * `requires` does not match the object's current state is refused
+   * (journaled, never executed). Absent provider = fail-closed for
+   * requires-gated interactions (refused).
+   */
+  objectState?: (objectId: string) => string | null
+  /**
+   * Interaction-completion hook (INTERACTABLES_SPEC.md): invoked when a goal
+   * COMPLETES after its interaction prompt actually played (phase
+   * 'interact' → finishGoal('completed')). `interactionId` is the full
+   * `<object>.<interaction>` id the goal resolved. NOT invoked on cancel,
+   * clear, supersede, timeout, or failure — those never reached the
+   * interaction. The scene uses this to apply `kind: "pickup"` attach/
+   * putdown semantics and `sets` state transitions (behavior lives in the
+   * scene, not the planner).
+   */
+  onInteractionComplete?: (interactionId: string, interaction: SceneInteraction) => void
   /** Policy override (tests — deterministic timing). */
   policy?: Partial<GoalPlannerPolicy>
 }
@@ -420,12 +562,31 @@ interface ActiveGoal {
   /** Face phase: when the smoothed facing error first converged (hold
    * debounce — the RAW yaw needs time to settle next to the EMA). */
   faceAlignedAtMs: number | null
+  /** Turn phase: when BOTH the smoothed and the RAW yaw first aligned on
+   * the waypoint (drift-class hold — the raw yaw must settle next to the
+   * EMA before a walk prompt goes out; a transient mid-execution crossing
+   * resets it). */
+  turnRawAlignedAtMs: number | null
   walkPromptSentAtMs: number
+  /** Landing-window state, SNAPSHOTTED at walk-prompt send: true when the
+   * yaw was MOVING at send (the never-settling sweep handoff — the walk
+   * must be allowed to land + re-anchor before steering judges it);
+   * false for a settled handoff (normal converged turn, instant-land
+   * sims) where no suppression is needed. Re-snapshotted on rotate. */
+  walkLandWindowOpen: boolean
   bestDistance: number
   stallSinceMs: number | null
   /** Closing-speed tracking for the arrival braking lead (last probe). */
   prevWaypointDist: number
   prevProbeAtMs: number
+  /** Last probe XZ (m) — the walk-phase "body is actually moving"
+   * discriminator (2026-08-04): the final-approach lateral gate must
+   * fire on a TANGENT walk (perpendicular miss with ~0 closing speed —
+   * measured live: straightness 0.295, 48 nav-absorbs into the door)
+   * while still leaving a FROZEN body (no displacement) to the
+   * stall/replan detector. */
+  prevProbeX: number
+  prevProbeZ: number
   /** Target-progress watchdog (policy at TARGET_STALL_S): the REMAINING
    * route length (distance to the current waypoint + the summed segment
    * lengths after it) must improve by STALL_PROGRESS_EPS_M within
@@ -479,6 +640,8 @@ export class GoalPlanner {
   private readonly nowMs: () => number
   private readonly random: () => number
   private readonly essenceState: () => EssenceStateSnapshot | null
+  private readonly objectState?: (objectId: string) => string | null
+  private readonly onInteractionComplete?: (interactionId: string, interaction: SceneInteraction) => void
   private readonly policy: GoalPlannerPolicy
 
   private goal: ActiveGoal | null = null
@@ -511,6 +674,8 @@ export class GoalPlanner {
     this.nowMs = options.nowMs ?? (() => performance.now())
     this.random = options.random ?? (() => Math.random())
     this.essenceState = options.essenceState ?? (() => null)
+    this.objectState = options.objectState
+    this.onInteractionComplete = options.onInteractionComplete
     this.policy = { ...GOAL_PLANNER, ...options.policy }
     this.lastActivityMs = this.nowMs()
   }
@@ -526,10 +691,27 @@ export class GoalPlanner {
       console.warn(`[planner] ${this.lastFailure}`)
       return false
     }
+    const { interaction } = resolved
+    // requires gate (INTERACTABLES_SPEC.md): an interaction that requires a
+    // state is only valid while the object is IN that state — refused with
+    // a journaled reason otherwise ("an open door can't be opened"). The
+    // scene provides the live state via `objectState`; fail-closed: a
+    // requires-gated interaction with no provider (or an object with no
+    // machine) is refused, never executed.
+    if (interaction.requires !== undefined) {
+      const objectId = interactionId.slice(0, interactionId.indexOf('.'))
+      const current = this.objectState ? this.objectState(objectId) : null
+      if (current !== interaction.requires) {
+        this.lastFailure =
+          `interaction "${interactionId}" refused: requires "${interaction.requires}", object "${objectId}" is ${current ?? 'unknown'}`
+        this.journalPrompt('interact', `[goal] ${this.lastFailure}`)
+        console.warn(`[planner] ${this.lastFailure}`)
+        return false
+      }
+    }
     if (this.goal !== null) {
       console.info(`[planner] goal ${this.goal.id} superseded by ${interactionId}`)
     }
-    const { interaction } = resolved
     const target = this.navigation.resolveStandingPoint(
       new Vector3(interaction.spot[0], 0, interaction.spot[1]),
     )
@@ -557,11 +739,15 @@ export class GoalPlanner {
       sentPrompt: null,
       turnSentAtMs: 0,
       faceAlignedAtMs: null,
+      turnRawAlignedAtMs: null,
       walkPromptSentAtMs: -Infinity,
+      walkLandWindowOpen: false,
       bestDistance: Infinity,
       stallSinceMs: null,
       prevWaypointDist: Infinity,
       prevProbeAtMs: 0,
+      prevProbeX: this.probe().x,
+      prevProbeZ: this.probe().z,
       bestTargetDist: Infinity,
       targetStallSinceMs: null,
       pathRemaining: this.computePathRemaining(path),
@@ -734,40 +920,74 @@ export class GoalPlanner {
       this.advanceFromWaypoint()
       return
     }
-    if (goal.sentPrompt === null) {
-      if (this.shouldSteer(waypoint)) {
-        goal.turnSentAtMs = now
-        this.sendTurnPrompt(waypoint)
-      } else {
-        // Waypoint too close for a meaningful turn (arrival takes over) —
-        // walk in.
-        this.beginPhase('walk')
-      }
-      return
-    }
-    // Settle window (policy at TURN_SETTLE_S): the prompt's reset chunk
-    // lands ~1.5-2.5 s after send and the yaw mid-execution is spin
-    // garbage (swings ±70° through the T2 crossfade, measured live
-    // 2026-08-02). Measuring before the settle reads the OLD stream's
-    // heading and declares false alignment mid-spin.
-    if (now - goal.turnSentAtMs < this.policy.TURN_SETTLE_S * 1000) return
-    // Settle elapsed: measure the ACTUAL result (re-anchor on reality).
-    if (Math.abs(this.headingErrorDeg(waypoint)) <= this.policy.TURN_TOLERANCE_DEG) {
-      // Turn segment complete: aligned with the waypoint — start walking.
+    // Turn-phase wall-clock cap (2026-08-04 drift class): the raw gate
+    // below waits for the yaw to SETTLE — a stream whose yaw never
+    // settles (live: tels sweep 0°→180° continuously for 68+ s with
+    // zero prompts in flight) would hold this phase forever until the
+    // 20 s TARGET watchdog consumes the goal's single replan on a TURN
+    // stall (desk1: travelM 0.224 — never walked). Hand off to the walk
+    // instead: the walk prompt REPLACES the circling stream (desk2's
+    // walk moved 3.7 m) and the walk phase's steering + stall detection
+    // own the residual. A healthy turn converges (settle+hold ~4.5 s)
+    // far under the cap; each reissue resets phaseStartedAtMs, so only
+    // a phase making NO progress ever hits it.
+    if (now - goal.phaseStartedAtMs > this.policy.TURN_PHASE_MAX_S * 1000) {
+      console.info(`[planner] turn phase capped at ${this.policy.TURN_PHASE_MAX_S}s — walking with residual heading`)
       this.beginPhase('walk')
       return
     }
-    // Error remains: re-issue with the REMAINING error immediately. The
-    // settle window (not a fixed timeout) paces iterations — the 45°
-    // request ceiling means a gross error needs several steps, and an
-    // 8 s-per-step timeout turned zigzag convergence into goal timeouts
-    // (unit sim, 2026-08-02). The reissue budget bounds a non-responding
-    // stream; on exhaustion, accept the error and walk (the stall/replan
-    // feedback corrects gross misalignment downstream).
-    if (goal.turnReissues < this.policy.MAX_TURN_REISSUES) {
-      goal.turnReissues += 1
+    // Turn prompt in flight (a turn was SENT this phase): wait out the
+    // settle window before measuring — the prompt's reset chunk lands
+    // ~1.5-2.5 s after send and the yaw mid-execution is spin garbage
+    // (swings ±70° through the T2 crossfade, measured live 2026-08-02).
+    // Measuring before the settle reads the OLD stream's heading and
+    // declares false alignment mid-spin. `sentPrompt` alone cannot
+    // identify this state: a reissue resets it while the stream is still
+    // executing — the drift class's reissue loop (2026-08-03).
+    if (goal.turnSentAtMs !== 0 && now - goal.turnSentAtMs < this.policy.TURN_SETTLE_S * 1000) return
+    // Settle elapsed (or no turn in flight): measure the ACTUAL result
+    // (re-anchor on reality). Drift-class gate (2026-08-03): the EMA
+    // alone is NOT enough to declare a turn aligned. The live stream
+    // executes a turn ask at 79-240% of the request and the raw yaw
+    // keeps rotating past the target after the EMA reads aligned
+    // (measured: the walk started with the raw yaw 76-100° off and
+    // carried her into the coffee table). Require BOTH the smoothed and
+    // the RAW yaw within tolerance of the waypoint, HELD (mirror of
+    // FACE_HOLD_S) so a transient mid-execution crossing cannot fire the
+    // walk prompt.
+    const emaErr = Math.abs(this.headingErrorDeg(waypoint))
+    const rawErr = Math.abs(this.rawHeadingErrorDeg(waypoint))
+    if (emaErr <= this.policy.TURN_TOLERANCE_DEG && rawErr <= this.policy.TURN_RAW_TOLERANCE_DEG) {
+      if (goal.turnRawAlignedAtMs === null) goal.turnRawAlignedAtMs = now
+      if (now - goal.turnRawAlignedAtMs >= this.policy.TURN_RAW_HOLD_S * 1000) {
+        this.beginPhase('walk')
+        return
+      }
+      return // aligned but holding — the raw yaw must stay settled
+    }
+    goal.turnRawAlignedAtMs = null
+    // Not aligned. If the yaw is still moving (raw diverged from the EMA
+    // mid-execution), WAIT — re-issuing onto a still-rotating stream
+    // compounds the overshoot (measured live: 4×45° asks executed
+    // 79-240% each and the heading never converged). Only a SETTLED
+    // misalignment consumes the reissue budget.
+    const rawSpread = Math.abs((wrapAngle(this.probe().yaw - (this.yawEma ?? this.probe().yaw)) * 180) / Math.PI)
+    if (rawSpread > this.policy.TURN_RAW_SETTLE_SPREAD_DEG) return
+    // Error remains (settled): re-issue with the REMAINING error
+    // immediately. The settle window (not a fixed timeout) paces
+    // iterations — the 45° request ceiling means a gross error needs
+    // several steps, and an 8 s-per-step timeout turned zigzag
+    // convergence into goal timeouts (unit sim, 2026-08-02). The FIRST
+    // ask of the phase is free (it is the measurement that starts the
+    // loop); each correction after it consumes the reissue budget, which
+    // bounds a non-responding stream. On exhaustion, accept the error
+    // and walk (the stall/replan feedback corrects gross misalignment
+    // downstream).
+    if (goal.turnSentAtMs === 0 || goal.turnReissues < this.policy.MAX_TURN_REISSUES) {
+      if (goal.turnSentAtMs !== 0) goal.turnReissues += 1
       goal.phaseStartedAtMs = now
-      goal.sentPrompt = null
+      goal.turnSentAtMs = now
+      this.sendTurnPrompt(waypoint)
     } else {
       this.beginPhase('walk')
     }
@@ -780,15 +1000,62 @@ export class GoalPlanner {
       return
     }
     if (this.trackTargetProgress(now)) return
+    const probe = this.probe()
     if (goal.sentPrompt === null) {
       this.sendSegmentPrompt('walk')
       goal.walkPromptSentAtMs = now
+      // Landing-window snapshot (2026-08-05): decide at SEND whether the
+      // walk prompt needs a landing window at all. The window exists for
+      // the never-settling handoff — the turn-phase sweep is LIVE when the
+      // cap fires, and the walk prompt's landing (1.5-2.5 s) reads the
+      // OLD stream's sweep garbage unless steering is suppressed. A
+      // settled handoff (converged turn; instant-land unit sims) has no
+      // landing risk and must not eat the window. |raw − EMA| is the
+      // yaw's motion measure (rate × tau), exactly the discriminator
+      // TURN_RAW_SETTLE_SPREAD_DEG uses.
+      const spreadAtSend = Math.abs((wrapAngle(probe.yaw - (this.yawEma ?? probe.yaw)) * 180) / Math.PI)
+      goal.walkLandWindowOpen = spreadAtSend > this.policy.WALK_LANDED_SPREAD_DEG
       goal.bestDistance = Infinity
       goal.stallSinceMs = null
     }
-    const probe = this.probe()
     const waypoint = goal.path[goal.waypointIndex]!
     const d = distanceXZ(probe.x, probe.z, waypoint.x, waypoint.z)
+    // Walk-prompt landing window (2026-08-04 never-settling stream class):
+    // after a walk prompt is sent it takes 1.5-2.5 s to REPLACE the old
+    // stream (the same reset-chunk latency TURN_SETTLE_S covers). Until
+    // the window elapses, the measured heading is the OLD stream's garbage
+    // — a steering check here yanks the walk back into turn before it
+    // ever moves (measured live: turn↔walk oscillation, each walk phase
+    // ~1 tick, route length never improves, the target watchdog consumes
+    // the replan). Suppress steering + lateral-gate for the window; the
+    // walk prompt is in flight and the arrival check below still runs (a
+    // body already inside the arrive radius must still arrive). The
+    // landing window also does not count as per-waypoint stall time
+    // (stallSinceMs is reset only WHILE the window is open — after it,
+    // the normal stall accumulation resumes so a genuinely frozen body
+    // still stalls).
+    const walkSettledMs = goal.walkPromptSentAtMs + this.policy.WALK_SETTLE_S * 1000
+    // The window's stall-clock semantics stay honest: while the window is
+    // open the landing does not count as per-waypoint stall time (a body
+    // that is still landing is not stalled), capped at WALK_SETTLE_S — a
+    // stream that never moves after the window still stalls. A CLOSED
+    // window (settled handoff) never touches the stall clock: the walk
+    // stalls from its first non-progress tick, exactly like pre-window
+    // behavior.
+    if (goal.walkLandWindowOpen && now < walkSettledMs) {
+      goal.stallSinceMs = null
+    }
+    // Early-close (2026-08-05): the window's suppression ends the moment
+    // the yaw RE-ANCHORS — the walk stream landing freezes the heading
+    // (live yaw-continuity re-anchor), collapsing |raw − EMA|. From that
+    // sample the walk's heading is honest and the steering/lateral gates
+    // may judge it: a usable freeze is judged immediately (no blind
+    // drift time), a garbage freeze is yanked as soon as the landing
+    // completes instead of eating the full window. The WALK_SETTLE_S cap
+    // still bounds a stream whose yaw never re-anchors (never lands).
+    const walkLanded = goal.walkLandWindowOpen &&
+      Math.abs((wrapAngle(probe.yaw - (this.yawEma ?? probe.yaw)) * 180) / Math.PI) <= this.policy.WALK_LANDED_SPREAD_DEG
+    const landingHolds = !goal.walkLandWindowOpen || walkLanded || now >= walkSettledMs
     // Closing speed toward the waypoint (m/s, ≥0) — the braking lead for
     // the final waypoint's arrive trigger (policy at ARRIVE_LEAD_S).
     const probeDtS = Math.max(1e-3, (now - goal.prevProbeAtMs) / 1000)
@@ -823,9 +1090,55 @@ export class GoalPlanner {
     // shouldSteer) interrupt the walk with a turn segment re-aimed at the
     // waypoint, then resume walking. Coarse on purpose: fine corrections
     // overshoot the stochastic stream and the heading never converges.
-    if (this.shouldSteer(waypoint)) {
+    // Landing-window gate (2026-08-04): steering is suppressed until the
+    // walk prompt has had WALK_SETTLE_S to replace the old stream — a
+    // same-tick check reads the OLD heading and yanks the walk before it
+    // moves (the never-settling stream class, desk2 live). The gate only
+    // applies when the send snapshot found the yaw MOVING (sweep
+    // handoff), and closes early the moment the yaw re-anchors
+    // (walkLanded); a settled handoff keeps the pre-window behavior.
+    if (landingHolds && this.shouldSteer(waypoint)) {
       this.beginPhase('turn')
       return
+    }
+    // Final-approach lateral gate (2026-08-04): the coarse 60° threshold
+    // tolerates a residual heading error the raw-gate turn phase leaves at
+    // ≤25° — at 2-3 m range that is a 0.5-1.2 m PERPENDICULAR miss, and
+    // the walk line never enters the arrive band (measured in the unit
+    // sim: a perfectly straight walk at 10° off failed arrival at 0.5 m).
+    // For the FINAL waypoint, steer whenever the perpendicular miss
+    // (range × sin(err)) exceeds the arrival tolerance (minus margin), so
+    // the walk line crosses the spot instead of passing beside it. The
+    // raw-gate turn phase owns the correction (settle + hold — no reissue
+    // onto a moving stream), so a late final-approach turn cannot compound
+    // into the rosette the coarse threshold was sized against. A body that
+    // is MOVING triggers it — closing OR tangent: a tangent walk (lateral
+    // miss, ~0 closing speed) is exactly the live meander (measured:
+    // straightness 0.295, 48 nav-absorbs into the door — she walked
+    // 3.7 m circling the spot at constant range, the closing-gate never
+    // fired, and the stall watchdog consumed the replan). A FROZEN body
+    // (no probe displacement) still belongs to the stall/replan detector
+    // — steering it just churns phases forever (measured in the unit sim:
+    // 22 walk prompts and no stall before the target watchdog). The
+    // no-turn zone still applies: inside WALK_NO_TURN_M the arrival
+    // radius + braking lead take over (heading error there is
+    // lateral-offset noise).
+    const movedM = Math.hypot(probe.x - goal.prevProbeX, probe.z - goal.prevProbeZ)
+    goal.prevProbeX = probe.x
+    goal.prevProbeZ = probe.z
+    // Landing-window gate on the lateral gate too (2026-08-04): a same-tick
+    // lateral check during the walk-prompt landing reads the OLD stream's
+    // heading — the corrected walk line is unknown until the new stream
+    // lands. The final-approach turn then decides from an honest heading.
+    // Like the steering gate: sweep-handoff window only, early-close on
+    // re-anchor.
+    if (landingHolds && isFinal && (closingSpeed > 0 || movedM > 0.02) && d > this.policy.WALK_NO_TURN_M) {
+      const errDeg = Math.abs(this.headingErrorDeg(waypoint))
+      const lateralMissM = d * Math.sin((errDeg * Math.PI) / 180)
+      if (lateralMissM > this.policy.FINAL_APPROACH_LATERAL_M) {
+        this.beginPhase('turn')
+        return
+      }
     }
     // Arrival != motion trust: measure ACTUAL progress toward the CURRENT
     // waypoint; stalled (blocked or drifted) walks replan once from the
@@ -844,6 +1157,10 @@ export class GoalPlanner {
     if (now - goal.walkPromptSentAtMs > this.policy.WALK_PROMPT_ROTATE_S * 1000) {
       goal.sentPrompt = null
       goal.walkPromptSentAtMs = now
+      // Re-snapshot the window: a rotate re-prompt sent from a settled
+      // (drifting-only) walk gets no window; one sent mid-sweep does.
+      const spreadAtRotate = Math.abs((wrapAngle(probe.yaw - (this.yawEma ?? probe.yaw)) * 180) / Math.PI)
+      goal.walkLandWindowOpen = spreadAtRotate > this.policy.WALK_LANDED_SPREAD_DEG
       this.sendSegmentPrompt('walk')
     }
   }
@@ -983,7 +1300,17 @@ export class GoalPlanner {
       goal.turnReissues = 0
       goal.faceAlignedAtMs = null
     }
-    if (phase === 'walk') goal.walkPromptSentAtMs = -Infinity
+    if (phase === 'turn') {
+      goal.turnRawAlignedAtMs = null
+      // A fresh turn phase has no prompt in flight: the first measurement
+      // is the phase's first ask (free), and corrections after it consume
+      // the reissue budget (stepTurn).
+      goal.turnSentAtMs = 0
+    }
+    if (phase === 'walk') {
+      goal.walkPromptSentAtMs = -Infinity
+      goal.walkLandWindowOpen = false
+    }
   }
 
   private arrivedAtTarget(): boolean {
@@ -1077,6 +1404,7 @@ export class GoalPlanner {
     goal.path = path
     goal.waypointIndex = 0
     goal.turnReissues = 0
+    goal.turnRawAlignedAtMs = null
     goal.stallSinceMs = null
     goal.bestDistance = Infinity
     goal.sentPrompt = null
@@ -1084,6 +1412,8 @@ export class GoalPlanner {
     goal.faceAlignedAtMs = null
     goal.prevWaypointDist = Infinity
     goal.prevProbeAtMs = 0
+    goal.prevProbeX = probe.x
+    goal.prevProbeZ = probe.z
     goal.bestTargetDist = Infinity
     goal.targetStallSinceMs = null
     goal.pathRemaining = this.computePathRemaining(path)
@@ -1096,6 +1426,14 @@ export class GoalPlanner {
     const goal = this.goal!
     if (reason !== 'completed' && reason !== 'cleared') {
       this.lastFailure = `${reason} (goal ${goal.id})`
+    }
+    // Interaction-completion hook (INTERACTABLES_SPEC.md): fires ONLY when
+    // the goal genuinely completed with its interaction prompt played
+    // (phase 'interact'). Cancels/clears/supersedes/timeouts/failures never
+    // reach the interaction, so they never invoke the hook — the scene's
+    // pickup semantics (attach/putdown) must not fire on aborted goals.
+    if (reason === 'completed' && goal.phase === 'interact') {
+      this.onInteractionComplete?.(goal.id, goal.interaction)
     }
     this.lastReplans = goal.replans
     this.lastActivityMs = this.nowMs()
@@ -1173,6 +1511,17 @@ export class GoalPlanner {
     const probe = this.probe()
     const desired = Math.atan2(waypoint.x - probe.x, waypoint.z - probe.z)
     return (wrapAngle(desired - (this.yawEma ?? probe.yaw)) * 180) / Math.PI
+  }
+
+  /** Signed heading error (deg) to a point vs the RAW probe facing — the
+   * stream's ACTUAL executed heading, not the filtered one. The turn→walk
+   * gate reads this (drift class): the EMA can read aligned while the raw
+   * yaw is still rotating past the target, and a walk prompt sent then
+   * goes off-heading into the nearest obstacle. */
+  private rawHeadingErrorDeg(waypoint: Vector3): number {
+    const probe = this.probe()
+    const desired = Math.atan2(waypoint.x - probe.x, waypoint.z - probe.z)
+    return (wrapAngle(desired - probe.yaw) * 180) / Math.PI
   }
 
   /**

@@ -36,6 +36,7 @@ import { Vector3 } from 'three'
 
 import { GoalPlanner, GOAL_PLANNER } from '../src/embodiment/planning/GoalPlanner.ts'
 import { RoomNavigation } from '../src/embodiment/navigation/RoomNavigation.ts'
+import { InteractableStateMachine } from '../src/embodiment/room/interactableState.ts'
 import { parseSceneManifest } from '../src/embodiment/room/sceneManifest.ts'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -107,27 +108,118 @@ function makeSim(x, z, yaw, opts = {}) {
     speed: opts.speed ?? 0.6,
     turnRateDegS: opts.turnRate ?? 120,
     driftDegS: opts.driftDegS ?? 0,
+    // Turn-execution tail (live stream model, 2026-08-03 drift class):
+    // the live ARDY stream executes a turn ask at 79-240% of the request
+    // and the raw yaw KEEPS MOVING past the requested heading after the
+    // planner's settle window closes (reset chunk lands 1.5-2.5 s after
+    // send; the yaw mid-execution is spin garbage — the EMA reads aligned
+    // as the raw crosses the target, then the raw keeps rotating past it).
+    // Model: after the requested turn target is reached, the yaw swings
+    // PAST it (up to turnSwingDeg, damped back to the target over
+    // turnSwingS). A walk prompt sent during that swing goes off-heading
+    // into the nearest obstacle — the drift class the regression locks.
+    swingDeg: opts.turnSwingDeg ?? 0,
+    swingS: opts.turnSwingS ?? 2,
+    swingDelayS: opts.turnSwingDelayS ?? 0,
+    swingAt: null, // sim-seconds when the swing starts (after the delay)
+    turnSwingBase: 0,
+    simS: 0,
     // Live-honest default: the stop-prompt latency measured on the raw
     // stream (prompt → service reset → new stream → settle ≈ 1.2 s at
     // 20 fps + ~0.1 s generation; the planner's braking lead is sized for
     // exactly this). Tests that need a different coast pass it explicitly.
     coastS: opts.coastS ?? 1.2,
     coastLeft: 0,
+    // Never-settling turn sweep (2026-08-04 drift class): the live
+    // stream's yaw demonstrably keeps rotating after a turn ask — the
+    // tels sweep 0°→180° continuously for 68+ s with zero prompts in
+    // flight (desk2), and the raw gate's "wait for settle" becomes an
+    // unbounded hold (the reissue budget never exhausts because the yaw
+    // is never "settled"). Model: after the requested turn target is
+    // reached, the yaw keeps rotating at neverSettleDegS until the NEXT
+    // prompt (a walk prompt replaces the stream and freezes the heading,
+    // exactly like the live yaw-continuity re-anchor).
+    neverSettleDegS: opts.neverSettleDegS ?? 0,
+    // Walk-prompt landing latency (s) — 2026-08-04 never-settling stream
+    // class: live, a walk prompt takes 1.5-2.5 s to REPLACE the old
+    // stream (the reset chunk lands, then the new walk stream starts).
+    // During the landing the body does not move and the OLD stream's yaw
+    // behavior continues (the sweep keeps sweeping). Pre-fix the planner
+    // measured the old stream's heading on the same tick the walk prompt
+    // was sent and yanked the walk back into turn before it ever moved
+    // (measured live: turn↔walk oscillation, each walk phase ~1 tick).
+    // WALK_SETTLE_S suppresses steering until the landing + re-anchor
+    // complete; this option makes the sim reproduce the live loop.
+    walkLandS: opts.walkLandS ?? 0,
+    walkLandLeft: 0,
+    // Walk-stream frozen heading (deg) — the live yaw-continuity
+    // re-anchor: when the walk prompt's reset chunk lands, the new walk
+    // stream freezes the heading at the direction the walk actually
+    // starts moving (live desk2: the walk at 42° error moved her 4.2 →
+    // 1.2 m — a usable frozen heading). null = freeze at the current
+    // sweep position (the unlucky case). The regression that locks the
+    // landing-window gate uses a USABLE frozen heading: the walk can
+    // complete IF the planner lets it land instead of yanking on the
+    // OLD stream's pre-landing sweep garbage.
+    walkFreezeYawDeg: opts.walkFreezeYawDeg ?? null,
     step(dt) {
+      this.simS += dt
       if (this.turnTarget !== null) {
+        // A new turn prompt cancels any in-flight swing (the stream
+        // re-anchors on the new ask).
+        this.swingAt = null
         const err = wrapAngle(this.turnTarget - this.yaw)
         const maxStep = (this.turnRateDegS * dt * Math.PI) / 180
         if (Math.abs(err) <= maxStep) {
           this.yaw = this.turnTarget
           this.turnTarget = null
+          if (this.swingDeg > 0) {
+            this.turnSwingBase = this.yaw
+            this.swingAt = this.simS + this.swingDelayS
+          }
         } else {
           this.yaw += Math.sign(err) * maxStep
         }
-      } else if (this.walking || this.coastLeft > 0) {
+      }
+      // Turn-execution tail: override the yaw while the swing is live —
+      // the walk (if any) moves at the swung heading, exactly like the
+      // live stream's walk going off-heading into the coffee table.
+      if (this.swingAt !== null) {
+        const u = Math.max(0, Math.min(1, (this.simS - this.swingAt) / this.swingS))
+        this.yaw = this.turnSwingBase + (this.swingDeg * Math.PI / 180) * Math.sin(Math.PI * u) * (1 - u)
+        if (u >= 1) this.swingAt = null
+      }
+      // Never-settling sweep: the yaw keeps rotating after the requested
+      // turn (no settle-back) until the next prompt arrives — a walk
+      // prompt replaces the stream and freezes the heading (the live
+      // yaw-continuity re-anchor). Only while no turn is in flight AND
+      // she is not walking (the walk re-anchors the heading, so the
+      // sweep belongs to turn execution alone).
+      if (this.neverSettleDegS !== 0 && this.turnTarget === null && this.swingAt === null && !this.walking) {
+        this.yaw = wrapAngle(this.yaw + (this.neverSettleDegS * dt * Math.PI) / 180)
+      }
+      if ((this.walking || this.coastLeft > 0) && this.turnTarget === null) {
         if (!this.walking) this.coastLeft = Math.max(0, this.coastLeft - dt)
         this.x = clamp(this.x + Math.sin(this.yaw) * this.speed * dt, bounds.minX, bounds.maxX)
         this.z = clamp(this.z + Math.cos(this.yaw) * this.speed * dt, bounds.minZ, bounds.maxZ)
         this.yaw += (this.driftDegS * dt * Math.PI) / 180
+      } else if (this.walkLandLeft > 0) {
+        // Walk-prompt landing (2026-08-04 never-settling stream class):
+        // the prompt has been sent but the new walk stream has not landed
+        // yet — the body does NOT move and the yaw continues whatever the
+        // OLD stream was doing (the never-settling sweep keeps sweeping).
+        this.walkLandLeft = Math.max(0, this.walkLandLeft - dt)
+        if (this.walkLandLeft === 0) {
+          // Landing complete: the new walk stream starts — the yaw
+          // re-anchors on the walk (live yaw-continuity re-anchor), the
+          // body starts moving at the frozen heading (walkFreezeYawDeg,
+          // the heading the walk actually moves at; null = the current
+          // sweep position, the unlucky case).
+          if (this.walkFreezeYawDeg !== null) {
+            this.yaw = (this.walkFreezeYawDeg * Math.PI) / 180
+          }
+          this.walking = true
+        }
       }
     },
   }
@@ -142,6 +234,8 @@ function makePlanner(manifest, navigation, channel, sim, clock, opts = {}) {
     nowMs: () => clock.ms,
     random: opts.random ?? (() => 0),
     essenceState: opts.essenceState ?? (() => null),
+    objectState: opts.objectState,
+    onInteractionComplete: opts.onInteractionComplete,
     // The sim executes turns instantly and exactly; TURN_SETTLE_S is a
     // LIVE-stream prompt-latency guard (reset chunk lands ~1.5-2.5 s after
     // send) and YAW_EMA_TAU_S smooths live root wobble. Neither exists in
@@ -150,8 +244,24 @@ function makePlanner(manifest, navigation, channel, sim, clock, opts = {}) {
     // uncompressed pair makes the harness settle-bound (120 s goal-cap
     // timeouts), while compressing ONLY the settle desyncs the EMA from
     // the measurement window (stale-yaw wrong-direction decisions). Both
-    // are compressed together, keeping their ratio.
-    policy: { TURN_SETTLE_S: 1.0, YAW_EMA_TAU_S: 0.25, ...opts.policy },
+    // are compressed together, keeping their ratio. TURN_RAW_SETTLE_SPREAD_DEG
+    // is the same physical quantity as the EMA lag (|raw − EMA| ≈ rate ×
+    // tau): with the tau compressed 0.8 → 0.25, a moving yaw produces
+    // ~1/3.2 of the live spread — the live 20° gate would read the sim's
+    // turn-execution tail (spread 14-16° while swinging) as "settled" and
+    // re-issue onto the moving stream, compounding the overshoot. 6° keeps
+    // the discrimination: settled ≈ 0-2°, tail ≥ 14°.
+    policy: {
+      TURN_SETTLE_S: 1.0,
+      YAW_EMA_TAU_S: 0.25,
+      TURN_RAW_SETTLE_SPREAD_DEG: 6,
+      // Same "moving vs settled" discriminator, snapshotted at walk-prompt
+      // send: the sim's never-settling sweep (40°/s × 0.25 tau ≈ 10°
+      // spread) opens the landing window; a settled handoff (~0°) stays
+      // closed. Pinned to match TURN_RAW_SETTLE_SPREAD_DEG.
+      WALK_LANDED_SPREAD_DEG: 6,
+      ...opts.policy,
+    },
   })
 }
 
@@ -183,7 +293,15 @@ function drive(planner, channel, sim, clock, opts = {}) {
     for (let i = lastLogLen; i < log.length; i += 1) {
       const entry = log[i]
       if (entry.kind === 'walk') {
-        sim.walking = true
+        if (sim.walkLandS > 0) {
+          // Live landing latency (2026-08-04 never-settling stream class):
+          // the prompt is sent but the new walk stream takes walkLandS to
+          // land — the body does not move yet, the yaw keeps sweeping.
+          sim.walkLandLeft = sim.walkLandS
+          sim.walking = false
+        } else {
+          sim.walking = true
+        }
         sim.turnTarget = null
       } else if (entry.kind === 'arrive' || entry.kind === 'interact') {
         // Stop-prompt latency: the walk coasts for sim.coastS before the
@@ -191,11 +309,16 @@ function drive(planner, channel, sim, clock, opts = {}) {
         if (sim.walking) sim.coastLeft = sim.coastS
         sim.walking = false
         sim.turnTarget = null
+        sim.walkLandLeft = 0
       } else if (entry.kind === 'turn') {
         sim.walking = false
+        sim.walkLandLeft = 0
         const deg = /(\d+)\s*degrees/.exec(entry.prompt)
         const dir = /left/.test(entry.prompt) ? 1 : -1
-        sim.turnTarget = sim.yaw + (dir * (deg ? Number(deg[1]) : 45) * Math.PI) / 180
+        const ask = deg ? Number(deg[1]) : 45
+        sim.turnAskDeg = ask
+        sim.turnDir = dir
+        sim.turnTarget = sim.yaw + (dir * ask * Math.PI) / 180
       }
     }
     lastLogLen = log.length
@@ -1154,4 +1277,364 @@ test('telemetry exposes goal/phase/distanceToSpot/replans/promptLog through the 
   assert.ok(sawGoal)
   assert.ok(sawDistance)
   assert.ok(out.tel.promptLog.length >= 4, 'prompt log must prove each phase')
+})
+
+// ── interaction-completion hook (spatial layer 5) ─────────────────
+
+test('onInteractionComplete fires once when a goal completes with its interaction played', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const completed = []
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    onInteractionComplete: (id, interaction) =>
+      completed.push([id, interaction.kind, interaction.prompt]),
+  })
+
+  planner.setGoal('desk.work')
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.lastFailure, null)
+  assert.equal(completed.length, 1, 'hook fires exactly once')
+  assert.deepEqual(completed[0], ['desk.work', 'sit', 'a person sits at a desk working'])
+})
+
+test('cup.pickup resolves through the planner and the hook carries the attach spec', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const completed = []
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    onInteractionComplete: (id, interaction) => completed.push([id, interaction.kind, interaction.attach]),
+  })
+
+  assert.equal(planner.setGoal('cup.pickup'), true)
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.lastFailure, null)
+  assert.ok(out.allPrompts.includes('a person picks up a cup from the table'))
+  assert.equal(completed.length, 1)
+  assert.equal(completed[0][0], 'cup.pickup')
+  assert.equal(completed[0][1], 'pickup')
+  assert.deepEqual(completed[0][2], { bone: 'rightHand', offset: [0, 0.05, 0] })
+})
+
+test('onInteractionComplete does NOT fire on clear / user-cancel / timeout', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+
+  // clear
+  {
+    const channel = makeChannel()
+    const sim = makeSim(0, 0.15, 0)
+    const clock = { ms: 0 }
+    const completed = []
+    const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+      onInteractionComplete: (id) => completed.push(id),
+    })
+    planner.setGoal('desk.work')
+    planner.clearGoal()
+    stepMs(clock, planner, 2000)
+    assert.equal(planner.getGoal(), null)
+    assert.equal(completed.length, 0, 'cleared goal must not fire the hook')
+  }
+
+  // user cancel mid-goal (priority model: user intent cancels, journaled)
+  {
+    const channel = makeChannel()
+    const sim = makeSim(0, 0.15, 0)
+    const clock = { ms: 0 }
+    const completed = []
+    const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+      onInteractionComplete: (id) => completed.push(id),
+    })
+    planner.setGoal('desk.work')
+    stepMs(clock, planner, 1000)
+    channel.userPromptAtMs = clock.ms
+    stepMs(clock, planner, 2000)
+    assert.equal(planner.getGoal(), null)
+    assert.equal(completed.length, 0, 'user-cancelled goal must not fire the hook')
+  }
+
+  // goal-cap timeout (never reached the interaction)
+  {
+    const channel = makeChannel()
+    const sim = makeSim(0, 0.15, 0)
+    const clock = { ms: 0 }
+    const completed = []
+    const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+      onInteractionComplete: (id) => completed.push(id),
+      policy: { MAX_GOAL_SECONDS: 1 },
+    })
+    planner.setGoal('desk.work')
+    stepMs(clock, planner, 5000)
+    assert.equal(planner.getGoal(), null)
+    assert.ok(planner.getTelemetry().lastFailure, 'must fail with a journaled reason')
+    assert.equal(completed.length, 0, 'timed-out goal must not fire the hook')
+  }
+})
+
+// ── requires gate + sets transition (spatial layer 5, door slice) ──
+
+/** door_01 manifest fixture (same geometry as rooms/tai-loft.json). */
+function doorManifest() {
+  return {
+    manifest_version: '1.1',
+    room_id: 'tai-loft',
+    name: 'The Synthesis Loft',
+    bounds: { minX: -3.65, maxX: 3.65, minZ: -3.65, maxZ: 3.65 },
+    obstacles: [],
+    objects: [
+      {
+        id: 'door_01',
+        label: 'the loft door',
+        position: [-2.4, 1.2, -3.9],
+        state: 'closed',
+        states: {
+          closed: { obstacle: true, mesh_rotation: [0, 0, 0] },
+          open: { obstacle: false, mesh_rotation: [0, -1.57, 0] },
+        },
+        obstacle: { center: [-2.4, -3.5], halfSize: [0.42, 0.25], padding: 0.1 },
+        interactions: [
+          { id: 'open', kind: 'use', spot: [-2.6, -3.1], facingDeg: 180, prompt: 'a person opens a door', requires: 'closed', sets: 'open' },
+          { id: 'close', kind: 'use', spot: [-2.6, -3.1], facingDeg: 180, prompt: 'a person closes a door', requires: 'open', sets: 'closed' },
+        ],
+      },
+    ],
+  }
+}
+
+/** Register door_01's stateful obstacle exactly like the scene does. */
+function addDoorObstacle(navigation, manifest) {
+  const door = manifest.objects.find((o) => o.id === 'door_01')
+  navigation.addBoxObstacle(
+    door.id,
+    new Vector3(door.obstacle.center[0], 0, door.obstacle.center[1]),
+    new Vector3(door.obstacle.halfSize[0] * 2, 1, door.obstacle.halfSize[1] * 2),
+    door.obstacle.padding,
+  )
+}
+
+test('requires gate: door_01.open is refused while the door is open (journaled)', async () => {
+  const { manifest } = parseSceneManifest(doorManifest())
+  assert.ok(manifest)
+  const navigation = RoomNavigation.fromManifest(manifest, 0.22)
+  addDoorObstacle(navigation, manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const machine = new InteractableStateMachine(manifest, () => clock.ms)
+  // Flip the machine to open (a completed open interaction did it).
+  const door = manifest.objects[0]
+  machine.applySets(door, door.interactions.find((i) => i.id === 'open'))
+  assert.equal(machine.stateOf('door_01'), 'open')
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    objectState: (id) => machine.stateOf(id),
+  })
+
+  assert.equal(planner.setGoal('door_01.open'), false)
+  assert.equal(planner.getGoal(), null)
+  assert.match(planner.getTelemetry().lastFailure ?? '', /requires "closed"/)
+  assert.match(planner.getTelemetry().lastFailure ?? '', /is open/)
+  // Journaled in the prompt log (GEVS-visible evidence).
+  assert.ok(planner.getTelemetry().promptLog.some((e) => e.prompt.includes('refused')), 'refusal journaled')
+  // The still-valid close interaction goes through.
+  assert.equal(planner.setGoal('door_01.close'), true)
+})
+
+test('requires gate: fail-closed without a state provider (unknown state → refused)', async () => {
+  const { manifest } = parseSceneManifest(doorManifest())
+  assert.ok(manifest)
+  const navigation = RoomNavigation.fromManifest(manifest, 0.22)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock) // no objectState
+
+  assert.equal(planner.setGoal('door_01.open'), false)
+  assert.match(planner.getTelemetry().lastFailure ?? '', /is unknown/)
+})
+
+test('door_01.open completes → onInteractionComplete fires and the machine transitions closed → open', async () => {
+  const { manifest } = parseSceneManifest(doorManifest())
+  assert.ok(manifest)
+  const navigation = RoomNavigation.fromManifest(manifest, 0.22)
+  addDoorObstacle(navigation, manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const machine = new InteractableStateMachine(manifest, () => clock.ms)
+  const completed = []
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    objectState: (id) => machine.stateOf(id),
+    // Scene contract: the real handler (TaiRoomScene.handleInteractionComplete)
+    // applies the sets transition here — mesh + nav effects are scene-side.
+    onInteractionComplete: (interactionId, interaction) => {
+      completed.push({ interactionId, interaction })
+      machine.applySets(manifest.objects[0], interaction)
+    },
+  })
+
+  assert.equal(planner.setGoal('door_01.open'), true)
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.lastFailure, null, `unexpected failure: ${out.tel.lastFailure}`)
+  // The interaction prompt actually played.
+  assert.ok(out.allPrompts.includes('a person opens a door'))
+  // Completion hook fired exactly once with the full interaction id.
+  assert.equal(completed.length, 1)
+  assert.equal(completed[0].interactionId, 'door_01.open')
+  assert.equal(completed[0].interaction.id, 'open')
+  // The sets transition applied: machine now says open, journaled.
+  assert.equal(machine.stateOf('door_01'), 'open')
+  assert.deepEqual(machine.journal().map((e) => [e.objectId, e.from, e.to]), [['door_01', 'closed', 'open']])
+  // The planner itself never touches navigation state — the scene's
+  // applyObjectStateEffects toggles the obstacle (out of scope here).
+  assert.equal(navigation.listObstacles().find((o) => o.id === 'door_01').enabled, true)
+})
+
+// ── drift class: turn-execution tail (live walk drift) ─────────────
+
+test('drift class: a turn whose raw yaw keeps rotating past the target after the settle window must not start the walk off-heading — the goal completes under reflex churn', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Live-stream turn-execution tail (2026-08-03 drift class): the live
+  // ARDY stream executes a turn ask at 79-240% of the request — the raw
+  // yaw holds at the requested heading briefly (EMA reads aligned), then
+  // swings PAST it (up to turnSwingDeg, damped back over turnSwingS).
+  // A walk prompt sent during that swing goes off-heading into the
+  // nearest obstacle — the live failure (4/4 completion-fail, walk into
+  // the coffee table / daybed, navAbsorbs 24-53, "blocked path after 1
+  // replan").
+  const sim = makeSim(0, 0.15, 0, {
+    turnSwingDeg: 90,
+    turnSwingS: 2,
+    turnSwingDelayS: 0.8,
+  })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+  assert.equal(planner.setGoal('desk.work'), true)
+  let reflexFired = false
+  let firstWalkMs = null
+  const out = drive(planner, channel, sim, clock, {
+    beforeEach(ms, _planner, ch, _sim) {
+      // Simulated reflex churn: one nav-reflex reaction DURING the walk,
+      // 4 s after the first walk prompt (the turn-execution swing has
+      // settled by then — the live reflex fires mid-walk, after the
+      // off-heading walk bumps the coffee table). The walk freezes for
+      // 2.5 s, then resumes (the reflex layer's restore re-issues the
+      // segment).
+      const tel = _planner.getTelemetry()
+      if (firstWalkMs === null && tel.promptLog.some((e) => e.kind === 'walk')) firstWalkMs = ms
+      if (!reflexFired && firstWalkMs !== null && ms >= firstWalkMs + 4000) {
+        reflexFired = true
+        ch.reflexActive = true
+      }
+      if (reflexFired && ch.reflexActive && firstWalkMs !== null && ms >= firstWalkMs + 6500) {
+        ch.reflexActive = false
+      }
+    },
+  })
+  assert.equal(reflexFired, true, 'reflex churn actually fired')
+  // The goal completes despite the execution tail + reflex churn: no
+  // failure, the interaction prompt played.
+  assert.equal(out.tel.lastFailure, null, `goal must complete: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person sits at a desk working'), 'interaction prompt played')
+  assert.ok(out.tel.promptLog.some((e) => e.prompt.includes('desk.work') && e.prompt.includes('failed')) === false)
+})
+
+test('drift class: a turn whose raw yaw NEVER settles (continuous stream sweep) must not deadlock the goal — the bounded turn phase hands off to the walk (walk prompts fire, the turn phase cannot hold forever)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Live stream, 2026-08-04 drift class (desk1/desk2 tels): after a turn
+  // ask the yaw does NOT settle — it sweeps 0°→180° continuously for
+  // 68+ s with zero prompts in flight. At 40°/s the sweep crosses the
+  // raw gate's 25° tolerance in ~1.25 s (< the 1.5 s hold), and the
+  // |raw − EMA| spread (≈ rate × tau = 10°) exceeds the 6° settle-spread
+  // gate, so the reissue budget never exhausts and the raw gate holds
+  // FOREVER — the 20 s TARGET watchdog then consumes the goal's single
+  // replan on a TURN stall (measured live: desk1 travelM 0.224, never
+  // walked; desk2 68 s of silence then fail). The bounded turn phase
+  // (TURN_PHASE_MAX_S) must hand off to the walk — the walk prompt
+  // freezes the heading (live yaw-continuity re-anchor) and the walk
+  // phase's steering + lateral gate own the residual. The class lock:
+  // PRE-FIX the turn phase holds until the watchdog fails the goal with
+  // ZERO walk prompts ever sent; POST-FIX the walk prompt fires (the
+  // handoff happened) and the goal ends bounded — completed, or
+  // journaled-failed by the WALK machinery, never by a turn deadlock.
+  const sim = makeSim(0, 0.15, 0, { neverSettleDegS: 40 })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+  assert.equal(planner.setGoal('desk.work'), true)
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.goal, null, 'goal ended (bounded — not a turn-phase hang)')
+  assert.ok(out.walkPrompts.length > 0, `walk prompt fired (turn phase handed off): ${out.walkPrompts.join(' | ')}`)
+  // The handoff is the fix: pre-fix, no walk prompt ever fires (the raw
+  // gate holds the turn phase until the watchdog consumes the replan).
+  assert.ok(
+    out.tel.lastFailure === null || /blocked path|no path|timed out/.test(out.tel.lastFailure ?? ''),
+    `failure (if any) is a WALK-phase outcome, never a turn deadlock: ${out.tel.lastFailure}`,
+  )
+})
+
+test('drift class: the walk prompt must land before steering can interrupt it — a never-settling stream completes instead of oscillating turn↔walk forever (landing-window gate)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Live desk2 (2026-08-04, load 14.45): the turn phase capped at 10 s
+  // (yaw never settles — the sweep runs the whole goal), handed off to
+  // the walk, and the walk prompt was yanked back into turn on the SAME
+  // tick: the steering check read the OLD stream's pre-landing heading
+  // (the walk prompt takes 1.5-2.5 s to REPLACE the old stream) and
+  // declared a >60° error the walk never had a chance to fix. The
+  // oscillation burned the route-length watchdog budget, consumed the
+  // goal's single replan on a turn↔walk churn, and the goal failed with
+  // travelM 3.36 and zero completion. Model: neverSettleDegS keeps the
+  // yaw sweeping during turn phases (live: 0°→180° for 68+ s) AND
+  // walkLandS delays the walk's body motion (live: the reset chunk
+  // lands 1.5-2.5 s after send) while the yaw keeps sweeping — the
+  // same-tick steering check then reads sweep garbage exactly like the
+  // live stream. WALK_SETTLE_S must hold the steering decision until
+  // the walk stream lands and the yaw re-anchors on the walk.
+  // walkFreezeYawDeg: -100 = a USABLE frozen heading (live desk2: the
+  // walk at 42° error moved her 4.2 → 1.2 m) — the direction of the
+  // desk's single path waypoint (-2.83, -0.35) from the start position
+  // (0, 0.15). The walk CAN complete if the planner lets it land
+  // instead of yanking on the pre-landing sweep garbage; a random
+  // sweep freeze (walkFreezeYawDeg: null) models the degenerate case
+  // that must NOT be the regression's subject.
+  const sim = makeSim(0, 0.15, 0, { neverSettleDegS: 40, walkLandS: 2.2, walkFreezeYawDeg: -100 })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+  assert.equal(planner.setGoal('desk.work'), true)
+  const out = drive(planner, channel, sim, clock)
+  // The goal completes: the walk prompt landed, the body moved, the
+  // walk machinery (steering + lateral gate + arrival) owned the
+  // residual instead of the turn↔walk oscillation.
+  assert.equal(out.tel.lastFailure, null, `goal must complete: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person sits at a desk working'), 'interaction prompt played')
+  // The walk phase must have moved the body — multiple walk prompts,
+  // none yanked before it could land.
+  assert.ok(out.walkPrompts.length > 0, `walk prompts fired: ${out.walkPrompts.join(' | ')}`)
+})
+
+test('drift class: stalled walks still fail as blocked after the raw-settle gate (no false completion)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Frozen stream: turns settle exactly, but walking makes no progress —
+  // the raw-settle gate must NOT mask the blocked-path failure (the
+  // pre-existing behavior is preserved: one replan, then fail).
+  const sim = makeSim(0, 0.15, 0, { speed: 0 })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+
+  planner.setGoal('desk.work')
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.goal, null)
+  assert.match(out.tel.lastFailure ?? '', /blocked path.*1 replan/)
+  assert.equal(out.walkPrompts.length, 2, `walk prompts: ${out.walkPrompts.join(' | ')}`)
 })
