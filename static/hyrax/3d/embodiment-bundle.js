@@ -27785,8 +27785,18 @@ class nE {
     b(this, "lastActivityMs");
     b(this, "ambientLastPickedAt", /* @__PURE__ */ new Map());
     /** Essence driver: wall clock of the last drive-rule evaluation (poll gate
-     * at ESSENCE_POLL_S — state is re-read on the presence cadence). */
+     * at ESSENCE_POLL_S — state is re-read on the presence cadence). Stamped
+     * only AFTER gate acceptance (Mai RCA t_af24521d): a reflex/watchdog/quiet
+     * blocked evaluation must not burn the cadence. */
     b(this, "lastEssencePollMs", -1 / 0);
+    /** Essence driver: blocked-evaluation counters (telemetry driverSkips). */
+    b(this, "driverSkips", {
+      essence: { reflexWatchdog: 0, userQuiet: 0, noState: 0, noRule: 0 }
+    });
+    /** Last journaled skip key (`driver:reason`) — the console line fires on
+     * reason transitions only, so a sustained reflex (hundreds of frames) is
+     * one line, not a flood. Reset when a goal fires. */
+    b(this, "lastDriverSkipKey", null);
     /** Essence driver: per-goal cooldown clock (goal id → last fire). */
     b(this, "essenceLastFiredAt", /* @__PURE__ */ new Map());
     /** Essence driver: min-dwell hysteresis anchor — wall clock when the last
@@ -27879,7 +27889,8 @@ class nE {
         lastGoal: ((r = [...this.ambientLastPickedAt.entries()].sort((o, a) => a[1] - o[1])[0]) == null ? void 0 : r[0]) ?? null,
         lastGoalAtMs: [...this.ambientLastPickedAt.values()].sort((o, a) => a - o)[0] ?? null
       },
-      goalSource: this.goalSource === null ? null : { kind: "essence", rule: this.goalSource.rule, state: { ...this.goalSource.state } }
+      goalSource: this.goalSource === null ? null : { kind: "essence", rule: this.goalSource.rule, state: { ...this.goalSource.state } },
+      driverSkips: { essence: { ...this.driverSkips.essence } }
     };
   }
   /** Per-frame step (drives the goal state machine + the ambient idle driver). */
@@ -27892,7 +27903,7 @@ class nE {
       this.yawEma = $t(this.yawEma + r * $t(n.yaw - this.yawEma));
     }
     if (this.goal === null) {
-      this.maybeStartEssence(t), this.maybeStartAmbient(t);
+      this.maybeStartEssence(t) || this.maybeStartAmbient(t);
       return;
     }
     if (this.channel.lastUserPromptAtMs() > this.goal.startedAtMs) {
@@ -28244,15 +28255,35 @@ class nE {
    * state drives goals; unmatched rules fall through to the ambient deck
    * exactly as before. No threshold tuning, no whims, no new interaction
    * points — the manifest vocabulary is the only goal space.
+   *
+   * Returns true when this tick's evaluation was consumed by the driver
+   * (poll slot stamped + rules evaluated, whether or not a goal started);
+   * false when the driver is not actionable (cadence-gated, owner-blocked,
+   * no fresh state, or no rule matched) — the caller then lets the ambient
+   * deck try, which is the designed fallback.
    */
   maybeStartEssence(e) {
-    if (e - this.lastEssencePollMs < this.policy.ESSENCE_POLL_S * 1e3 || (this.lastEssencePollMs = e, this.channel.isReflexActive() || this.channel.isWatchdogHolding()) || e - this.channel.lastUserPromptAtMs() < this.policy.ESSENCE_USER_QUIET_S * 1e3) return;
+    if (e - this.lastEssencePollMs < this.policy.ESSENCE_POLL_S * 1e3) return !1;
+    if (this.channel.isReflexActive() || this.channel.isWatchdogHolding())
+      return this.driverSkip("reflex|watchdog"), !1;
+    if (e - this.channel.lastUserPromptAtMs() < this.policy.ESSENCE_USER_QUIET_S * 1e3)
+      return this.driverSkip("user-quiet"), !1;
     const t = this.essenceState();
-    if (t === null || t.fresh !== !0) return;
+    if (t === null || t.fresh !== !0)
+      return this.driverSkip("no-state|stale"), !1;
+    this.lastEssencePollMs = e;
     const n = this.pickEssenceGoal(e, t);
-    n !== null && (this.essenceLastFiredAt.set(n.goal, e), this.essenceLastStartedAtMs = e, this.setGoal(n.goal, "essence") && (this.goalSource = { kind: "essence", rule: n.rule, state: { ...t } }, this.journalPrompt("interact", `[goal] ${n.goal} (essence: ${n.rule})`), console.info(
+    return n === null ? (this.driverSkip("no-rule"), !1) : (this.essenceLastFiredAt.set(n.goal, e), this.essenceLastStartedAtMs = e, this.lastDriverSkipKey = null, this.setGoal(n.goal, "essence") && (this.goalSource = { kind: "essence", rule: n.rule, state: { ...t } }, this.journalPrompt("interact", `[goal] ${n.goal} (essence: ${n.rule})`), console.info(
       `[planner] essence driver: rule "${n.rule}" → ${n.goal} (energy ${kr(t.energy)}, focus ${kr(t.focus)}, stress ${kr(t.stress)}, sociability ${kr(t.sociability)}, activity ${t.activity ?? "?"})`
-    )));
+    )), !0);
+  }
+  /** Journal a blocked/empty essence evaluation: monotonic telemetry counter
+   * (driverSkips) + a console line on reason transitions only. */
+  driverSkip(e) {
+    const t = this.driverSkips.essence;
+    e === "reflex|watchdog" ? t.reflexWatchdog += 1 : e === "user-quiet" ? t.userQuiet += 1 : e === "no-state|stale" ? t.noState += 1 : t.noRule += 1;
+    const n = `essence:${e}`;
+    n !== this.lastDriverSkipKey && (console.info(`[planner] essence driver skipped: ${e} (${t.noRule + t.noState + t.userQuiet + t.reflexWatchdog} total)`), this.lastDriverSkipKey = n);
   }
   /**
    * Ordered first-match drive-rule evaluation. A rule whose goal does not

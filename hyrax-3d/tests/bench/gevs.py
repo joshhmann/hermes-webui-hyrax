@@ -524,19 +524,39 @@ def main():
                 driver-fired goal runs and completes (or times out). No settle
                 prompt here: a user prompt would start the driver's 30 s quiet
                 window and double the check wall time. The override is cleared
-                afterwards so the real presence path is never affected."""
+                afterwards so the real presence path is never affected.
+
+                Isolation (Mai RCA t_af24521d): the check clears any goal left
+                by a previous check FIRST — a stale goal would occupy the
+                single goal slot and starve the essence driver (the RCA's
+                essenceGoalSeen=0 run opened its window with the door goal
+                still active). The seed is then set and verified via the
+                getEssenceState echo — a silently dropped seed would make an
+                essenceGoalSeen=0 result uninterpretable. `started` is keyed
+                on goalSource.kind == 'essence' SPECIFICALLY, so a stray
+                non-essence goal can never satisfy the completion break."""
                 spot = check.get("recenter")
                 if spot and page.evaluate(
                         "(s) => window.__ardy.recenterRoot ? window.__ardy.recenterRoot(s[0], s[1]) : false",
                         spot):
                     print(f"  [recenter] {check['id']} → ({spot[0]}, {spot[1]})", flush=True)
+                # Fresh-planner isolation: cancel any goal left over from a
+                # previous check before the seed lands.
+                page.evaluate("() => window.__ardy.clearGoal ? window.__ardy.clearGoal() : false")
+                page.wait_for_timeout(int(check.get("settleS", 3)) * 1000)
                 mark = page.evaluate("() => window.__gevs.frames.length")
                 tel_before = page.evaluate("() => ({ ...window.__ardy.getTelemetry() })")
                 page.evaluate(
                     "(s) => window.__ardy.setEssenceState ? window.__ardy.setEssenceState(s) : false",
                     check["essenceSeed"])
-                print(f"  [essence-seed] t={time.time()-t_run0:6.1f} {json.dumps(check['essenceSeed'])[:100]}",
-                      flush=True)
+                seed_echo = page.evaluate(
+                    "() => window.__ardy.getEssenceState ? window.__ardy.getEssenceState() : null")
+                print(f"  [essence-seed] t={time.time()-t_run0:6.1f} {json.dumps(check['essenceSeed'])[:100]} "
+                      f"→ echo {json.dumps(seed_echo)[:60]}", flush=True)
+                seed_ok = bool(seed_echo) and seed_echo.get("fresh") is True
+                if not seed_ok:
+                    print(f"  [essence-seed] WARNING: seed echo did not land: "
+                          f"{json.dumps(seed_echo)[:120]}", flush=True)
                 deadline = time.time() + int(check.get("goalTimeoutS", 90))
                 tels = []
                 started = False
@@ -544,7 +564,8 @@ def main():
                     tels.append(page.evaluate(
                         "() => ({ state: window.__ardy.getState(), ...window.__ardy.getTelemetry() })"))
                     planner = (tels[-1].get("planner") or {})
-                    if planner.get("goal") is not None:
+                    src = planner.get("goalSource") or {}
+                    if src.get("kind") == "essence":
                         started = True
                     if started and planner.get("goal") is None and len(tels) >= 4:
                         break  # the driver-fired goal ran and completed
@@ -552,7 +573,8 @@ def main():
                 page.evaluate("() => window.__ardy.setEssenceState ? window.__ardy.setEssenceState(null) : false")
                 segments = [{"label": check["id"], "prompt": f"essence:{check['essenceSeed']}",
                              "seconds": round(time.time() - deadline + int(check.get("goalTimeoutS", 90)), 1),
-                             "frame_mark": mark, "tel_before": tel_before, "tels": tels}]
+                             "frame_mark": mark, "tel_before": tel_before, "tels": tels,
+                             "seedEchoOk": seed_ok}]
                 page.screenshot(path=str(shots_dir / f"{check['id']}.jpg"), type="jpeg", quality=60)
                 return segments
 
@@ -713,7 +735,7 @@ def main():
             "scores": scores,
             "checks": results,
             "console": [l for l in console_lines
-                        if "ardy" in l.lower() or l.startswith(("error", "pageerror"))][:50],
+                        if "ardy" in l.lower() or "[planner]" in l or l.startswith(("error", "pageerror"))][:50],
         }
         (out_dir / "gevs-report.json").write_text(json.dumps(report, indent=1))
         write_markdown(out_dir / "gevs-report.md", report)

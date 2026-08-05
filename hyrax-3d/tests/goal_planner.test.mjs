@@ -1248,6 +1248,69 @@ test('essence driver: a non-essence goal replaces the story (goalSource clears)'
   assert.equal(planner.getTelemetry().goalSource, null)
 })
 
+test('essence driver: a reflex-blocked poll does NOT burn the 30s slot — the goal fires on the first clean tick (RCA t_af24521d)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => ESSENCE_STATE({ energy: 0.2 }),
+  })
+  // The body is pinned against the daybed by the nav reflex (the RCA run's
+  // proximate trigger) for 31 s — two poll boundaries pass while blocked.
+  channel.reflexActive = true
+  stepMs(clock, planner, 31_000)
+  assert.equal(planner.getGoal(), null, 'reflex blocks the driver')
+  let skips = planner.getTelemetry().driverSkips.essence
+  assert.ok(skips.reflexWatchdog >= 1, `the gate block must be journaled, got ${JSON.stringify(skips)}`)
+  assert.equal(skips.noRule, 0, 'a blocked poll is not a rule evaluation')
+
+  // Reflex clears → the FIRST tick fires. Pre-fix the blocked polls had
+  // consumed the cadence and the driver would have waited out the full 30s
+  // (letting the ambient deck claim the slot meanwhile).
+  const clearedAt = clock.ms
+  channel.reflexActive = false
+  const picked = waitForEssenceGoal(planner, clock, 10_000)
+  assert.equal(picked, 'daybed.nap')
+  assert.ok(clock.ms - clearedAt < 30_000,
+    `fire must come from the first clean tick, not a fresh cadence (waited ${clock.ms - clearedAt}ms)`)
+  assert.equal(planner.getTelemetry().goalSource.rule, 'energy-low')
+})
+
+test('essence driver: a matching rule outranks the ambient deck on the same idle tick — ambient never claims the slot (RCA t_af24521d)', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  const sim = makeSim(0, 0.15, 0)
+  const clock = { ms: 0 }
+  let current = null // no presence state until the seed lands at t=90s
+  const planner = makePlanner(manifest, navigation, channel, sim, clock, {
+    essenceState: () => current,
+    random: () => 0,
+  })
+  // 90 s of idle: the ambient deck gate (AMBIENT_AFTER_S) opens at exactly
+  // the same tick the presence seed lands — the tick where the deck would
+  // otherwise claim the single goal slot after reflex-clear.
+  let seeded = false
+  let ticks = 0
+  while (clock.ms < 200_000 && planner.getGoal() === null && ticks++ < 5000) {
+    clock.ms += 100
+    if (clock.ms >= 90_000 && !seeded) {
+      seeded = true
+      current = ESSENCE_STATE({ energy: 0.2 })
+    }
+    planner.update(0.1)
+  }
+  assert.ok(seeded)
+  assert.equal(planner.getGoal(), 'daybed.nap', 'the essence driver claims the slot on the seed tick')
+  const tel = planner.getTelemetry()
+  assert.equal(tel.goalSource.rule, 'energy-low', 'the goal is essence-driven, not deck')
+  assert.equal(tel.ambient.lastGoal, null, 'the ambient deck never picked (essence outranks it)')
+  const skips = tel.driverSkips.essence
+  assert.ok(skips.noState > 0, `pre-seed evaluations are journaled as no-state: ${JSON.stringify(skips)}`)
+})
+
 // ── telemetry ──────────────────────────────────────────────────────
 
 test('telemetry exposes goal/phase/distanceToSpot/replans/promptLog through the run', async () => {

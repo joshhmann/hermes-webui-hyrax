@@ -230,10 +230,12 @@ def compute_metrics(check, segments, idle_floor_rate):
         m["quarterTurnYawDeg"] = round(sum(qt) / len(qt), 1) if qt else None
 
     # ── goal planner (spatial layer 3b) ───────────────────────────
-    # Also covers essence-driven checks (spatial layer 4, `essenceSeed`):
+    # Also covers essence-driven checks (spatial layer 4, `essenceSeed`) and
+    # the pickup-cup check (spatial layer 5, `pickupFlow` — its phases are
+    # goals too, so phase/prompt-log/arrival evidence is the same):
     # the goal arrives from the driver, not setGoal, but the phase/arrival/
     # prompt-log evidence is the same.
-    if check.get("goal") or check.get("essenceSeed"):
+    if check.get("goal") or check.get("essenceSeed") or check.get("pickupFlow"):
         planner_tels = [(t.get("planner") or {}) for t in tels]
         phases = [p.get("phase") for p in planner_tels]
         interact_idx = next((i for i, ph in enumerate(phases) if ph in ("interact", "done")), None)
@@ -262,6 +264,18 @@ def compute_metrics(check, segments, idle_floor_rate):
         est = (essence or {}).get("state") or {}
         e = est.get("energy")
         m["essenceStateEnergy"] = round(e, 3) if isinstance(e, (int, float)) else None
+        # Essence-driver gate-block counters (RCA t_af24521d): essenceGoalSeen
+        # alone is silent — these make "driver blocked" vs "no rule matched"
+        # legible (which gate starved the driver). Counters are monotonic per
+        # sample, so the max across samples is the run total.
+        skips = {}
+        for p in planner_tels:
+            ds = p.get("driverSkips") or {}
+            ed = ds.get("essence") or {}
+            for k, v in ed.items():
+                if isinstance(v, (int, float)):
+                    skips[k] = max(skips.get(k, 0), v)
+        m["essenceDriverSkips"] = skips
         expected = check.get("interactionPromptContains", "")
         # The prompt log is a persistent journal — dedupe across 2 Hz samples
         # so the same entry is never counted twice.
@@ -284,6 +298,119 @@ def compute_metrics(check, segments, idle_floor_rate):
         # Last failure journaled by the planner (why the goal ended, if it failed).
         failures = [p.get("lastFailure") for p in planner_tels if p.get("lastFailure")]
         m["lastFailure"] = failures[-1] if failures else None
+
+    # ── stateful interactables (spatial layer 5, door-open) ────────
+    # Goal checks with a `stateObject` carry per-sample `door` probes
+    # (state / rotDeg / nav enabled / doorway route-clear / journal) plus a
+    # pre-goal sample on tel_before — the fail-before half of the evidence.
+    if check.get("stateObject"):
+        sid = check["stateObject"]
+        pre = (segments[0]["tel_before"] or {}).get("door") or {}
+        doors = [t.get("door") for t in tels if isinstance(t.get("door"), dict)]
+        if doors:
+            states = [d.get("state") for d in doors]
+            m["doorStateOpen"] = 1 if any(s == "open" for s in states) else 0
+            rots = [d.get("rotDeg") for d in doors
+                    if isinstance(d.get("rotDeg"), (list, tuple)) and len(d["rotDeg"]) == 3]
+            if rots:
+                # |rotationY| delta from closed [0,0,0] (the check door
+                # swings about Y; sign depends on the hinge side).
+                m["doorRotationDeltaDeg"] = round(abs(rots[-1][1]), 1)
+            else:
+                m["doorRotationDeltaDeg"] = None
+            navs = [d.get("nav") for d in doors if isinstance(d.get("nav"), dict)]
+            if navs:
+                m["doorNavEnabledAfter"] = (
+                    0 if navs[-1].get("enabled") is False
+                    else (1 if navs[-1].get("enabled") is True else None))
+            else:
+                m["doorNavEnabledAfter"] = None
+            routes = [d.get("doorwayRouteClear") for d in doors
+                      if d.get("doorwayRouteClear") is not None]
+            m["doorwayRouteClearAfter"] = (
+                1 if routes and routes[-1] else (0 if routes else None))
+            pre_route = pre.get("doorwayRouteClear")
+            m["doorwayRouteClearBefore"] = (
+                1 if pre_route else (0 if pre_route is not None else None))
+            m["doorStateBefore"] = 1 if pre.get("state") == "closed" else (
+                0 if pre.get("state") else None)
+            # Journal entries are a persistent array — dedupe across the
+            # 2 Hz samples so a transition is never double-counted.
+            entries = []
+            seen = set()
+            for d in doors:
+                for e in (d.get("journal") or []):
+                    key = (e.get("t"), e.get("objectId"), e.get("to"))
+                    if key not in seen:
+                        seen.add(key)
+                        entries.append(e)
+            m["stateJournalSeen"] = 1 if any(
+                e.get("objectId") == sid and e.get("to") == "open" for e in entries) else 0
+        else:
+            m.update(doorStateOpen=None, doorRotationDeltaDeg=None,
+                     doorNavEnabledAfter=None, doorwayRouteClearBefore=None,
+                     doorwayRouteClearAfter=None, stateJournalSeen=None,
+                     doorStateBefore=None)
+
+    # ── bounded pickup (spatial layer 5) ───────────────────────────
+    # Segments carry `probes` (2 Hz pickup-probe samples aligned with the
+    # tels): [pickup, carry, putdown, settle]. Evidence is measured from the
+    # probe (holding/attached/cupWorld/handWorld/followErrorM/placedAt/home)
+    # plus the planner telemetry + root frames — never dead-reckoned.
+    if check.get("pickupFlow"):
+        all_probes = [p for s in segments for p in s.get("probes", []) if p]
+        m["pickupSeen"] = 1 if any(p.get("holding") == "cup" for p in all_probes) else 0
+        attached_errs = [p.get("followErrorM") for p in all_probes
+                         if p.get("attached") and p.get("followErrorM") is not None]
+        m["attachErrorM"] = round(max(attached_errs), 4) if attached_errs else None
+        carry = segments[1] if len(segments) > 1 else None
+        if carry:
+            cprobes = [p for p in carry.get("probes", []) if p]
+            m["carryHeldPct"] = (
+                round(100 * sum(1 for p in cprobes if p.get("holding") == "cup") / len(cprobes), 1)
+                if cprobes else None)
+            cframes = carry.get("frames", [])
+            if len(cframes) >= 2:
+                cpts = [(f["x"], 0.0, f["z"]) for f in cframes]
+                m["carryTravelM"] = round(_dist_xz(cpts[0], cpts[-1]), 3)
+            else:
+                m["carryTravelM"] = None
+        else:
+            m.update(carryHeldPct=None, carryTravelM=None)
+        put = segments[2] if len(segments) > 2 else None
+        if put:
+            pprobes = [p for p in put.get("probes", []) if p]
+            released = [p for p in pprobes if p.get("holding") is None]
+            m["putdownSeen"] = 1 if released else 0
+            last_placed = None
+            home = None
+            for p in pprobes:
+                if p.get("placedAt"):
+                    last_placed = p["placedAt"]
+                if p.get("home"):
+                    home = p["home"]
+            if last_placed and home:
+                m["placeErrorM"] = round(
+                    math.hypot(last_placed[0] - home[0], last_placed[2] - home[2]), 3)
+            else:
+                m["placeErrorM"] = None
+        else:
+            m.update(putdownSeen=None, placeErrorM=None)
+        settle = segments[3] if len(segments) > 3 else None
+        if settle:
+            # Real mesh drift after release: cupWorld of the placed mesh
+            # across the settle window (placedAt is a frozen constant —
+            # measuring it would be a self-check).
+            worlds = [p.get("cupWorld") for p in settle.get("probes", [])
+                      if p and p.get("cupWorld")]
+            if len(worlds) >= 2:
+                drift = max(math.hypot(a[0] - b[0], a[2] - b[2])
+                            for a, b in zip(worlds, worlds[1:], strict=False))
+                m["staysM"] = round(drift, 3)
+            else:
+                m["staysM"] = None
+        else:
+            m["staysM"] = None
 
     return m
 

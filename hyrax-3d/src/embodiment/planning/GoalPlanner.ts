@@ -115,6 +115,24 @@ export interface PlannerGoalSourceTelemetry {
   state: EssenceStateSnapshot
 }
 
+/** Essence-driver blocked-evaluation counters (Mai RCA t_af24521d): the
+ * driver used to return quietly on every gate — essenceGoalSeen=0 was the
+ * only signal. These counters make "no rule matched" vs "driver blocked"
+ * legible in telemetry (GEVS metric essenceDriverSkips). */
+export interface PlannerDriverSkips {
+  essence: {
+    /** Evaluations blocked by the reflex layer or a watchdog hold. */
+    reflexWatchdog: number
+    /** Evaluations blocked by the post-user-prompt quiet window. */
+    userQuiet: number
+    /** Evaluations with no fresh state to evaluate (null or stale). */
+    noState: number
+    /** Full evaluations where no drive rule was actionable (no match,
+     * cooldown, or min-dwell). */
+    noRule: number
+  }
+}
+
 /**
  * All planner policy as data (mirrors the ARDY_REFLEX block pattern).
  * Thresholds/variants/deck/cooldowns live here, never in code.
@@ -503,6 +521,8 @@ export interface GoalPlannerTelemetry {
    * down because energy 0.24" story. Set when an essence goal fires, retained
    * until a non-essence goal starts (null then, and while nothing fired). */
   goalSource: PlannerGoalSourceTelemetry | null
+  /** Essence-driver blocked-evaluation counters (never reset; monotonic). */
+  driverSkips: PlannerDriverSkips
 }
 
 export interface GoalPlannerOptions {
@@ -652,8 +672,18 @@ export class GoalPlanner {
   private lastActivityMs: number
   private readonly ambientLastPickedAt = new Map<string, number>()
   /** Essence driver: wall clock of the last drive-rule evaluation (poll gate
-   * at ESSENCE_POLL_S — state is re-read on the presence cadence). */
+   * at ESSENCE_POLL_S — state is re-read on the presence cadence). Stamped
+   * only AFTER gate acceptance (Mai RCA t_af24521d): a reflex/watchdog/quiet
+   * blocked evaluation must not burn the cadence. */
   private lastEssencePollMs = -Infinity
+  /** Essence driver: blocked-evaluation counters (telemetry driverSkips). */
+  private readonly driverSkips: PlannerDriverSkips = {
+    essence: { reflexWatchdog: 0, userQuiet: 0, noState: 0, noRule: 0 },
+  }
+  /** Last journaled skip key (`driver:reason`) — the console line fires on
+   * reason transitions only, so a sustained reflex (hundreds of frames) is
+   * one line, not a flood. Reset when a goal fires. */
+  private lastDriverSkipKey: string | null = null
   /** Essence driver: per-goal cooldown clock (goal id → last fire). */
   private readonly essenceLastFiredAt = new Map<string, number>()
   /** Essence driver: min-dwell hysteresis anchor — wall clock when the last
@@ -807,6 +837,7 @@ export class GoalPlanner {
         this.goalSource === null
           ? null
           : { kind: 'essence', rule: this.goalSource.rule, state: { ...this.goalSource.state } },
+      driverSkips: { essence: { ...this.driverSkips.essence } },
     }
   }
 
@@ -825,9 +856,11 @@ export class GoalPlanner {
     if (this.goal === null) {
       // Lowest tier: the essence driver (live derived state) replaces the
       // static deck as the goal source; the deck remains the no-rule-match
-      // fallback, exactly as before.
-      this.maybeStartEssence(now)
-      this.maybeStartAmbient(now)
+      // fallback, exactly as before. A driver-consumed tick excludes the
+      // deck — essence outranks ambient in single-goal selection (Mai RCA
+      // t_af24521d: ambient silently claimed the slot after reflex-clear).
+      const essenceConsumed = this.maybeStartEssence(now)
+      if (!essenceConsumed) this.maybeStartAmbient(now)
       return
     }
     // Priority: user prompt cancels the active goal (journaled, no queue).
@@ -1561,25 +1594,51 @@ export class GoalPlanner {
    * state drives goals; unmatched rules fall through to the ambient deck
    * exactly as before. No threshold tuning, no whims, no new interaction
    * points — the manifest vocabulary is the only goal space.
+   *
+   * Returns true when this tick's evaluation was consumed by the driver
+   * (poll slot stamped + rules evaluated, whether or not a goal started);
+   * false when the driver is not actionable (cadence-gated, owner-blocked,
+   * no fresh state, or no rule matched) — the caller then lets the ambient
+   * deck try, which is the designed fallback.
    */
-  private maybeStartEssence(now: number): void {
+  private maybeStartEssence(now: number): boolean {
     // Poll gate: the state provider is re-read on the presence cadence, not
     // every frame.
-    if (now - this.lastEssencePollMs < this.policy.ESSENCE_POLL_S * 1000) return
-    this.lastEssencePollMs = now
-    // Only fires when nothing else owns the prompt.
-    if (this.channel.isReflexActive() || this.channel.isWatchdogHolding()) return
+    if (now - this.lastEssencePollMs < this.policy.ESSENCE_POLL_S * 1000) return false
+    // Transient prompt-owner gates do NOT consume the poll slot (Mai RCA
+    // t_af24521d): a reflex/watchdog block or user-quiet window is a
+    // condition, not an evaluation — stamping pre-gates burned the 30 s
+    // cadence on blocked polls and let the ambient deck claim the single
+    // goal slot before the driver got a clean window. The slot is stamped
+    // only once the evaluation is accepted (fresh state read).
+    if (this.channel.isReflexActive() || this.channel.isWatchdogHolding()) {
+      this.driverSkip('reflex|watchdog')
+      return false
+    }
     // User intent outranks the driver: a recent user prompt silences it.
-    if (now - this.channel.lastUserPromptAtMs() < this.policy.ESSENCE_USER_QUIET_S * 1000) return
+    if (now - this.channel.lastUserPromptAtMs() < this.policy.ESSENCE_USER_QUIET_S * 1000) {
+      this.driverSkip('user-quiet')
+      return false
+    }
     const state = this.essenceState()
-    if (state === null || state.fresh !== true) return
+    if (state === null || state.fresh !== true) {
+      this.driverSkip('no-state|stale')
+      return false
+    }
+    // Stamp AFTER gate acceptance — a blocked evaluation never burns the
+    // cadence, so the first clean tick can fire immediately.
+    this.lastEssencePollMs = now
     const pick = this.pickEssenceGoal(now, state)
-    if (pick === null) return
+    if (pick === null) {
+      this.driverSkip('no-rule')
+      return false
+    }
     // Record cooldown + dwell anchors BEFORE the attempt so a failed start
     // (no path) also cools down — the driver never hammers setGoal every poll.
     this.essenceLastFiredAt.set(pick.goal, now)
     this.essenceLastStartedAtMs = now
-    if (!this.setGoal(pick.goal, 'essence')) return
+    this.lastDriverSkipKey = null
+    if (!this.setGoal(pick.goal, 'essence')) return true
     this.goalSource = { kind: 'essence', rule: pick.rule, state: { ...state } }
     // Journal the cause in the prompt log (spec: "energy 0.2 → daybed.nap
     // observed in telemetry + prompt log") — the log stream ties the goal to
@@ -1591,6 +1650,22 @@ export class GoalPlanner {
       `stress ${fmtScore(state.stress)}, sociability ${fmtScore(state.sociability)}, ` +
       `activity ${state.activity ?? '?'})`,
     )
+    return true
+  }
+
+  /** Journal a blocked/empty essence evaluation: monotonic telemetry counter
+   * (driverSkips) + a console line on reason transitions only. */
+  private driverSkip(reason: 'reflex|watchdog' | 'user-quiet' | 'no-state|stale' | 'no-rule'): void {
+    const counter = this.driverSkips.essence
+    if (reason === 'reflex|watchdog') counter.reflexWatchdog += 1
+    else if (reason === 'user-quiet') counter.userQuiet += 1
+    else if (reason === 'no-state|stale') counter.noState += 1
+    else counter.noRule += 1
+    const key = `essence:${reason}`
+    if (key !== this.lastDriverSkipKey) {
+      console.info(`[planner] essence driver skipped: ${reason} (${counter.noRule + counter.noState + counter.userQuiet + counter.reflexWatchdog} total)`)
+      this.lastDriverSkipKey = key
+    }
   }
 
   /**
