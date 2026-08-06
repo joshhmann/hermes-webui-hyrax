@@ -20,7 +20,7 @@
   var vn = GestaltVN.vn = GestaltVN.vn || {};
   var essence = GestaltVN.essence = GestaltVN.essence || {};
 
-  var OPERATORS = ['tai', 'rei', 'nei', 'mai'];
+  var OPERATORS = ['tai', 'rei', 'nei', 'mai', 'aya'];
   var ROOMS_BASE_URL = '/static/hyrax/vn/rooms';
 
   var _registry = {};    // id -> entry

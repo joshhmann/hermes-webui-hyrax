@@ -15,7 +15,7 @@
 
   var CONFIDENCE_FLOOR = 0.6;       // §4 step 3: non-exact reuse floor
   var L2_CACHE_MAX = 8;             // architecture §6: ≤8 frames per operator
-  var OPERATORS = ['tai', 'rei', 'nei', 'mai'];
+  var OPERATORS = ['tai', 'rei', 'nei', 'mai', 'aya'];
 
   // §6 sister enums (canonical enum lives server-side; mirrored here for
   // family mapping only — never used to invent expressions). The neutral and

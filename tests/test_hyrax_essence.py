@@ -488,7 +488,7 @@ class TestFramesRegistryGet:
         id_re = re.compile(r"^frame\.[a-z0-9-]+(\.[a-z0-9-]+)*$")
         for frame in body["frames"]:
             assert id_re.match(frame["id"]), frame["id"]
-            assert frame["operatorId"] in ("tai", "rei", "nei", "mai")
+            assert frame["operatorId"] in ("tai", "rei", "nei", "mai", "aya")
             # authored (VN manifest + dropped sprites) and generated (VNCCS
             # emotion sprite suite) are both legitimate shipped sources
             assert frame["source"] in ("authored", "generated")
@@ -605,8 +605,9 @@ class TestFramesRegistryGet:
         ]
         # 20 hand-dropped pose sprites + 2660 VNCCS emotion sprites
         # (133 SFW emotions × 4 operators × 5 pose variants 0001-0005:
-        # standing/sitting/thinking/casual/confident)
-        assert len(sprites) == 2680
+        # standing/sitting/thinking/casual/confident) + 670 aya
+        # (133 emotions × 5 + 5 neutral, exported 2026-08-06)
+        assert len(sprites) == 3350
         for frame in sprites:
             display = frame["assets"].get("display")
             assert display is not None, frame["id"]
@@ -663,10 +664,9 @@ class TestFramesRegistryGet:
             f for f in handler.json_body()["frames"]
             if f["assets"]["imageUrl"].startswith("/api/hyrax/essence/frames/file/")
         ]
-        assert len(sprites) == 2680
+        assert len(sprites) == 3350  # 2680 (4 sisters) + 670 (aya, 2026-08-06)
         for frame in sprites:
             thumb = frame["assets"].get("thumbnailUrl")
-            assert thumb is not None, frame["id"]
             prefix = "/api/hyrax/essence/frames/file/thumbs/"
             assert thumb.startswith(prefix) and thumb.endswith(".webp"), thumb
             target = essence.ESSENCE_FRAMES_DIR / "thumbs" / thumb[len(prefix):]
@@ -854,7 +854,7 @@ class TestPresence:
         assert handled is True
         assert handler.status == 200
         body = handler.json_body()
-        assert len(body["items"]) == 4
+        assert len(body["items"]) == 5  # tai/rei/nei/mai + aya (onboarded 2026-08-04)
         assert body["meta"]["generatedAt"]
         items = self._items_by_operator(handler)
         for item in items.values():
@@ -1032,7 +1032,7 @@ class TestPresence:
         monkeypatch.setattr(essence, "_query", lambda db, sql, params=(): [])
         _, handler = _call_essence_get("/api/hyrax/presence")
         assert handler.status == 200
-        assert len(handler.json_body()["items"]) == 4
+        assert len(handler.json_body()["items"]) == 5  # tai/rei/nei/mai + aya
 
     def test_available_comes_from_vn_profiles(self, monkeypatch):
         self._patch(monkeypatch, [])
