@@ -1251,6 +1251,8 @@ def handle_kanban_post(handler, parsed, body) -> bool | None:
             return j(handler, _patch_task_payload(task_id, body, board=board)) or True
     except ImportError as exc:
         return bad(handler, f"kanban unavailable: {exc}", status=503)
+    except PermissionError as exc:
+        return bad(handler, str(exc), status=403)
     except LookupError as exc:
         return bad(handler, str(exc), status=404)
     except ValueError as exc:
@@ -1291,6 +1293,8 @@ def handle_kanban_patch(handler, parsed, body) -> bool | None:
             return j(handler, _patch_task_payload(task_id, body, board=board)) or True
     except ImportError as exc:
         return bad(handler, f"kanban unavailable: {exc}", status=503)
+    except PermissionError as exc:
+        return bad(handler, str(exc), status=403)
     except LookupError as exc:
         return bad(handler, str(exc), status=404)
     except ValueError as exc:
