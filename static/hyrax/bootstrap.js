@@ -1,52 +1,99 @@
 /**
  * Hyraxknot Division — Hermes WebUI Extension Bootstrap
- * 
- * Registers division panels via window.HermesPanels.register(), injects
- * DOM elements, and hooks into the Hermes WebUI panel system WITHOUT
- * modifying core arrays or monkey-patching switchPanel.
- * 
- * Loaded by index.html via: <script src="/static/hyrax/bootstrap.js" defer>
+ *
+ * The ONE Hyrax integration script (index.html loads exactly this, deferred).
+ *
+ * Responsibilities:
+ *   - wait for the native extension-panel API (window.HermesPanels /
+ *     `hermes:panel-ready`) and register EXACTLY the working panels
+ *     `projects` and `hq` through HermesPanels.register
+ *   - lazy dynamic imports of the controller ES modules (./projects.js,
+ *     ./hq.js — the VN controller ./vn.js is imported by hq.js on demand)
+ *   - inject only the necessary nav buttons (listener-based, no inline
+ *     handlers) and the HQ sidebar Operators view
+ *   - load hyrax.css once (version-cache-busted from this script's own URL)
+ *   - HQ-first landing when the URL carries no explicit intent
+ *
+ * Explicitly NOT done here: switchPanel wrapping/reassignment, registry
+ * mutation (HermesPanels.register owns that), polling, observer workarounds,
+ * duplicate bootstrap.
  */
 (function() {
   'use strict';
 
+  // Idempotence guard — one bootstrap per page load, even if init somehow
+  // runs twice (e.g. hermes:panel-ready racing a direct HermesPanels check).
+  if (window.__hyraxBootstrapped) return;
+  window.__hyraxBootstrapped = true;
+
   // ── Panel definitions ──
-  // Hyrax is HQ-centric: the only added rail panel is HQ. The upstream
-  // WebUI panels stay untouched (AGENTS: don't mess with the OEM surface).
-  // (Retired 2026-07-24: projects/warroom/dispatch/verify/promises were
-  // placeholder panels — redundant with the native panels.)
+  // Exactly the working panels: projects (native kanban aggregation) and HQ.
+  // Retired 2026-08-04: approvals / warroom / dispatch / verify / promises
+  // placeholder panels (dead DOM + nav removed; approvals data still reaches
+  // the UI through presence pending-approval dots).
   var HYRAX_PANELS = [
+    { id: 'projects', label: 'Projects', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
     { id: 'hq', label: 'HQ', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-    { id: 'approvals', label: 'Approvals', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   ];
 
   // Panels whose main view renders entirely from JS (no placeholder chrome).
-  var MAIN_ONLY_PANELS = ['hq', 'approvals'];
+  var MAIN_ONLY_PANELS = ['hq', 'projects'];
 
   // Panels whose sidebar shows another panel's view while active.
-  var SIDEBAR_FALLBACKS = { 'approvals': 'hq' };
+  var SIDEBAR_FALLBACKS = { 'projects': 'hq' };
 
-  // ── Mount/unmount hooks ──
-  // Dispatch to the owning module's window hook (hq.js / approvals.js).
-  // Graceful when the module hasn't loaded — hooks are captured on mount.
-  var MOUNT_HOOKS = { 'hq': '__hqMount', 'approvals': '__approvalsMount' };
-  var UNMOUNT_HOOKS = { 'hq': '__hqUnmount', 'approvals': '__approvalsUnmount' };
-
-  function mountPanel(id) {
-    var hook = window[MOUNT_HOOKS[id]];
-    if (typeof hook === 'function') {
-      return hook(id);
+  // ── Lazy module loading ──
+  // Controllers are ES modules; they load on first panel open. A failed
+  // import clears the cache so the next open retries.
+  var _modules = {};
+  function loadModule(name) {
+    if (!_modules[name]) {
+      _modules[name] = import('./' + name + '.js').catch(function(err) {
+        _modules[name] = null;
+        throw err;
+      });
     }
+    return _modules[name];
+  }
+
+  // ── Mount/unmount hooks (HermesPanels contract: fn(panelId)) ──
+  function mountPanel(id) {
+    if (id === 'projects') {
+      return loadModule('projects').then(function(m) {
+        if (typeof m.mount === 'function') return m.mount(id);
+      }).catch(function() {
+        if (typeof window.showToast === 'function') {
+          try { window.showToast('Projects panel failed to load — refresh the page.'); } catch (_) {}
+        }
+      });
+    }
+    if (id === 'hq') {
+      return loadModule('hq').then(function(m) {
+        if (typeof m.mount === 'function') return m.mount(id);
+      }).catch(function() {
+        if (typeof window.showToast === 'function') {
+          try { window.showToast('HQ panel failed to load — refresh the page.'); } catch (_) {}
+        }
+      });
+    }
+    return Promise.resolve();
   }
 
   function unmountPanel(id) {
-    var hook = window[UNMOUNT_HOOKS[id]];
-    if (typeof hook === 'function') {
-      return hook(id);
+    if (id === 'projects') {
+      return loadModule('projects').then(function(m) {
+        if (typeof m.unmount === 'function') m.unmount(id);
+      }).catch(function() { /* already gone — nothing to unmount */ });
     }
+    if (id === 'hq') {
+      return loadModule('hq').then(function(m) {
+        if (typeof m.unmount === 'function') m.unmount(id);
+      }).catch(function() { /* already gone — nothing to unmount */ });
+    }
+    return Promise.resolve();
   }
 
-  // ── 1. Init: register panels via HermesPanels ──
+  // ── Init: register panels via HermesPanels ──
   function init() {
     // Graceful: if HermesPanels isn't installed yet, wait for the
     // hermes:panel-ready event (dispatched by panels.js once).
@@ -55,9 +102,8 @@
       return;
     }
 
-    // Register each panel with its lifecycle hooks.
     var hp = window.HermesPanels;
-    var i, p, unreg;
+    var i, p;
     for (i = 0; i < HYRAX_PANELS.length; i++) {
       p = HYRAX_PANELS[i];
       var def = {
@@ -70,15 +116,12 @@
       // register() rejects an own sidebarFallback key that isn't a string,
       // so only add the key when this panel actually has a fallback.
       if (SIDEBAR_FALLBACKS[p.id]) def.sidebarFallback = SIDEBAR_FALLBACKS[p.id];
-      unreg = hp.register(def);
-      // Keep unregister handle for any future cleanup
-      if (typeof p._unreg !== 'undefined') continue;
-      p._unreg = unreg;
+      hp.register(def);
     }
 
     injectNavButtons();
-    injectPanelDivs();
     injectHqSidebarView();
+    injectProjectsHost();
     injectCss();
     scheduleHomePanel();
   }
@@ -88,7 +131,7 @@
   // already fired), land on HQ when the URL carries no explicit intent
   // and the user hasn't chosen chat as home. Explicit intents — ?session=,
   // /session/<id>, ?panel=, ?q=, #session= — are never hijacked, except
-  // ?panel=<hyrax-panel> (hq, approvals, …) which always opens that panel
+  // ?panel=<hyrax-panel> (hq, projects, …) which always opens that panel
   // regardless of the stored pref.
   function hasExplicitIntent(search, path, hash) {
     if (/[?&](session|panel|q)=/.test(search)) return true;
@@ -139,7 +182,7 @@
     }
   }
 
-  // ── 3b. Inject the HQ sidebar panel-view (Operators list) ──
+  // ── Inject the HQ sidebar panel-view (Operators list) ──
   // The sidebar falls back to the chat panel on HQ because no #panelHq
   // panel-view exists. Inject one; hq.js fills #hyraxHqOperators on mount.
   function injectHqSidebarView() {
@@ -154,7 +197,18 @@
     ref.parentNode.appendChild(view);
   }
 
-  // ── 2. Inject nav buttons into rail + sidebar-nav ──
+  // ── Ensure the projects main-view host exists (index.html ships it) ──
+  function injectProjectsHost() {
+    if (document.getElementById('mainProjects')) return;
+    var mainEl = document.querySelector('main.main');
+    if (!mainEl) return;
+    var div = document.createElement('div');
+    div.id = 'mainProjects';
+    div.className = 'main-view';
+    mainEl.appendChild(div);
+  }
+
+  // ── Inject nav buttons into rail + sidebar-nav ──
   function injectNavButtons() {
     var containers = document.querySelectorAll('.rail, .sidebar-nav');
     var cIdx, container;
@@ -168,7 +222,7 @@
       for (pIdx = 0; pIdx < HYRAX_PANELS.length; pIdx++) {
         p = HYRAX_PANELS[pIdx];
 
-        // Skip if button already exists
+        // Skip if button already exists (idempotent injection)
         if (container.querySelector('[data-panel="' + p.id + '"]')) continue;
 
         btn = document.createElement('button');
@@ -177,9 +231,17 @@
         btn.dataset.label = p.label;
         btn.title = p.label;
         btn.setAttribute('data-tooltip', p.label);
-        btn.setAttribute('onclick', "switchPanel('" + p.id + "',{fromRailClick:true})");
         if (isRail) btn.setAttribute('aria-label', p.label);
         btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + p.icon + '"/></svg>';
+
+        // Listener-based navigation — no inline handlers.
+        btn.addEventListener('click', function(panelId) {
+          return function() {
+            if (typeof switchPanel === 'function') {
+              switchPanel(panelId, { fromRailClick: true });
+            }
+          };
+        }(p.id));
 
         // Insert before settings/logs anchor
         var anchor = container.querySelector('[data-panel="settings"], [data-panel="logs"]');
@@ -188,40 +250,7 @@
     }
   }
 
-  // ── 3. Inject panel divs into main.main (main-view panels) ──
-  function injectPanelDivs() {
-    var mainEl = document.querySelector('main.main');
-    if (!mainEl) return;
-
-    var pIdx, p, mid, existing, div;
-
-    for (pIdx = 0; pIdx < HYRAX_PANELS.length; pIdx++) {
-      p = HYRAX_PANELS[pIdx];
-      mid = 'main' + p.id.charAt(0).toUpperCase() + p.id.slice(1);
-      existing = document.getElementById(mid);
-      if (existing) continue;
-
-      div = document.createElement('div');
-      div.id = mid;
-      div.className = 'main-view';
-
-      if (MAIN_ONLY_PANELS.indexOf(p.id) !== -1) {
-        // HQ / Approvals — empty container; the owning module renders into
-        // it on mount. (index.html already ships #mainHq, so this branch is
-        // a fallback and must not duplicate ids like mainHqBody.)
-        div.innerHTML = '';
-      } else {
-        div.innerHTML = '<div class="main-view-header"><h2 class="main-view-title">' + p.label + '</h2></div>'
-          + '<div class="main-view-content" id="hyrax-' + p.id + '-content">'
-          + '<p class="hyrax-placeholder">' + p.label + ' — coming soon.</p>'
-          + '</div>';
-      }
-
-      mainEl.appendChild(div);
-    }
-  }
-
-  // ── 4. Load hyrax CSS (once) ──
+  // ── Load hyrax CSS (once) ──
   function injectCss() {
     if (document.querySelector('link[href*="/static/hyrax/hyrax.css"]')) return;
     // Extract version from our own script tag for cache-busting
@@ -238,6 +267,6 @@
     document.head.appendChild(link);
   }
 
-  // ── 5. Boot ──
+  // ── Boot ──
   init();
 })();

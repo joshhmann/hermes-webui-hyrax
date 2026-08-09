@@ -51,4 +51,16 @@ export default [
       "no-import-assign": "error",
     },
   },
+  // Narrow override: Hyrax shell controller modules (hq.js / vn.js /
+  // projects.js — t_b91c5672 migration) are ES modules loaded via dynamic
+  // import from bootstrap.js. Only the parser mode changes; runtime-error
+  // rules remain fully active.
+  {
+    files: ["static/hyrax/hq.js", "static/hyrax/vn.js", "static/hyrax/projects.js"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+    rules: {
+      "no-const-assign": "error",
+      "no-import-assign": "error",
+    },
+  },
 ];

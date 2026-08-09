@@ -935,6 +935,10 @@
       <div class="main-view-body" id="mainHqBody">
       </div>
     </div>
+    <div id="mainProjects" class="main-view">
+      <div class="main-view-body" id="mainProjectsBody">
+      </div>
+    </div>
     <div id="mainSettings" class="main-view">
       <div class="settings-main">
           <div class="settings-pane active" id="settingsPaneConversation">
@@ -1781,21 +1785,9 @@
 <script src="static/boot.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/outline.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/hyrax/bootstrap.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/hq.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/approvals.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnEvents.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnSession.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/essence/essenceState.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/essence/essenceFrames.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/essence/essenceIntents.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnStage.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnActions.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnSidebar.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnDialogue.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnComposer.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnApprovals.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnTechDrawer.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/hyrax/vn/vnShell.js?v=__WEBUI_VERSION__" defer></script>
+<!-- Hyrax shell migration (t_b91c5672): bootstrap.js is the ONLY Hyrax
+     integration script — it dynamically imports the projects/hq/vn
+     controller modules. Direct script tags for those modules were removed. -->
 
 <!-- Kanban: create/rename board modal — used for both flows. -->
 <div class="kanban-modal-overlay" id="kanbanBoardModal" hidden onclick="if(event.target===this)closeKanbanBoardModal()">
