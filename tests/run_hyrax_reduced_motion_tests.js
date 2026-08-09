@@ -143,11 +143,17 @@ function runTests() {
       ', JS refs: ' + jsMatches + ')');
   });
 
-  // ── 5. JS-driven blink animation exists and can be suppressed ──
+  // ── 5. Retired vn-blink animation is fully removed ──
+  // The old monolithic vn.js drove a vn-blink cursor animation. The vn2
+  // surface (vnShell/vnDialogue/vnStage) does not implement it — the dead
+  // keyframe was removed from hyrax.css. Nothing may ship an orphan blink
+  // animation that the reduced-motion contract cannot cover.
   console.log('\n── JS animation suppression ──');
   const hasBlinkTimer = vnSrc.includes('_scheduleBlink') || vnSrc.includes('vn-blink');
-  assert(hasBlinkTimer,
-    'vn.js has blink timer animation (vn-blink)');
+  assert(!hasBlinkTimer,
+    'vn.js has no blink timer animation (retired with the old surface)');
+  assert(!css.includes('vn-blink'),
+    'hyrax.css has no dead vn-blink keyframe');
 
   // ── 6. Content remains visible when motion is disabled ──
   console.log('\n── Content visibility ──');

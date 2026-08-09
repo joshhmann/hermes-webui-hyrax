@@ -115,27 +115,34 @@ const bootstrapSrc = fs.readFileSync(BOOTSTRAP_PATH, 'utf-8');
 function runTests() {
   console.log('═══ Hyrax 2D Fallback & Teardown Tests ═══\n');
 
+  // Classic VN surface sources (the thin vn.js controller delegates to these)
+  const shellSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnShell.js'), 'utf-8');
+  const composerSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnComposer.js'), 'utf-8');
+  const vnEventsSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnEvents.js'), 'utf-8');
+  const dialogueSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnDialogue.js'), 'utf-8');
+  const stageSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnStage.js'), 'utf-8');
+
   // ── 2D Fallback: error/loading/empty states ──
   console.log('── 2D fallback states (static analysis) ──');
 
-  // 1. Loading state exists in VN
-  assert(vnSrc.includes('vn-loading') || vnSrc.includes('Loading'),
-    'vn.js has distinct loading state class');
+  // 1. Loading state exists in VN (classic vnShell)
+  assert(shellSrc.includes('vn2-loading') || shellSrc.includes('Connecting to'),
+    'classic VN shell has a distinct loading state class');
 
-  // 2. Error state exists
-  const errorClasses = (vnSrc.match(/vn-error/g) || []).length;
+  // 2. Error state exists (classic vnShell)
+  const errorClasses = (shellSrc.match(/vn2-error/g) || []).length;
   assert(errorClasses >= 1,
-    'vn.js has at least one error state class (got ' + errorClasses + ')');
+    'classic VN shell has at least one error state class (got ' + errorClasses + ')');
 
-  // 3. Empty state (no messages yet)
-  assert(vnSrc.includes('vn-empty') ||
-    vnSrc.includes('No messages') || vnSrc.includes('Start the conversation'),
-    'vn.js has empty state for conversations with no turns');
+  // 3. Empty state (no messages yet — classic composer placeholder; the
+  // backlog simply renders empty and the composer invites the first turn)
+  assert(composerSrc.includes('placeholder') && composerSrc.includes('Type a message'),
+    'classic composer shows an empty-state hint for conversations with no turns');
 
-  // 4. Portrait has fallback on error
-  assert(vnSrc.includes('_fallback') || vnSrc.includes('.onerror') ||
-    vnSrc.includes('addEventListener(\'error\''),
-    'vn.js has image error fallback for portrait');
+  // 4. Portrait has fallback on error (classic stage)
+  assert(stageSrc.includes('_fallback') || stageSrc.includes('.onerror') ||
+    stageSrc.includes("addEventListener('error'"),
+    'classic stage has an image error fallback for the portrait');
 
   // 5. 2D fallback renders the HQ map when 3D import fails
   assert(hqSrc.includes('render2dFallback'),
@@ -153,69 +160,71 @@ function runTests() {
   assert(hqSrc.includes('.catch'),
     'hq.js catches profile fetch failure');
 
-  // 9. Toast indicates errors to user
-  assert(vnSrc.includes('showToast') || vnSrc.includes('_showToast') ||
-    vnSrc.includes('hyrax-toast'),
-    'vn.js shows user-facing toast messages');
+  // 9. Toast indicates errors to user (classic shell/composer surface)
+  assert(shellSrc.includes('_toast') || composerSrc.includes('_toast') ||
+    shellSrc.includes('showToast') || composerSrc.includes('showToast'),
+    'classic VN surface shows user-facing toast messages');
 
   // 10. The _api function falls back to fetch if window.api is not available
-  assert(vnSrc.includes('window.api') || vnSrc.includes('typeof window.api'),
-    'vn.js falls back when window.api is unavailable');
+  // (classic vnEvents shared transport)
+  assert(vnEventsSrc.includes('typeof root.api'),
+    'classic stream module falls back when window.api is unavailable');
 
   // ── SSE lifecycle ──
   console.log('\n── SSE lifecycle ──');
 
-  // 11. EventSource is closed on unmount
-  assert(vnSrc.includes('.close()'),
-    'vn.js closes EventSource on cleanup');
+  // 11. EventSource is closed on unmount / stream replacement (classic
+  // vnEvents owns the SSE transport)
+  assert(vnEventsSrc.includes('.close()'),
+    'classic stream module closes EventSource on cleanup');
 
-  // 12. Race token guards stale SSE
-  const raceTokenChecks = (vnSrc.match(/_raceToken !== token/g) || []).length;
+  // 12. Race token guards stale async work (classic vnShell mount/session)
+  const raceTokenChecks = (shellSrc.match(/_raceToken !== token/g) || []).length;
   assert(raceTokenChecks >= 3,
-    'vn.js has >= 3 race-token checks in SSE handlers (got ' + raceTokenChecks + ')');
+    'classic shell has >= 3 race-token checks in async handlers (got ' + raceTokenChecks + ')');
 
   // 13. EventSource reference is nulled after close
-  assert(vnSrc.includes('_eventSource = null'),
-    'vn.js nulls EventSource reference after close');
+  assert(vnEventsSrc.includes('_es = null'),
+    'classic stream module nulls EventSource reference after close');
 
   // ── Teardown ──
   console.log('\n── Teardown hygiene ──');
 
-  // 14. Blink timer is cleared
-  assert(vnSrc.includes('clearTimeout'),
-    'vn.js clears blink timer on cleanup');
+  // 14. Timers are cleared (classic dialogue settle + stage jolt timers)
+  assert(dialogueSrc.includes('clearTimeout') || stageSrc.includes('clearTimeout'),
+    'classic VN modules clear their timers on cleanup');
 
-  // 15. Blink timer reference is nulled
-  assert(vnSrc.includes('_blinkTimer = null'),
-    'vn.js nulls blink timer reference');
+  // 15. No blink timer remains (the old vn-blink animation was retired with
+  // the monolithic vn.js — the vn2 surface has no cursor blink)
+  assert(!vnSrc.includes('_blinkTimer') && !vnSrc.includes('vn-blink'),
+    'vn.js has no blink timer reference (retired animation)');
 
-  // 16. Cleanup resets all state variables
+  // 16. Cleanup resets controller state (thin controller) and delegates to
+  // the classic shell; the classic stream module resets its own transport.
   const stateResets = [
-    '_streamed = \'\'', '_streamBubble = null',
-    '_activeConversation = null',
-    '_currentSisterId = null', '_currentSisterName',
+    '_mounted = false', '_currentSisterId = null',
   ];
   stateResets.forEach(function(pat) {
     assert(vnSrc.includes(pat),
-      'vn.js cleanup resets "' + pat + '"');
+      'vn.js unmount resets "' + pat + '"');
   });
+  assert(vnSrc.includes('shell.unmount'), 'vn.js unmount delegates to the VN shell');
+  assert(vnEventsSrc.includes('_es = null'),
+    'classic stream module nulls the EventSource reference after close');
 
-  // 17. Mount/unmount functions exist
+  // 17. Mount/unmount functions exist (ES controller exports + legacy hooks)
   assert(typeof hqSrc !== 'undefined', 'hq.js source loaded');
   assert(hqSrc.includes('__hqMount'), 'hq.js exposes __hqMount');
   assert(hqSrc.includes('__hqUnmount'), 'hq.js exposes __hqUnmount');
-  assert(vnSrc.includes('__vnMount'), 'vn.js exposes __vnMount');
-  assert(vnSrc.includes('__vnUnmount'), 'vn.js exposes __vnUnmount');
+  assert(vnSrc.includes('export { mount, unmount'), 'vn.js exports the mount/unmount controller');
 
   // ── Repeated mount/unmount safety ──
   console.log('\n── Repeated mount/unmount safety ──');
 
-  // 18. EventSource replaces before creating new one
-  const esCloseBeforeCreate = vnSrc.indexOf('.close()') < vnSrc.indexOf('EventSource(') ||
-    vnSrc.indexOf('es.close()') < vnSrc.indexOf('new EventSource');
-  // We check this by looking for explicit close before new EventSource
-  assert(vnSrc.includes('if (_eventSource)'),
-    'vn.js checks for existing EventSource before creating new one');
+  // 18. EventSource replaces before creating new one (classic vnEvents
+  // disposes the prior transport inside init/_resetTransport)
+  assert(vnEventsSrc.includes('if (_es)') || vnEventsSrc.includes('if(_es)'),
+    'classic stream module checks for an existing EventSource before replacing it');
 
   // 19. No setInterval (polling anti-pattern)
   assert(!vnSrc.includes('setInterval'),
@@ -228,9 +237,10 @@ function runTests() {
   // ── Bootstrap teardown ──
   console.log('\n── Bootstrap teardown ──');
 
-  // 21. Bootstrap registers unregister handles
-  assert(bootstrapSrc.includes('_unreg'),
-    'bootstrap.js stores unregister handles for cleanup');
+  // 21. Bootstrap registers through HermesPanels (the registry owns the
+  // unregister lifecycle — HermesPanels.register returns the handle)
+  assert(bootstrapSrc.includes('hp.register(def)'),
+    'bootstrap.js registers panels through HermesPanels (registry-owned lifecycle)');
 
   // 22. Bootstrap uses once:true to avoid duplicate listeners
   assert(bootstrapSrc.includes('once: true') || bootstrapSrc.includes('{ once: true }') ||
@@ -249,12 +259,16 @@ function runTests() {
     'hq.js increments mount generation on unmount');
 
   // 25. Stale import check after mount gen changes
-  assert(hqSrc.includes('_mountGen !== gen'),
+  assert(hqSrc.includes('gen !== _mountGen'),
     'hq.js checks mount generation after async import resolves');
 
-  // 26. Unmount returns previous content for restoration
-  assert(hqSrc.includes('_prevContent'),
-    'hq.js snapshots content for restoration on unmount');
+  // 26. Unmount re-renders fresh on remount (no content snapshot needed —
+  // the 2D map is re-rendered from scratch, and show2d resets the mount
+  // guard so a return from the VN can never show a stale host)
+  assert(hqSrc.includes('render2dFallback'),
+    'hq.js re-renders the 2D map on remount (no stale content)');
+  assert(hqSrc.includes('_mounted = false') && hqSrc.includes('show2d'),
+    'hq.js resets the mount guard on explicit re-show (no stale dataset flag)');
 
   console.log(`\n═══ Results: ${passed} passed, ${failed} failed ═══\n`);
   if (failures.length > 0) {

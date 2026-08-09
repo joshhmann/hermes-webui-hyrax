@@ -52,27 +52,33 @@ function runTests() {
   console.log('── Semantic HTML patterns (static analysis) ──');
 
   // 1. All interactive elements should be <button> or <a>
-  // vn.js uses _el('button', ...) factory, not HTML strings
-  const btnFactoryCalls = (vnSrc.match(/_el\(\s*['"]button['"]/g) || []).length;
+  // The classic VN surface uses _el('button', ...) factory, not HTML strings.
+  const classicSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnShell.js'), 'utf-8') +
+    fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnComposer.js'), 'utf-8');
+  const btnFactoryCalls = (classicSrc.match(/_el\(\s*['"]button['"]/g) || []).length;
   assert(btnFactoryCalls >= 2,
-    'vn.js creates interactive elements as <button> via _el() (got ' + btnFactoryCalls + ')');
+    'classic VN surface creates interactive elements as <button> via _el() (got ' + btnFactoryCalls + ')');
 
   // No <div onclick for interactive elements
-  const divOnclickCount = (vnSrc.match(/<div[^>]*onclick/gi) || []).length;
+  const divOnclickCount = (classicSrc.match(/<div[^>]*onclick/gi) || []).length;
   assert(divOnclickCount === 0,
-    'vn.js must not use <div onclick for interactive elements');
+    'classic VN surface must not use <div onclick for interactive elements');
 
   // 2. Chibis should be <button> elements (hq.js uses createElement('button'))
   assert(hqSrc.includes("createElement('button')") || hqSrc.includes('createElement(\'button\')'),
     'hq.js creates chibi as <button> element');
 
-  // 3. vn.js uses _el('form', ...) for composer (not <div onclick)
-  assert(vnSrc.includes("_el('form'") || vnSrc.includes('_el("form"'),
-    'vn.js uses _el(\'form\', ...) for composer element');
+  // 3. Classic composer uses _el('form', ...) for the composer element
+  const composerSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnComposer.js'), 'utf-8');
+  const shellSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnShell.js'), 'utf-8');
+  const dialogueSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnDialogue.js'), 'utf-8');
+  const stageSrc = fs.readFileSync(path.join(__dirname, '..', 'static', 'hyrax', 'vn', 'vnStage.js'), 'utf-8');
+  assert(composerSrc.includes("_el('form'") || composerSrc.includes('_el("form"'),
+    'classic composer uses _el(\'form\', ...) for the composer element');
 
-  // 4. vn.js uses _el('textarea', ...) for message input
-  assert(vnSrc.includes("_el('textarea'") || vnSrc.includes('_el("textarea"'),
-    'vn.js uses _el(\'textarea\', ...) for message input');
+  // 4. Classic composer uses _el('textarea', ...) for message input
+  assert(composerSrc.includes("_el('textarea'") || composerSrc.includes('_el("textarea"'),
+    'classic composer uses _el(\'textarea\', ...) for message input');
 
   // 5. Bootstrap creates nav buttons as <button> elements
   assert(bootstrapSrc.includes("createElement('button')") || bootstrapSrc.includes('createElement(\'button\')'),
@@ -85,33 +91,33 @@ function runTests() {
   assert(hqSrc.includes('aria-label'),
     'hq.js sets aria-label on chibi elements');
 
-  // 7. VN loading state has role="status"
-  assert(vnSrc.includes('role: \'status\'') || vnSrc.includes('role=\"status\"') ||
-    vnSrc.includes("role='status'") || vnSrc.includes('"status"'),
-    'vn.js uses role="status" on loading state');
+  // 7. VN loading state has role="status" (classic shell)
+  assert(shellSrc.includes("setAttribute('role', 'status')") || shellSrc.includes('role=\\"status\\"') ||
+    shellSrc.includes("role='status'"),
+    'classic shell uses role="status" on the loading state');
 
-  // 8. VN error state has role="alert"
-  const alertRoles = (vnSrc.match(/role.*alert/g) || []).length;
+  // 8. VN error state has role="alert" (classic shell)
+  const alertRoles = (shellSrc.match(/role.*alert/g) || []).length;
   assert(alertRoles >= 1,
-    'vn.js uses role="alert" on error states (got ' + alertRoles + ' matches)');
+    'classic shell uses role="alert" on error states (got ' + alertRoles + ' matches)');
 
-  // 9. Backlog has role="log"
-  assert(vnSrc.includes('role: \'log\'') || vnSrc.includes('role=\"log\"') ||
-    vnSrc.includes("role='log'") || vnSrc.includes('"log"'),
-    'vn.js uses role="log" on backlog');
+  // 9. Backlog has role="log" (classic dialogue)
+  assert(dialogueSrc.includes("setAttribute('role', 'log')") || dialogueSrc.includes('role=\\"log\\"') ||
+    dialogueSrc.includes('"log"'),
+    'classic dialogue uses role="log" on backlog');
 
   // 10. Dialogue has aria-live (for live-region behavior)
-  assert(vnSrc.includes('aria-live') || vnSrc.includes('aria-live'),
-    'vn.js uses aria-live on dialogue container');
+  assert(dialogueSrc.includes("aria-live', 'polite'") || dialogueSrc.includes("aria-live='polite'"),
+    'classic dialogue uses aria-live on the conversation scroller');
 
-  // 11. Textarea has aria-label
-  assert(vnSrc.includes('aria-label'),
-    'vn.js sets aria-label on textarea');
+  // 11. Textarea has aria-label (classic composer)
+  assert(composerSrc.includes("setAttribute('aria-label', 'Message')"),
+    'classic composer sets aria-label on textarea');
 
-  // 12. Toast notification has role="status"
-  assert(vnSrc.includes('role: \'status\'') || vnSrc.includes('role=\"status\"') ||
-    vnSrc.includes("role='status'") || vnSrc.includes('"status"'),
-    'vn.js toast uses role="status"');
+  // 12. Toast notification has role="status" (classic shell fallback toast)
+  assert(shellSrc.includes("t.setAttribute('role', 'status')") || shellSrc.includes("role='status'") ||
+    shellSrc.includes('"status"'),
+    'classic shell toast uses role="status"');
 
   // 13. Nav buttons in bootstrap have aria-label
   const ariaLabelCount = (bootstrapSrc.match(/aria-label/g) || []).length;
@@ -121,9 +127,10 @@ function runTests() {
   // ── Image alt text ──
   console.log('\n── Image alt text ──');
 
-  // 14. Portrait has meaningful alt (not empty string)
-  assert(vnSrc.includes("alt:") || vnSrc.includes('alt ='),
-    'vn.js sets meaningful alt text on portrait image');
+  // 14. Portrait has meaningful alt (classic stage frame ladder)
+  assert(stageSrc.includes('_altForFrame') || stageSrc.includes('alt =') ||
+    stageSrc.includes('.alt ='),
+    'classic stage sets meaningful alt text on portrait image');
 
   // 15. Chibi images have empty alt (decorative)
   assert(hqSrc.includes("alt: ''") || hqSrc.includes("alt=\"\"") || hqSrc.includes("alt = ''"),
@@ -132,40 +139,39 @@ function runTests() {
   // ── Keyboard behavior (static) ──
   console.log('\n── Keyboard behavior ──');
 
-  // 16. Enter key sends message (with !event.shiftKey guard)
-  assert(vnSrc.includes("event.key === 'Enter'") || vnSrc.includes('event.key === "Enter"'),
-    'vn.js handles Enter key to send message');
+  // 16. Enter key sends message (classic composer, with Shift guard)
+  assert(composerSrc.includes("event.key === 'Enter'") || composerSrc.includes('event.key === "Enter"'),
+    'classic composer handles Enter key to send message');
 
-  // 17. Shift+Enter guard prevents send
-  assert(vnSrc.includes('!event.shiftKey'),
-    'vn.js checks !event.shiftKey to allow Shift+Enter for newline');
+  // 17. Shift+Enter guard prevents send (classic composer)
+  assert(composerSrc.includes('!event.shiftKey'),
+    'classic composer checks !event.shiftKey to allow Shift+Enter for newline');
 
-  // 18. Send button type="submit"
-  assert(vnSrc.includes('type: \'submit\'') || vnSrc.includes('type=\"submit\"') ||
-    vnSrc.includes("type='submit'"),
-    'vn.js send button has type="submit"');
+  // 18. Send button type="submit" (classic composer)
+  assert(composerSrc.includes("setAttribute('type', 'submit')") || composerSrc.includes('type=\\"submit\\"') ||
+    composerSrc.includes("type='submit'"),
+    'classic composer send button has type="submit"');
 
-  // 19. New Conversation button type="button" (prevents form submit)
-  assert(vnSrc.includes('type: \'button\'') || vnSrc.includes('type=\"button\"') ||
-    vnSrc.includes("type='button'"),
-    'vn.js new conversation button has type="button"');
+  // 19. New Conversation / action buttons type="button" (classic shell)
+  assert(shellSrc.includes("setAttribute('type', 'button')") || composerSrc.includes("setAttribute('type', 'button')"),
+    'classic VN buttons use type="button"');
 
   // ── Focus management ──
   console.log('\n── Focus management ──');
 
-  // 20. Input gets focus after send
-  assert(vnSrc.includes('input.focus()'),
-    'vn.js calls .focus() on input after message send');
+  // 20. Input gets focus after send (classic composer)
+  assert(composerSrc.includes('_textarea.focus()'),
+    'classic composer calls .focus() on input after message send');
 
-  // 21. Send button gets disabled during API call
-  assert(vnSrc.includes('setAttribute(\'disabled\'') || vnSrc.includes('setAttribute(\"disabled\"') ||
-    vnSrc.includes("setAttribute('disabled'"),
-    'vn.js disables send button during API call');
+  // 21. Send button gets disabled during API call (classic composer gates on
+  // the busy state — property assignment, same a11y effect as setAttribute)
+  assert(composerSrc.includes('_sendBtn.disabled = busy'),
+    'classic composer disables send button during API call');
 
   // 22. Loading state uses aria-live="polite" (not assertive chatter)
-  assert(vnSrc.includes('aria-live=\"polite\"') || vnSrc.includes("aria-live='polite'") ||
-    vnSrc.includes('"polite"'),
-    'vn.js loading state uses aria-live="polite"');
+  assert(shellSrc.includes("aria-live', 'polite'") || shellSrc.includes('aria-live=\\"polite\\"') ||
+    shellSrc.includes("aria-live='polite'"),
+    'classic shell loading state uses aria-live="polite"');
 
   // ── Disabled/loading states ──
   console.log('\n── State attributes ──');
@@ -174,9 +180,9 @@ function runTests() {
   assert(hqSrc.includes('staged'),
     'hq.js uses "staged" class for disabled/unavailable chibis');
 
-  // 24. Remove disabled attribute when API completes
-  assert(vnSrc.includes('removeAttribute(\'disabled\''),
-    'vn.js removes disabled attribute when API call completes');
+  // 24. Send button re-enabled when API call completes (busy gate clears)
+  assert(composerSrc.includes('_sendBtn.disabled = busy'),
+    'classic composer removes disabled attribute when API call completes');
 
   // ── No keyboard traps ──
   console.log('\n── No keyboard traps ──');
@@ -188,7 +194,7 @@ function runTests() {
     'vn.js should not use onfocus/onblur handlers (potential keyboard traps)');
 
   // 26. Back button is a <button> (created via _el('button', ...))
-  assert(vnSrc.includes("_el('button',") || vnSrc.includes('_el("button",'),
+  assert(shellSrc.includes("_el('button',") || shellSrc.includes('_el("button",'),
     'VN back button is created via _el(\'button\', ...)');
 
   console.log(`\n═══ Results: ${passed} passed, ${failed} failed ═══\n`);

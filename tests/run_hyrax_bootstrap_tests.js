@@ -296,14 +296,14 @@ function runTests() {
 
   // 3. Verify panels were registered
   console.log('\n── Panel registration counts ──');
-  // HQ-centric surface: hq + approvals (D3 Josh approval-tier panel).
-  // Placeholder panels retired 2026-07-24 — upstream panels stay untouched.
+  // Migration contract (t_b91c5672): exactly the working panels projects + hq.
+  // The approvals panel was retired by this card; its nav/DOM/hooks are gone.
   assert(registerCalls.length === 2, `exactly 2 panels registered (got ${registerCalls.length})`);
 
   const registeredIds = registerCalls.map(d => d.id);
   assert(registeredIds.includes('hq'), '"hq" panel registered');
-  assert(registeredIds.includes('approvals'), '"approvals" panel registered');
-  assert(!registeredIds.includes('projects'), '"projects" panel NOT registered (retired)');
+  assert(registeredIds.includes('projects'), '"projects" panel registered');
+  assert(!registeredIds.includes('approvals'), '"approvals" panel NOT registered (retired)');
 
   // 4. HQ mount/unmount hooks
   console.log('\n── HQ mount/unmount hooks ──');
@@ -311,6 +311,14 @@ function runTests() {
   assert(hqReg !== undefined, 'hq registration found');
   assert(typeof hqReg.mount === 'function', 'hq mount is a function');
   assert(typeof hqReg.unmount === 'function', 'hq unmount is a function');
+
+  // 4b. Projects mount/unmount hooks
+  console.log('\n── Projects mount/unmount hooks ──');
+  const projReg = registerCalls.find(d => d.id === 'projects');
+  assert(projReg !== undefined, 'projects registration found');
+  assert(typeof projReg.mount === 'function', 'projects mount is a function');
+  assert(typeof projReg.unmount === 'function', 'projects unmount is a function');
+  assert(projReg.sidebarFallback === 'hq', 'projects sidebar falls back to hq');
 
   // 5. HQ mount returns a value (or undefined) — should not throw
   console.log('\n── HQ mount invocation ──');
@@ -346,38 +354,28 @@ function runTests() {
 
   // 8. Panel divs injected into main.main (main-view, not sidebar)
   console.log('\n── Panel div injection ──');
+  // index.html owns the single #mainHq host (migration contract) — bootstrap
+  // must NOT inject a duplicate.
   const hqPanelDiv = fakeMain._children.find(el =>
     el.id === 'mainHq'
   );
-  assert(hqPanelDiv !== undefined, 'mainHq div injected into main.main');
+  assert(hqPanelDiv === undefined, 'bootstrap does NOT inject #mainHq (index.html owns it)');
 
+  // mainProjects is shipped by index.html too; bootstrap only backfills it
+  // defensively when the host is missing (this fake doc has no index.html,
+  // so the backfill path is what we observe).
   const projectsPanelDiv = fakeMain._children.find(el =>
     el.id === 'mainProjects'
   );
-  assert(projectsPanelDiv === undefined, 'mainProjects div NOT injected (retired)');
+  assert(projectsPanelDiv !== undefined, 'mainProjects div present in main.main (index.html or backfill)');
 
-  // 8b. Approvals panel: registration + hooks + main-view div
-  console.log('\n── Approvals panel registration ──');
-  const aprReg = registerCalls.find(d => d.id === 'approvals');
-  assert(aprReg !== undefined, 'approvals registration found');
-  assert(typeof aprReg.mount === 'function', 'approvals mount is a function');
-  assert(typeof aprReg.unmount === 'function', 'approvals unmount is a function');
-  assert(aprReg.sidebarFallback === 'hq', 'approvals sidebar falls back to hq');
-  try {
-    aprReg.mount('approvals');   // approvals.js not loaded here — must be graceful
-    aprReg.unmount('approvals');
-    assert(true, 'approvals mount/unmount did not throw without approvals.js');
-  } catch (e) {
-    assert(false, 'approvals mount/unmount threw: ' + e.message);
-  }
-  const aprPanelDiv = fakeMain._children.find(el =>
-    el.id === 'mainApprovals'
+  // 8b. Projects panel: registration + hooks + main-view div (approvals is
+  // retired by the migration card — nothing may reference it).
+  console.log('\n── Projects panel registration ──');
+  const projNavBtn = fakeRail._children.some(el =>
+    el.dataset && el.dataset.panel === 'projects'
   );
-  assert(aprPanelDiv !== undefined, 'mainApprovals div injected into main.main');
-  const aprNavBtn = fakeRail._children.some(el =>
-    el.dataset && el.dataset.panel === 'approvals'
-  );
-  assert(aprNavBtn, 'rail has approvals button');
+  assert(projNavBtn, 'rail has projects button');
 
   // 9. CSS link injected
   console.log('\n── CSS injection ──');
