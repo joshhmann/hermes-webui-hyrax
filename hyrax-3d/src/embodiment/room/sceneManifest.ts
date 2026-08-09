@@ -2,6 +2,7 @@
  * Scene manifest — the room as data (spatial layer 3).
  *
  * Spec: docs/gestalt-vn/specs/SCENE_MANIFEST_SPEC.md
+ * Stateful interactables: docs/gestalt-vn/specs/INTERACTABLES_SPEC.md
  *
  * A room manifest is versioned JSON served from the repo (hyrax-3d/rooms/,
  * via the /api/hyrax/3d/ static route) and loaded at loft mount.
@@ -9,12 +10,18 @@
  * manifest (the caller falls back to DEFAULT_SCENE_MANIFEST — an empty
  * room — and warns). A valid manifest is the spatial truth: RoomNavigation
  * builds collision from `bounds` + `obstacles`, the reflex layer resolves
- * blocker ids to human labels, and the planner/essence layers (later) will
- * speak `objects[].interactions[].spot` as their vocabulary.
+ * blocker ids to human labels, and the planner/essence layers speak
+ * `objects[].interactions[].spot` as their vocabulary.
+ *
+ * v1.1 (INTERACTABLES_SPEC.md): objects may declare a state machine —
+ * `states` (obstacle + mesh_rotation per state), the initial `state`, and
+ * per-interaction `requires` (gate) / `sets` (transition on completion).
+ * A stateful object may carry its own `obstacle` AABB, toggled by the
+ * current state's `obstacle` flag (open door = no collision).
  */
-export const SCENE_MANIFEST_VERSION = '1.0'
+export const SCENE_MANIFEST_VERSION = '1.1'
 
-export const INTERACTION_KINDS = ['sit', 'stand', 'lie', 'look', 'use'] as const
+export const INTERACTION_KINDS = ['sit', 'stand', 'lie', 'look', 'use', 'pickup'] as const
 export type InteractionKind = (typeof INTERACTION_KINDS)[number]
 
 export interface SceneBounds {
@@ -37,6 +44,29 @@ export interface SceneObstacle {
   padding: number
 }
 
+/**
+ * One state of a stateful object (INTERACTABLES_SPEC.md): `obstacle` feeds
+ * RoomNavigation (an open door removes its collision so paths route
+ * through), `mesh_rotation` is the visible mesh response (Euler, radians).
+ */
+export interface SceneObjectState {
+  obstacle: boolean
+  mesh_rotation: [number, number, number]
+}
+
+/**
+ * Attach spec for `kind: "pickup"` interactions (INTERACTABLES_SPEC.md):
+ * on interaction COMPLETION the object's mesh parents to the named bone
+ * with the offset (bone-local meters) — no IK, no physics; parenting IS
+ * the tracking. `putdown` reverses the attach at the object's target spot.
+ */
+export interface SceneAttachSpec {
+  /** VRM normalized bone node name, e.g. "rightHand" (pose-probe vocabulary). */
+  bone: string
+  /** Bone-local offset (meters) — e.g. [0, 0.05, 0] sits just above the hand. */
+  offset: [number, number, number]
+}
+
 /** Named interaction point: stable id, kind, spot (XZ), facing, motion prompt. */
 export interface SceneInteraction {
   id: string
@@ -44,6 +74,21 @@ export interface SceneInteraction {
   spot: [number, number]
   facingDeg: number
   prompt: string
+  /**
+   * State the object must be in for this interaction to be valid
+   * (INTERACTABLES_SPEC.md). Absent = always valid. Enforced fail-closed:
+   * the planner refuses (journaled) and the goal picker hides the
+   * interaction while the object is in another state.
+   */
+  requires?: string
+  /** State applied on interaction COMPLETION (arrival + prompt finished),
+   * journaled. Absent = no transition. */
+  sets?: string
+  /**
+   * Pickup-only (validator rejects it on other kinds): how the object
+   * attaches when this interaction completes. Absent on non-pickup kinds.
+   */
+  attach?: SceneAttachSpec
 }
 
 export interface SceneObject {
@@ -57,6 +102,18 @@ export interface SceneObject {
    * position — the manifest is the spatial truth, rendering is downstream.
    */
   baked?: boolean
+  /** Initial state (required when `states` is declared — fail-closed). */
+  state?: string
+  /** Declared state machine (INTERACTABLES_SPEC.md): each state carries the
+   * obstacle + mesh response the engine applies on transition. */
+  states?: Record<string, SceneObjectState>
+  /**
+   * Collision AABB for a STATEFUL object (XZ footprint, same shape as a
+   * manifest obstacle minus id/label). Registered with RoomNavigation at
+   * load; enabled only while the current state's `obstacle` is true.
+   * Requires `states` (there is nothing to toggle it otherwise).
+   */
+  obstacle?: { center: [number, number]; halfSize: [number, number]; padding: number }
 }
 
 export interface SceneManifest {
@@ -178,6 +235,24 @@ function parseObstacle(raw: unknown, errors: string[], path: string): SceneObsta
   return raw as unknown as SceneObstacle
 }
 
+function parseAttach(raw: unknown, errors: string[], path: string): SceneAttachSpec | null {
+  if (!isPlainObject(raw)) {
+    errors.push(`${path}.attach must be an object`)
+    return null
+  }
+  let ok = true
+  if (!isNonEmptyString(raw.bone)) {
+    errors.push(`${path}.attach.bone must be a non-empty string`)
+    ok = false
+  }
+  if (!isFiniteTriple(raw.offset)) {
+    errors.push(`${path}.attach.offset must be [x, y, z] finite numbers`)
+    ok = false
+  }
+  if (!ok) return null
+  return raw as unknown as SceneAttachSpec
+}
+
 function parseInteraction(raw: unknown, errors: string[], path: string): SceneInteraction | null {
   if (!isPlainObject(raw)) {
     errors.push(`${path} must be an object`)
@@ -204,8 +279,42 @@ function parseInteraction(raw: unknown, errors: string[], path: string): SceneIn
     errors.push(`${path}.prompt must be a string`)
     ok = false
   }
+  let attach: SceneAttachSpec | undefined
+  if (raw.attach !== undefined) {
+    // Fail-closed pairing: `attach` is pickup-only (INTERACTABLES_SPEC.md),
+    // and a pickup WITHOUT an attach spec cannot attach to anything.
+    if (raw.kind !== 'pickup') {
+      errors.push(`${path}.attach is only allowed on kind "pickup"`)
+      ok = false
+    } else {
+      const parsed = parseAttach(raw.attach, errors, path)
+      if (parsed) attach = parsed
+      else ok = false
+    }
+  } else if (raw.kind === 'pickup') {
+    errors.push(`${path}.kind "pickup" requires attach {bone, offset}`)
+    ok = false
+  }
   if (!ok) return null
-  return raw as unknown as SceneInteraction
+  const interaction = raw as unknown as SceneInteraction
+  return { ...interaction, attach: attach ?? interaction.attach }
+}
+
+function parseObjectState(raw: unknown, errors: string[], path: string): SceneObjectState | null {
+  if (!isPlainObject(raw)) {
+    errors.push(`${path} must be an object`)
+    return null
+  }
+  let ok = true
+  if (typeof raw.obstacle !== 'boolean') {
+    errors.push(`${path}.obstacle must be a boolean`)
+    ok = false
+  }
+  if (!isFiniteTriple(raw.mesh_rotation)) {
+    errors.push(`${path}.mesh_rotation must be [x, y, z] finite numbers (Euler, radians)`)
+    ok = false
+  }
+  return ok ? (raw as unknown as SceneObjectState) : null
 }
 
 function parseObject(raw: unknown, errors: string[], path: string): SceneObject | null {
@@ -241,9 +350,104 @@ function parseObject(raw: unknown, errors: string[], path: string): SceneObject 
       interactions = parsed
     }
   }
+
+  // State machine (INTERACTABLES_SPEC.md): `states` (obstacle + mesh
+  // response per state), the initial `state`, and per-interaction
+  // requires/sets. FAIL-CLOSED: an interaction referencing an undeclared
+  // state, a state without its machine, or a machine without an initial
+  // state rejects the whole manifest — the engine never guesses.
+  let states: Record<string, SceneObjectState> | undefined
+  if (raw.states !== undefined) {
+    if (!isPlainObject(raw.states)) {
+      errors.push(`${path}.states must be an object`)
+      ok = false
+    } else {
+      const keys = Object.keys(raw.states)
+      if (keys.length === 0) {
+        errors.push(`${path}.states must declare at least one state`)
+        ok = false
+      }
+      const parsed: Record<string, SceneObjectState> = {}
+      for (const key of keys) {
+        const state = parseObjectState(raw.states[key], errors, `${path}.states.${key}`)
+        if (!state) ok = false
+        else parsed[key] = state
+      }
+      states = parsed
+    }
+  }
+  if (raw.state !== undefined) {
+    if (!isNonEmptyString(raw.state)) {
+      errors.push(`${path}.state must be a non-empty string`)
+      ok = false
+    } else if (states === undefined) {
+      errors.push(`${path}.state requires a ${path}.states state machine`)
+      ok = false
+    } else if (!states[raw.state]) {
+      errors.push(`${path}.state "${raw.state}" is not declared in ${path}.states (${Object.keys(states).join('|')})`)
+      ok = false
+    }
+  } else if (states !== undefined) {
+    errors.push(`${path}.state is required when ${path}.states is declared (fail-closed: no implicit initial state)`)
+    ok = false
+  }
+
+  if (states !== undefined) {
+    for (let i = 0; i < (interactions ?? []).length; i += 1) {
+      for (const field of ['requires', 'sets'] as const) {
+        const value = (interactions as SceneInteraction[])[i]![field]
+        if (value === undefined) continue
+        if (!states[value]) {
+          errors.push(`${path}.interactions[${i}].${field} "${value}" is not declared in ${path}.states (${Object.keys(states).join('|')})`)
+          ok = false
+        }
+      }
+    }
+  } else {
+    for (let i = 0; i < (interactions ?? []).length; i += 1) {
+      const interaction = (interactions as SceneInteraction[])[i]!
+      if (interaction.requires !== undefined || interaction.sets !== undefined) {
+        errors.push(`${path}.interactions[${i}].requires/sets require a ${path}.states state machine`)
+        ok = false
+      }
+    }
+  }
+
+  // Stateful object collision (INTERACTABLES_SPEC.md): an AABB toggled by
+  // the current state's `obstacle` flag. Requires a machine — a static
+  // obstacle belongs in the top-level `obstacles` array instead.
+  let obstacle: SceneObject['obstacle'] | undefined
+  if (raw.obstacle !== undefined) {
+    if (states === undefined) {
+      errors.push(`${path}.obstacle requires a ${path}.states state machine (its enabled-ness is state-driven)`)
+      ok = false
+    } else {
+      const o = raw.obstacle as Record<string, unknown>
+      if (
+        !isPlainObject(o) ||
+        !isFinitePair(o.center) ||
+        !isFinitePair(o.halfSize) ||
+        (o.halfSize as number[])[0]! < 0 ||
+        (o.halfSize as number[])[1]! < 0 ||
+        !isFiniteNumber(o.padding) ||
+        (o.padding as number) < 0
+      ) {
+        errors.push(`${path}.obstacle must be { center: [x, z], halfSize: [x, z] (non-negative), padding: number >= 0 }`)
+        ok = false
+      } else {
+        obstacle = o as SceneObject['obstacle']
+      }
+    }
+  }
+
   if (!ok) return null
   const object = raw as unknown as SceneObject
-  return { ...object, interactions: interactions ?? object.interactions }
+  return {
+    ...object,
+    interactions: interactions ?? object.interactions,
+    states: states ?? object.states,
+    obstacle: obstacle ?? object.obstacle,
+  }
 }
 
 /**

@@ -140,8 +140,13 @@ export async function mountTaiLoft(
   goalPanel.className = 'tai-loft-goals'
   goalPanel.style.display = 'none'
   let goalsLoaded = false
+  /** Last fetched interaction list (live state filter re-renders from it —
+   * spatial layer 5: an interaction whose `requires` stops matching the
+   * object's state disappears from the list without a refetch). */
+  let panelItems: { id: string; label: string }[] = []
   const renderGoalPanel = (interactions: { id: string; label: string }[]): void => {
     goalsLoaded = true
+    panelItems = interactions
     goalPanel.replaceChildren()
     const active = room.getGoal()
     const head = document.createElement('div')
@@ -151,6 +156,7 @@ export async function mountTaiLoft(
     for (const it of interactions) {
       const b = document.createElement('button')
       b.textContent = `${it.label} · ${it.id}`
+      b.dataset.goalId = it.id
       b.addEventListener('click', () => {
         room.setGoal(it.id)
         renderGoalPanel(interactions)
@@ -171,8 +177,12 @@ export async function mountTaiLoft(
     const show = goalPanel.style.display === 'none'
     goalPanel.style.display = show ? '' : 'none'
     if (!show) return
-    interface ManifestInteraction { id: string }
-    interface ManifestObject { id: string; label?: string; interactions?: ManifestInteraction[] }
+    interface ManifestInteraction { id: string; requires?: string }
+    interface ManifestObject {
+      id: string
+      label?: string
+      interactions?: ManifestInteraction[]
+    }
     const fallback = [
       { id: 'couch.sit', label: 'the couch' },
       { id: 'chair.sit', label: 'the armchair' },
@@ -185,7 +195,12 @@ export async function mountTaiLoft(
         let items = fallback
         if (manifest && Array.isArray(manifest.objects)) {
           const found = (manifest.objects as ManifestObject[]).flatMap((o) =>
-            (o.interactions ?? []).map((i) => ({ id: `${o.id}.${i.id}`, label: o.label ?? o.id })),
+            (o.interactions ?? [])
+              // requires gate (INTERACTABLES_SPEC.md): the picker only
+              // shows interactions valid in the object's LIVE state (an
+              // open door shows only "close").
+              .filter((i) => !i.requires || room.getObjectState(o.id) === i.requires)
+              .map((i) => ({ id: `${o.id}.${i.id}`, label: o.label ?? o.id })),
           )
           if (found.length) items = found
         }
@@ -195,11 +210,26 @@ export async function mountTaiLoft(
   })
   controls.append(goalButton)
   shell.append(goalPanel)
-  // Keep the header honest while a goal runs.
+  // Keep the header honest while a goal runs. Spatial layer 5: re-render
+  // when the state-filtered interaction set changed (a completed door-open
+  // swaps the "open" button for "close" without reopening the panel).
   const goalStatusTimer = setInterval(() => {
     if (goalPanel.style.display === 'none' || !goalsLoaded) return
     const head = goalPanel.querySelector('.tai-loft-goals-head')
     if (head) head.textContent = room.getGoal() ? `Goal: ${room.getGoal()}` : 'No active goal'
+    const visible = [...goalPanel.querySelectorAll('button[data-goal-id]')]
+      .map((b) => (b as HTMLButtonElement).dataset.goalId ?? '')
+      .filter(Boolean)
+    const live = panelItems.filter((it) => {
+      const [objectId, interactionName] = it.id.split('.')
+      const object = manifest.objects.find((o) => o.id === objectId)
+      const interaction = object?.interactions?.find((i) => i.id === interactionName)
+      return !interaction?.requires || room.getObjectState(objectId) === interaction.requires
+    })
+    const key = live.map((i) => i.id).join('|')
+    if (key !== visible.join('|') && visible.length) {
+      renderGoalPanel(live)
+    }
   }, 1000)
 
   // GEVS scoreboard: toggle panel showing the latest bench report
@@ -300,6 +330,19 @@ export async function mountTaiLoft(
     hipsWorldY: () => room.getHipsWorldY(),
     footWorldY: () => room.getFootWorldY(),
     poseProbe: (bones?: string[]) => room.getArdyPoseProbe(bones),
+    // Bounded pickup (spatial layer 5): live probe for the GEVS pickup-cup
+    // check — held object, attach bone, cup/hand world positions,
+    // carry-follow error, placement, range refusals.
+    pickupProbe: () => room.getPickupProbe(),
+    // Stateful interactables (spatial layer 5): live probes for the GEVS
+    // door-open check — object state, mesh rotation (deg), nav obstacle
+    // enabled-state, the transition journal, and route-clear through the
+    // doorway (blocked closed → clear open).
+    getObjectState: (objectId: string) => room.getObjectState(objectId),
+    getObjectRotationDeg: (objectId: string) => room.getObjectRotationDeg(objectId),
+    getNavObstacle: (objectId: string) => room.getNavObstacle(objectId),
+    getStateJournal: () => room.getStateJournal(),
+    navRouteClear: (x1: number, z1: number, x2: number, z2: number) => room.isNavRouteClear(x1, z1, x2, z2),
     // Bounded self-collision (capsule push-out): live toggle + penetration probe.
     setSelfCollision: (enabled: boolean) => room.setArdySelfCollision(enabled),
     selfCollisionReport: () => room.getArdySelfCollisionReport(),

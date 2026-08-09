@@ -267,7 +267,12 @@ export interface GoalPlannerPolicy {
    * live 2026-08-02: arrival triggered at 0.35 m while moving read 1.3 m at
    * the interaction). The final-waypoint arrival radius is
    * ARRIVE_TOLERANCE_M + min(closingSpeed × ARRIVE_LEAD_S, ARRIVE_LEAD_MAX_M),
-   * so a fast approach stops early and coasts ONTO the spot. */
+   * so a fast approach stops early and coasts ONTO the spot. Sized 0.9 s
+   * (2026-08-08): the 1.2 s value systematically overshot — live desk runs
+   * landed a deterministic 0.48 m short (trigger 0.83 m, coast 0.35 m at
+   * 0.4 m/s = 0.875 s; the 0.45 m GEVS arrival bar sits 3 cm under the
+   * landing) — the lead must match the ACTUAL coast, not the prompt
+   * latency. */
   ARRIVE_LEAD_S: number
   /** Cap (m) on the braking lead above the arrival tolerance. */
   ARRIVE_LEAD_MAX_M: number
@@ -290,6 +295,30 @@ export interface GoalPlannerPolicy {
   WALK_PROMPT_ROTATE_S: number
   /** How long the arrive stop prompt plays (s). */
   ARRIVE_PROMPT_S: number
+  /** An arrival miss (m) at or below this is accepted without a replan —
+   * the interaction prompt supplies the motion. Sized to the GEVS
+   * planner-desk-work arrival bar (0.45 m pass / 0.6 m partial at the
+   * first interact sample): accepting at 0.75 m guarantees a partial at
+   * best, so a miss in the 0.45-0.75 m band re-approaches (a SHORT walk —
+   * the load-fragile class was a multi-meter re-approach; the pickup-cup
+   * putdown's fragile step is isolated by its phase recenter). */
+  CLOSE_ARRIVE_ACCEPT_M: number
+  /** A face phase that drifts the body beyond this distance from the spot
+   * is re-approached instead of interacting from range (2026-08-08
+   * arrival-quality class: arrival accepted on the spot, face reissues
+   * orbited her to 1.11 m live). Sized as the accept band + turn-drift
+   * slack. */
+  FACE_DRIFT_REAIM_M: number
+  /** Debounce (s) for the face-drift re-aim — a transient turn-execution
+   * drift must not fire the re-approach. */
+  FACE_DRIFT_GUARD_S: number
+  /** Walk-prompt absorption budget (frames): a walk whose nav-REJECTED
+   * frames reach this count WITHOUT approach progress is re-aimed (a
+   * heading problem — turn) instead of left to the stall detector (which
+   * replans — a path problem — and burns the goal's single replan on the
+   * SAME heading; live r2: 129 absorbs, 14 walks, travelM 1.05, no reflex
+   * line, blocked). */
+  WALK_ABSORB_REAIM_N: number
   /** How long the interaction prompt plays before the goal completes (ms). */
   INTERACTION_MS: number
   /** Cap on the whole goal (s) — a goal that cannot finish fails with reason. */
@@ -317,11 +346,18 @@ export interface GoalPlannerPolicy {
 
 export const GOAL_PLANNER: GoalPlannerPolicy = {
   ARRIVE_TOLERANCE_M: 0.35,
-  // Final-approach lateral gate (2026-08-04): 0.30 keeps the corrected
-  // walk line within the 0.35 arrival tolerance with margin for the
-  // tick/coast quantization (the arrive trigger + stop coast land up to
-  // ~0.05 m off the ideal line-crossing).
-  FINAL_APPROACH_LATERAL_M: 0.3,
+  // Final-approach lateral gate (2026-08-04): keeps the corrected walk
+  // line within the arrival tolerance with margin for the tick/coast
+  // quantization (the arrive trigger + stop coast land up to ~0.05 m off
+  // the ideal line-crossing). Sized 0.5 m (2026-08-08): the 0.3 m value
+  // fired on borderline-GOOD walks (live trace: err 11.7° at 1.46 m =
+  // 0.30 m miss — a yank into a never-settling turn that never converged,
+  // the goal churned and died; 4/9 live desk runs reached the 1.0-1.6 m
+  // final-approach zone then died exactly this way). The arrival trigger
+  // (radius 0.35 + braking lead ≈ 0.89 m at walking speed) catches any
+  // line within 0.89 m of the spot — a 0.3-0.5 m miss is INSIDE that
+  // band and completes; only lines that genuinely miss (> 0.5 m) re-aim.
+  FINAL_APPROACH_LATERAL_M: 0.5,
   // Steering is COARSE on purpose (calibrated live 2026-08-02, trace + GEVS
   // runs): the stream's walks curve ~10-16°/s and turns execute 79-240% of
   // the request, so a 30° re-steer threshold fires every ~2 s, each
@@ -382,7 +418,7 @@ export const GOAL_PLANNER: GoalPlannerPolicy = {
   FACE_HOLD_S: 1.5,
   WALK_WAYPOINT_ARRIVE_M: 0.3,
   SMOOTH_SKIP_M: 1.2,
-  ARRIVE_LEAD_S: 1.2,
+  ARRIVE_LEAD_S: 0.9,
   ARRIVE_LEAD_MAX_M: 0.7,
   STALL_PROGRESS_EPS_M: 0.02,
   WALK_STALL_S: 6,
@@ -390,6 +426,16 @@ export const GOAL_PLANNER: GoalPlannerPolicy = {
   MAX_WALK_REPLANS: 1,
   WALK_PROMPT_ROTATE_S: 12,
   ARRIVE_PROMPT_S: 2.5,
+  CLOSE_ARRIVE_ACCEPT_M: 0.45,
+  // 0.85 m (2026-08-08): the 0.65 m value re-approached moderate face
+  // drifts (live f3r3: drifted 0.67 m, the re-approach walk failed in the
+  // never-settling mode and the goal died blocked — a completion lost for
+  // 2 cm). Only the TERRIBLE drifts (the 1.11 m live class) are worth the
+  // re-approach gamble; a 0.65-0.85 m drift completes with a poor-but-
+  // honest arrival (the criterion is completion-gated).
+  FACE_DRIFT_REAIM_M: 0.85,
+  FACE_DRIFT_GUARD_S: 1.5,
+  WALK_ABSORB_REAIM_N: 4,
   INTERACTION_MS: 20000,
   MAX_GOAL_SECONDS: 120,
   PROMPT_LOG_CAP: 32,
@@ -495,6 +541,11 @@ export interface PlannerRootProbe {
   x: number
   z: number
   yaw: number
+  /** Monotonic nav-rejection frame counter of the body (ArdyMotionSource
+   * navAbsorbCount — the treadmill: a rejected frame never happened).
+   * Optional: a probe without it disables the walk-absorption re-aim
+   * (the reflex edge still works). */
+  navAbsorbCount?: number
 }
 
 export interface PlannerPromptLogEntry {
@@ -588,6 +639,13 @@ interface ActiveGoal {
    * resets it). */
   turnRawAlignedAtMs: number | null
   walkPromptSentAtMs: number
+  /** navAbsorbCount at the current walk prompt's send — the absorption
+   * accounting baseline for the graze-class re-aim (2026-08-08). */
+  walkAbsorbBaseline: number
+  /** Face phase: wall clock when the body first drifted past
+   * FACE_DRIFT_REAIM_M (debounce — a transient turn-execution drift must
+   * not fire the re-approach). */
+  faceDriftSinceMs: number | null
   /** Landing-window state, SNAPSHOTTED at walk-prompt send: true when the
    * yaw was MOVING at send (the never-settling sweep handoff — the walk
    * must be allowed to land + re-anchor before steering judges it);
@@ -668,6 +726,18 @@ export class GoalPlanner {
   private lastFailure: string | null = null
   /** Replan count of the last finished goal (telemetry: "current/last goal"). */
   private lastReplans = 0
+  /**
+   * Reflex edge for the walk-absorption recovery (2026-08-08 positional
+   * class, live desk1): a reflex that JUST cleared during the walk phase
+   * means the walk was nav-REJECTED — the reflex layer only fires on
+   * sustained rejection ("front, coffee table" — the walk pressed into an
+   * obstacle AABB and every frame was absorbed; live: navAbsorbs 69,
+   * travelM 0.194). Set in update() before the phase dispatch; consumed
+   * by stepWalk.
+   */
+  private reflexJustCleared = false
+  /** Previous tick's reflex state (edge detection for the above). */
+  private reflexWasActive = false
   private readonly promptLog: PlannerPromptLogEntry[] = []
   private lastActivityMs: number
   private readonly ambientLastPickedAt = new Map<string, number>()
@@ -771,6 +841,8 @@ export class GoalPlanner {
       faceAlignedAtMs: null,
       turnRawAlignedAtMs: null,
       walkPromptSentAtMs: -Infinity,
+      walkAbsorbBaseline: 0,
+      faceDriftSinceMs: null,
       walkLandWindowOpen: false,
       bestDistance: Infinity,
       stallSinceMs: null,
@@ -884,6 +956,13 @@ export class GoalPlanner {
     }
     // Priority: reflex interrupts a segment — no sends, no phase clock.
     const reflexActive = this.channel.isReflexActive()
+    // Reflex edge (walk-absorption recovery, 2026-08-08): a reflex that
+    // just CLEARED is the nav-rejection signal — the reflex layer only
+    // fires on sustained rejection, so a reflex during the walk means
+    // the walk was absorbed. The walk phase re-aims on this edge; other
+    // phases (turn/arrive/face) resume normally.
+    this.reflexJustCleared = !reflexActive && this.reflexWasActive
+    this.reflexWasActive = reflexActive
     switch (this.goal.phase) {
       case 'planning': this.enterInitialSegment(); break
       case 'turn': this.stepTurn(now, reflexActive); break
@@ -1030,6 +1109,21 @@ export class GoalPlanner {
     const goal = this.goal!
     if (reflexActive) {
       this.freezeTargetStall(now)
+      return // reflex owns the prompt; restore re-issues ours
+    }
+    // Walk-absorption recovery (2026-08-08 positional class): a reflex
+    // that just cleared means the walk was nav-REJECTED — the reflex
+    // layer only fires on sustained rejection (live desk1: the walk froze
+    // at a sweep-garbage heading that clipped the coffee table 0.27 m
+    // from spawn — navAbsorbs 69, travelM 0.194, walkPromptCount 9 with
+    // zero translation). The reflex restore re-issues the SAME walk into
+    // the SAME wall; the stall detector then replans the SAME clear route
+    // and fails "blocked path after 1 replan". Re-aim instead: the turn
+    // phase owns the heading, and the walk only re-fires through the raw
+    // gate — a fresh aim, not a re-press.
+    if (this.reflexJustCleared) {
+      console.info(`[planner] goal ${goal.id} walk absorbed — re-aiming at waypoint`)
+      this.beginPhase('turn')
       return
     }
     if (this.trackTargetProgress(now)) return
@@ -1037,6 +1131,10 @@ export class GoalPlanner {
     if (goal.sentPrompt === null) {
       this.sendSegmentPrompt('walk')
       goal.walkPromptSentAtMs = now
+      // Absorption accounting baseline (graze-class re-aim): the body's
+      // monotonic nav-rejection counter at THIS prompt's send — frames
+      // rejected during this walk count against it.
+      goal.walkAbsorbBaseline = this.probe().navAbsorbCount ?? -1
       // Landing-window snapshot (2026-08-05): decide at SEND whether the
       // walk prompt needs a landing window at all. The window exists for
       // the never-settling handoff — the turn-phase sweep is LIVE when the
@@ -1173,6 +1271,33 @@ export class GoalPlanner {
         return
       }
     }
+    // Graze-absorption re-aim (2026-08-08 positional class): a walk
+    // whose frames are being nav-REJECTED without approach progress is
+    // pressed into an obstacle — the reflex layer only fires on sustained
+    // rejection (the accumulator leaks below trigger on a slow graze), so
+    // the planner's ONLY signal here is the body's own absorption counter
+    // (live r2: 129 absorbs, walkPromptCount 14, travelM 1.05, NO reflex
+    // line, "blocked path after 1 replan" — the stall detector burned the
+    // goal's single replan on the SAME heading). Absorption is a HEADING
+    // problem (re-aim — the turn owns the fresh aim), NOT a path problem
+    // (replan): re-aiming preserves the replan budget for a genuinely
+    // blocked route. Gated by the landing window (a same-tick check reads
+    // the OLD stream's sweep) and by progress (a healthy walk that grazes
+    // a boundary while advancing must not re-aim). The reflex-active case
+    // is already handled above (freeze + restore re-issues ours).
+    if (landingHolds && goal.walkAbsorbBaseline >= 0 && probe.navAbsorbCount !== undefined) {
+      const absorbedThisWalk = probe.navAbsorbCount - goal.walkAbsorbBaseline
+      if (
+        absorbedThisWalk >= this.policy.WALK_ABSORB_REAIM_N &&
+        d >= goal.bestDistance - this.policy.STALL_PROGRESS_EPS_M
+      ) {
+        console.info(
+          `[planner] goal ${goal.id} walk absorbed ${absorbedThisWalk} frame(s) without progress — re-aiming at waypoint`,
+        )
+        this.beginPhase('turn')
+        return
+      }
+    }
     // Arrival != motion trust: measure ACTUAL progress toward the CURRENT
     // waypoint; stalled (blocked or drifted) walks replan once from the
     // live position, then fail.
@@ -1204,19 +1329,30 @@ export class GoalPlanner {
     if (goal.sentPrompt === null) this.sendSegmentPrompt('arrive')
     if (now - goal.phaseStartedAtMs > this.policy.ARRIVE_PROMPT_S * 1000) {
       // Arrival != motion trust (re-anchor on reality, MotionBricks): the
-      // stop coasted, now measure where she ACTUALLY ended up. Outside the
-      // tolerance — braking-lead miss, stepping turn, or stream overshoot —
-      // replan from the live position and re-approach ONCE (shares the
-      // goal's replan budget); a second miss proceeds with the residual
-      // journaled rather than looping approaches forever.
-      if (!this.arrivedAtTarget()) {
+      // stop coasted, now measure where she ACTUALLY ended up.
+      const d = distanceXZ(this.probe().x, this.probe().z, goal.target.x, goal.target.z)
+      const arrived = this.arrivedAtTarget()
+      // Close-arrival accept (2026-08-08, pickup-cup bench): an arrival
+      // miss at interaction range is accepted WITHOUT burning the goal's
+      // single replan on a re-approach walk — the prompt supplies the
+      // motion, and the re-approach turn is the load-fragile step (a
+      // capped turn fires the walk with a residual heading; the walk
+      // stalls and the goal dies "blocked" under host load — measured
+      // live twice on the putdown phase). Outside it, the re-approach
+      // below still applies; the walk is the right tool at range.
+      if (!arrived && d <= this.policy.CLOSE_ARRIVE_ACCEPT_M) {
+        console.info(`[planner] goal ${goal.id} arrival off by ${d.toFixed(2)} m — within close-accept ${this.policy.CLOSE_ARRIVE_ACCEPT_M.toFixed(2)} m, proceeding to interact`)
+      } else if (!arrived) {
+        // Outside the tolerance — braking-lead miss, stepping turn, or
+        // stream overshoot — replan from the live position and re-approach
+        // ONCE (shares the goal's replan budget); a second miss proceeds
+        // with the residual journaled rather than looping approaches
+        // forever.
         if (goal.replans < this.policy.MAX_WALK_REPLANS) {
-          const d = distanceXZ(this.probe().x, this.probe().z, goal.target.x, goal.target.z)
           console.info(`[planner] goal ${goal.id} arrival off by ${d.toFixed(2)} m — re-approaching from actual position`)
           this.replanFromActual()
           return
         }
-        const d = distanceXZ(this.probe().x, this.probe().z, goal.target.x, goal.target.z)
         console.warn(`[planner] goal ${goal.id} proceeding to interact ${d.toFixed(2)} m from the spot (re-approach budget exhausted)`)
       }
       const desired = (goal.interaction.facingDeg * Math.PI) / 180
@@ -1231,6 +1367,32 @@ export class GoalPlanner {
   private stepFace(now: number, reflexActive: boolean): void {
     const goal = this.goal!
     if (reflexActive) return
+    // Face-drift guard (2026-08-08 arrival-quality class): the face
+    // phase's turns can DRIFT the body off the spot — live: arrival
+    // accepted on the spot (minDistanceM 0.013), face reissues orbited
+    // her to 1.11 m (navAbsorbs 87 — the never-settling stream turns in
+    // circles) and the interaction fired from range (arrivalM 1.113).
+    // A drift beyond the accept band is a positional problem — re-approach
+    // (shared replan budget) instead of interacting from range. Gated on
+    // replan budget (a re-approach must actually be possible) and
+    // debounced (a transient turn-execution drift must not fire it).
+    const dSpot = distanceXZ(this.probe().x, this.probe().z, goal.target.x, goal.target.z)
+    if (dSpot > this.policy.FACE_DRIFT_REAIM_M) {
+      if (goal.faceDriftSinceMs === null) goal.faceDriftSinceMs = now
+      if (now - goal.faceDriftSinceMs >= this.policy.FACE_DRIFT_GUARD_S * 1000) {
+        if (goal.replans < this.policy.MAX_WALK_REPLANS) {
+          console.info(
+            `[planner] goal ${goal.id} face drifted her ${dSpot.toFixed(2)} m off the spot — re-approaching`,
+          )
+          this.beginPhase('arrive')
+          return
+        }
+        // No replan budget: proceed with the residual rather than loop.
+        goal.faceDriftSinceMs = null
+      }
+    } else {
+      goal.faceDriftSinceMs = null
+    }
     const desired = (goal.interaction.facingDeg * Math.PI) / 180
     const err = (Math.abs(wrapAngle(desired - (this.yawEma ?? this.probe().yaw))) * 180) / Math.PI
     if (err <= this.policy.TURN_TOLERANCE_DEG) {
@@ -1262,7 +1424,22 @@ export class GoalPlanner {
       goal.phaseStartedAtMs = now
       goal.sentPrompt = null
     } else {
-      this.beginPhase('interact')
+      // Reissue budget exhausted: accept the residual facing ONLY from
+      // interaction range — a face that drifted her out of the accept
+      // band re-approaches instead (the arrive gate replans once, then
+      // proceeds journaled).
+      const dAtExhaustion = distanceXZ(this.probe().x, this.probe().z, goal.target.x, goal.target.z)
+      if (
+        dAtExhaustion > this.policy.FACE_DRIFT_REAIM_M &&
+        goal.replans < this.policy.MAX_WALK_REPLANS
+      ) {
+        console.info(
+          `[planner] goal ${goal.id} face could not converge and drifted her ${dAtExhaustion.toFixed(2)} m off the spot — re-approaching`,
+        )
+        this.beginPhase('arrive')
+      } else {
+        this.beginPhase('interact')
+      }
     }
   }
 

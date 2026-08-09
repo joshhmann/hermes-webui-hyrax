@@ -31,12 +31,14 @@ import {
   type ProceduralTuning,
 } from './locomotion/ProceduralLocomotion'
 import { ArdyMotionSource, type ArdyMotionState, type ArdyTelemetry } from './motion/ArdyMotionSource'
+import { PickupSystem, type PickupProbe } from './interactables/PickupSystem'
 import { GoalPlanner, type EssenceStateSnapshot, type GoalPlannerPolicy, type GoalPlannerTelemetry } from './planning/GoalPlanner'
 import type { SelfCollisionTargetReport } from './collision/SelfCollision.ts'
 import { RoomNavigation } from './navigation/RoomNavigation'
 import { AvatarRig } from './rig/AvatarRig'
 import roomManifest from './room/roomObjects.json'
-import type { SceneManifest } from './room/sceneManifest'
+import { InteractableStateMachine, type StateJournalEntry } from './room/interactableState'
+import type { SceneInteraction, SceneManifest, SceneObject } from './room/sceneManifest'
 import type { RoomObjectDefinition } from './types'
 import { VisemeController } from './voice/VisemeController'
 
@@ -118,6 +120,12 @@ export class TaiRoomScene {
   private readonly navigation: RoomNavigation
   private readonly face = new FaceController()
   private readonly visemes = new VisemeController()
+  /** Bounded pickup (spatial layer 5): attach-to-bone, carry, putdown. */
+  private readonly pickup = new PickupSystem()
+  /** Stateful interactables (spatial layer 5): per-object state machines
+   * (INTERACTABLES_SPEC.md) — current state, requires gating, and the
+   * journaled sets transition on interaction completion. */
+  private readonly objectStates: InteractableStateMachine
   private readonly objects = new Map<string, Mesh>()
   private readonly resizeObserver: ResizeObserver
   private readonly ambient: AmbientLight
@@ -169,6 +177,7 @@ export class TaiRoomScene {
     // room data, so it stays here (matches the pre-manifest 0.22).
     this.operatorId = this.essenceOptions.operator ?? 'tai'
     this.navigation = RoomNavigation.fromManifest(manifest, LOFT_ACTOR_RADIUS)
+    this.objectStates = new InteractableStateMachine(manifest)
     this.scene.background = new Color('#0c1220')
     this.scene.fog = new FogExp2('#080c14', 0.018)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -199,6 +208,11 @@ export class TaiRoomScene {
     this.timeOfDay = new TimeOfDaySystem(this.scene, this.ambient, this.directional, this.pendant, this.projector, this.server)
 
     this.seedRoom()
+    // Stateful interactables (spatial layer 5): object-declared collision
+    // (door_01's AABB) joins the nav grid, then each object's initial state
+    // applies its mesh_rotation + obstacle flag (closed door = blocking).
+    this.registerStatefulObstacles()
+    this.applyInitialObjectStates()
     this.resizeObserver = new ResizeObserver(() => this.resize())
     this.resizeObserver.observe(this.container)
 
@@ -249,9 +263,26 @@ export class TaiRoomScene {
         probe: () => {
           const rig = this.rig
           return rig
-            ? { x: rig.scene.position.x, z: rig.scene.position.z, yaw: rig.scene.rotation.y }
-            : { x: 0, z: 0.15, yaw: 0 }
+            ? {
+                x: rig.scene.position.x,
+                z: rig.scene.position.z,
+                yaw: rig.scene.rotation.y,
+                // Graze-class re-aim signal: the body's nav-rejection
+                // counter (a walk pressed into an obstacle absorbs
+                // frames — the reflex may never fire on a slow graze).
+                navAbsorbCount: this.ardySource?.navAbsorbCountSnapshot ?? 0,
+              }
+            : { x: 0, z: 0.15, yaw: 0, navAbsorbCount: 0 }
         },
+        // Live object state for the requires gate (spatial layer 5): the
+        // planner refuses requires-gated interactions while the object is
+        // in the wrong state (an open door can't be opened) — journaled.
+        objectState: (objectId) => this.objectStates.stateOf(objectId),
+        // Interaction-completion hook (spatial layer 5): pickup/putdown and
+        // sets state transitions live HERE (the scene), not in the planner
+        // — the planner just reports that the interaction finished playing.
+        onInteractionComplete: (interactionId, interaction) =>
+          this.handleInteractionComplete(interactionId, interaction),
       })
     }
     this.face.applyIntent({ face: { expression: 'relaxed', intensity: 0.25, talking: false } })
@@ -315,9 +346,202 @@ export class TaiRoomScene {
   }
 
   /** Goal planner seam (spatial layer 3b): start a manifest interaction goal
-   * (e.g. "desk.work"). Returns false when the interaction is unknown. */
+   * (e.g. "desk.work"). Returns false when the interaction is unknown.
+   *
+   * Pickup gate (spatial layer 5, INTERACTABLES_SPEC.md v1 — the door task
+   * owns states/requires/sets; until those land, the pickup/putdown pairing
+   * is gated HERE): a pickup goal is refused while she is already holding,
+   * and a putdown goal (a non-pickup interaction on a pickable object) is
+   * refused while she is empty-handed. One held object at a time. */
   setGoal(interactionId: string): boolean {
+    const [objectId, interactionName] = interactionId.split('.')
+    const object = this.manifest.objects.find((o) => o.id === objectId)
+    const interaction = object?.interactions?.find((i) => i.id === interactionName)
+    if (interaction?.kind === 'pickup' && this.pickup.heldObjectId !== null) {
+      console.warn(`[pickup] refusing ${interactionId}: already holding "${this.pickup.heldObjectId}"`)
+      return false
+    }
+    const pickable = object?.interactions?.some((i) => i.kind === 'pickup') ?? false
+    if (pickable && interaction && interaction.kind !== 'pickup' && this.pickup.heldObjectId !== objectId) {
+      console.warn(`[pickup] refusing ${interactionId}: not holding "${objectId}"`)
+      return false
+    }
     return this.planner?.setGoal(interactionId) ?? false
+  }
+
+  /**
+   * Interaction-completion hook (spatial layer 5): applies pickup/putdown
+   * semantics when a manifest interaction finishes playing.
+   *   - `kind: "pickup"` → bounded attach: the object's mesh parents to the
+   *     attach bone with the offset (no IK, no physics — parenting IS the
+   *     tracking). Refused (journaled) when out of bounded range, bone
+   *     missing, or already holding.
+   *   - any other interaction on a pickable object while she holds it →
+   *     putdown: the mesh unparents and is placed at the object's authored
+   *     home position, where it stays.
+   */
+  private handleInteractionComplete(interactionId: string, interaction: SceneInteraction): void {
+    const objectId = interactionId.split('.')[0]
+    const object = this.manifest.objects.find((o) => o.id === objectId)
+    if (!object) {
+      console.warn(`[pickup] completion for unknown object "${objectId}"`)
+      return
+    }
+    // Stateful interactables (spatial layer 5 — door slice): apply the
+    // interaction's `sets` transition on completion — mesh response + nav
+    // collision toggle, journaled. Independent of pickup semantics below.
+    this.applyStateTransition(object, interaction)
+    const home = new Vector3(object.position[0], object.position[1], object.position[2])
+    const mesh = this.objects.get(this.bakedMeshForObject(objectId))
+    if (!mesh) {
+      console.warn(`[pickup] no baked mesh for object "${objectId}" (${interactionId})`)
+      return
+    }
+    if (interaction.kind === 'pickup') {
+      if (!interaction.attach) return // validator rejects this; belt-and-suspenders
+      const hold = this.pickup.pickUp(
+        objectId,
+        mesh,
+        interaction.attach,
+        this.resolveBone(interaction.attach.bone),
+        { x: this.rig?.scene.position.x ?? 0, z: this.rig?.scene.position.z ?? 0 },
+        home,
+      )
+      console.info(
+        hold
+          ? `[pickup] ${interactionId} → ${interaction.attach.bone} (offset ${interaction.attach.offset.join(',')})`
+          : `[pickup] ${interactionId} refused: ${this.pickup.lastReason}`,
+      )
+      return
+    }
+    // Putdown: any completed interaction on the held object's manifest
+    // entry releases it (spec: "putdown reverses at a target spot"). Only
+    // pickable objects take this path — stateful props (the door) don't.
+    if (!this.isPickableObject(objectId)) return
+    if (this.pickup.putDown(objectId)) {
+      console.info(`[pickup] ${interactionId} → cup placed at (${home.x.toFixed(2)}, ${home.y.toFixed(2)}, ${home.z.toFixed(2)})`)
+    } else if (this.pickup.lastReason) {
+      console.warn(`[pickup] ${interactionId} putdown refused: ${this.pickup.lastReason}`)
+    }
+  }
+
+  /** Baked-visual binding: manifest object id → seeded mesh id. The manifest
+   * is the spatial truth; rendering is downstream (SCENE_MANIFEST_SPEC) —
+   * the cup's visual is the baked coffee-mug cylinder. */
+  private bakedMeshForObject(objectId: string): string {
+    return objectId === 'cup' ? 'coffee-mug' : objectId
+  }
+
+  /** Resolve an attach bone to the node the motion actually writes (the
+   * normalized humanoid rig — pose-probe vocabulary), with the rig's
+   * general bone resolver as fallback. Null when the rig is absent. */
+  private resolveBone(name: string): Object3D | null {
+    const humanoid = this.rig?.vrm?.humanoid
+    return humanoid?.getNormalizedBoneNode(name as any) ?? this.rig?.getBone(name) ?? null
+  }
+
+  /** Live pickup probe for the GEVS pickup-cup check (measured state: held
+   * object id, attach bone, cup/hand world positions, carry-follow error,
+   * last placement, last range refusal). */
+  getPickupProbe(): PickupProbe {
+    const probe = this.pickup.probe()
+    if (probe.home === null) {
+      const object = this.manifest.objects.find((o) => o.id === 'cup')
+      if (object) probe.home = [...object.position] as [number, number, number]
+    }
+    return probe
+  }
+
+  // ── stateful interactables (spatial layer 5 — door slice) ────────
+
+  /** Stateful-interactable completion: apply the interaction's `sets`
+   * transition — mesh_rotation on the baked mesh + nav obstacle toggle per
+   * the new state's `obstacle` flag. Journaled by the machine; no-op when
+   * the interaction has no `sets` (or the object has no machine). */
+  private applyStateTransition(object: SceneObject, interaction: SceneInteraction): void {
+    const transition = this.objectStates.applySets(object, interaction)
+    if (!transition) return
+    this.applyObjectStateEffects(object, transition.to)
+    console.info(`[loft] ${object.id}: ${transition.from} → ${transition.to} (interaction "${interaction.id}" completed)`)
+  }
+
+  /** Apply a state's declared effects: mesh rotation (Euler, radians) +
+   * nav obstacle enabled-ness. Called at load for the initial state and on
+   * every transition (spec: the world responds). */
+  private applyObjectStateEffects(object: SceneObject, stateName: string): void {
+    const state = object.states?.[stateName]
+    if (!state) return
+    const mesh = this.objects.get(object.id)
+    if (mesh) mesh.rotation.set(state.mesh_rotation[0], state.mesh_rotation[1], state.mesh_rotation[2])
+    if (object.obstacle) this.navigation.setObstacleEnabled(object.id, state.obstacle)
+  }
+
+  /** Register stateful-object collision AABBs (manifest object.obstacle)
+   * with the nav grid. Enabled-ness follows the current state. */
+  private registerStatefulObstacles(): void {
+    for (const object of this.manifest.objects) {
+      if (!object.states || !object.obstacle) continue
+      this.navigation.addBoxObstacle(
+        object.id,
+        new Vector3(object.obstacle.center[0], 0, object.obstacle.center[1]),
+        new Vector3(object.obstacle.halfSize[0] * 2, 1, object.obstacle.halfSize[1] * 2),
+        object.obstacle.padding,
+      )
+    }
+  }
+
+  /** Apply each stateful object's initial state effects (load-time). */
+  private applyInitialObjectStates(): void {
+    for (const object of this.manifest.objects) {
+      if (!object.states || !object.state) continue
+      this.applyObjectStateEffects(object, object.state)
+    }
+  }
+
+  /** True when the object is a pickable object (declares a pickup
+   * interaction) — the putdown path only applies to those; stateful props
+   * (the door) and plain furniture never put down. */
+  private isPickableObject(objectId: string): boolean {
+    return (
+      this.manifest.objects.find((o) => o.id === objectId)?.interactions?.some(
+        (i) => i.kind === 'pickup',
+      ) ?? false
+    )
+  }
+
+  /** Current state of a stateful object (null when no machine). */
+  getObjectState(objectId: string): string | null {
+    return this.objectStates.stateOf(objectId)
+  }
+
+  /** The baked mesh's current Euler rotation in degrees (null when the
+   * object has no rendered mesh) — the visible mesh-response probe. */
+  getObjectRotationDeg(objectId: string): [number, number, number] | null {
+    const mesh = this.objects.get(objectId)
+    if (!mesh) return null
+    return [
+      roundNumber((mesh.rotation.x * 180) / Math.PI),
+      roundNumber((mesh.rotation.y * 180) / Math.PI),
+      roundNumber((mesh.rotation.z * 180) / Math.PI),
+    ]
+  }
+
+  /** Nav obstacle enabled-state for an object id (null when the object is
+   * not a registered nav obstacle). */
+  getNavObstacle(objectId: string): { enabled: boolean } | null {
+    const obstacle = this.navigation.listObstacles().find((o) => o.id === objectId)
+    return obstacle ? { enabled: obstacle.enabled } : null
+  }
+
+  /** State-transition journal (GEVS evidence: transitions are journaled). */
+  getStateJournal(): StateJournalEntry[] {
+    return this.objectStates.journal()
+  }
+
+  /** Direct XZ route-clear probe against the CURRENT nav state (GEVS: the
+   * doorway route must be blocked while closed and clear once open). */
+  isNavRouteClear(x1: number, z1: number, x2: number, z2: number): boolean {
+    return this.navigation.isRouteClear(new Vector3(x1, 0, z1), [new Vector3(x2, 0, z2)])
   }
 
   // ── essence driver (spatial layer 4) ─────────────────────────────
@@ -735,6 +959,7 @@ export class TaiRoomScene {
     this.addResetChamber()
     this.addAnalogAccents()
     this.addWarmFixtures()
+    this.addDoor()
   }
 
   private addSocialHub(): void {
@@ -748,7 +973,7 @@ export class TaiRoomScene {
     const right = this.box('chair-right', new Vector3(2, 0.34, 1), new Vector3(0.78, 0.68, 0.78), '#6a4a2c')
     right.rotation.y = 0.45
     this.box('coffee-table', new Vector3(0, 0.28, 1.15), new Vector3(1.25, 0.12, 0.62), '#2c1f1a')
-    this.cylinder('coffee-mug', new Vector3(0.2, 0.4, 1.15), 0.045, 0.04, 0.1, '#eeeeee')
+    this.cylinder('coffee-mug', new Vector3(0.2, 0.4, 0.92), 0.045, 0.04, 0.1, '#eeeeee')
   }
 
   private addCommandZone(): void {
@@ -802,6 +1027,35 @@ export class TaiRoomScene {
       this.cylinder(`pendant-${x}`, new Vector3(x, 2.45, 0.75), 0.18, 0.28, 0.24, '#ffbe75', { emissive: '#ff9f45', intensity: 0.65 })
       this.cylinder(`cord-${x}`, new Vector3(x, 2.72, 0.75), 0.012, 0.012, 0.45, '#19110f')
     }
+  }
+
+  /**
+   * door_01 — the stateful interactable (INTERACTABLES_SPEC.md, spatial
+   * layer 5). Panel is hinged at its LEFT edge: the geometry is translated
+   * so the origin IS the hinge, and the manifest's `states.<s>.mesh_rotation`
+   * swings it (closed [0,0,0] → panel along the back wall; open
+   * [0,-1.57,0] → panel swings INTO the room). The engine applies the
+   * rotation + nav obstacle toggle on transition (applyObjectStateEffects);
+   * the handle is a child of the panel so it swings along. The manifest
+   * position (-2.4, 1.2, -3.9) is the panel's authored center; the hinge
+   * world point is -0.35 x of it (panel half-width).
+   */
+  private addDoor(): void {
+    const panel = new Mesh(new BoxGeometry(0.7, 1.9, 0.08), this.material('#3a2f28', { roughness: 0.55, metalness: 0.12 }))
+    panel.geometry.translate(0.35, 0, 0) // origin = hinge edge
+    panel.name = 'synthesis-loft-door_01'
+    panel.position.set(-2.75, 1.2, -3.93)
+    panel.castShadow = true
+    panel.receiveShadow = true
+    this.scene.add(panel)
+    this.objects.set('door_01', panel)
+    const handle = new Mesh(
+      new CylinderGeometry(0.03, 0.03, 0.14, 12),
+      this.material('#c9a45c', { metalness: 0.55, roughness: 0.4 }),
+    )
+    handle.position.set(0.62, 0.95, 0.02)
+    panel.add(handle)
+    this.box('door-jamb', new Vector3(-2.8, 1.2, -3.99), new Vector3(0.9, 2.05, 0.06), '#241c17')
   }
 }
 

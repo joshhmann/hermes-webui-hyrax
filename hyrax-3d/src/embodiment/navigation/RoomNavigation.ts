@@ -15,6 +15,13 @@ export type RoomObstacle = {
   padding: number;
   /** Human-readable name from the scene manifest (reflex telemetry). */
   label?: string;
+  /**
+   * Stateful-obstacle toggle (INTERACTABLES_SPEC.md): false = the obstacle
+   * is skipped by EVERY collision check (an open door removes its
+   * collision so paths can route through). Static manifest obstacles are
+   * always enabled; stateful objects flip this via setObstacleEnabled.
+   */
+  enabled: boolean;
 };
 
 /** Manifest-literal id used when a move clamps against the room bounds. */
@@ -92,6 +99,7 @@ export class RoomNavigation {
         center: new Vector3(obstacle.center[0], 0, obstacle.center[1]),
         halfSize: new Vector3(obstacle.halfSize[0], 0, obstacle.halfSize[1]),
         padding: obstacle.padding + actorRadius,
+        enabled: true,
       });
     }
     return navigation;
@@ -110,7 +118,22 @@ export class RoomNavigation {
       center: center.clone(),
       halfSize: new Vector3(Math.abs(size.x) / 2, Math.abs(size.y) / 2, Math.abs(size.z) / 2),
       padding: padding + this.actorRadius,
+      enabled: true,
     });
+  }
+
+  /**
+   * Stateful-obstacle toggle (INTERACTABLES_SPEC.md): enable/disable an
+   * obstacle by id (open door → collision removed, paths route through).
+   * Disabled obstacles are skipped by every collision check but still
+   * listed by listObstacles (so the state is observable). Returns false
+   * when no obstacle with that id exists.
+   */
+  setObstacleEnabled(id: string, enabled: boolean): boolean {
+    const obstacle = this.obstacles.find((candidate) => candidate.id === id);
+    if (!obstacle) return false;
+    obstacle.enabled = enabled;
+    return true;
   }
 
   listObstacles(): RoomObstacle[] {
@@ -184,6 +207,7 @@ export class RoomNavigation {
     }
 
     for (const obstacle of this.obstacles) {
+      if (!obstacle.enabled) continue;
       const resolved = this.pushOutsideObstacle(position, obstacle);
       if (resolved) {
         position.copy(resolved);
@@ -258,6 +282,7 @@ export class RoomNavigation {
 
   private findBlockingObstacle(start: Vector3, goal: Vector3): RoomObstacle | null {
     for (const obstacle of this.obstacles) {
+      if (!obstacle.enabled) continue;
       if (segmentIntersectsAabb2D(start, goal, obstacle)) {
         return obstacle;
       }
@@ -267,6 +292,7 @@ export class RoomNavigation {
 
   private isPointBlocked(point: Vector3): boolean {
     return this.obstacles.some((obstacle) => {
+      if (!obstacle.enabled) return false;
       const minX = obstacle.center.x - obstacle.halfSize.x - obstacle.padding;
       const maxX = obstacle.center.x + obstacle.halfSize.x + obstacle.padding;
       const minZ = obstacle.center.z - obstacle.halfSize.z - obstacle.padding;

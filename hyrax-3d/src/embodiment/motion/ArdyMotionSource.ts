@@ -122,7 +122,18 @@ export interface ArdyTelemetry {
    * (treadmill absorb — boundary contact, no stream reset). */
   navAbsorbCount: number
   /** Live sanity-gate internals (benchmark/debug instrumentation). */
-  gate: { leanEmaDeg: number; rootYEma: number; hold: boolean }
+  gate: {
+    leanEmaDeg: number
+    rootYEma: number
+    hold: boolean
+    /** Continuous in-band heading rotation (s) — the never-settling sweep
+     * story (0 when none). Benchmark evidence for the sweep class. */
+    sweepSec: number
+    /** Direction reversals in the rolling window — the never-settling
+     * oscillation story (0 when none). Benchmark evidence for the
+     * daybed churn class. */
+    oscReversals: number
+  }
   /** Ground-contact correction currently applied to the hips (profiled path;
    * null on the gestalt fallback). */
   groundCorrectionM: number | null
@@ -272,6 +283,86 @@ export type ArdyReflexDirection = keyof typeof ARDY_REFLEX.PROMPTS
 const HARD_LEAN_REJECT_DEG = 45
 const ROOT_SPIN_RAD_S = 1.5
 const MOVE_ACCUM_S = 0.25
+/**
+ * Never-settling heading sweep gate (2026-08-09 essence-daybed-nap class).
+ * The live stream's root yaw can rotate CONTINUOUSLY (0°→180°→360°... at
+ * ~40°/s for 68+ s with zero prompts in flight) while the root stays
+ * upright at standing height — every gate above is BLIND to it: lean is
+ * yaw-invariant (a pure yaw sweep reads 0°), root height stays in bounds,
+ * and the rate (0.7 rad/s) sits BELOW the acrobatics band (≥ 1.5 rad/s),
+ * so the flip exemption never engages either. The sweep garbage is fed to
+ * the rig heading (the nav approval passes yaw deltas unconstrained), the
+ * planner's probe reads a heading that NEVER settles, and every goal that
+ * needs a turn dies in circling/re-approach churn (44+ walks unusable;
+ * essence-daybed-nap 8×0.75 with zero completion-gated passes at ANY
+ * commit). Planner-side caps (TURN_PHASE_MAX_S etc.) bound the damage but
+ * cannot fix a feed that never stops rotating — the source must fail
+ * closed on the class itself.
+ *
+ * Discriminator — the rotation-rate BAND, measured with the same rootSpin
+ * the acrobatics exemption already computes:
+ *  - below SWEEP_RATE_FLOOR_RAD_S: a settled yaw or a walk curve
+ *    (10-16°/s live) — the sweep story RESETS;
+ *  - in [floor, ROOT_SPIN_RAD_S): a legit turn executes here (40-86°/s)
+ *    but SETTLES within ~2.5 s (measured 79-240% of a ≤45° ask); the
+ *    never-settling sweep lives in this band FOREVER. 8 s of continuous
+ *    in-band rotation is unambiguous — release to procedural + ONE hard
+ *    reset, exactly like drift, but engaged IMMEDIATELY: the 8 s window
+ *    IS the debounce, and a drift-style INSANE_HOLD_MS wait would hand
+ *    the planner off into the garbage at its 10 s turn cap.
+ *  - ≥ ROOT_SPIN_RAD_S: flips (3.3-7 rad/s) — the acrobatics exemption
+ *    owns that band; the sweep story resets (a flip is never a sweep).
+ * The story also resets on stream generation bumps (a new prompt's stream
+ * starts a fresh story) and on rotation discontinuities.
+ *
+ * Trade-off (documented): a user prompt for a slow 360° spin (9-12 s at
+ * 30-40°/s) can trip the gate and hard-reset mid-spin. Acceptable: the
+ * planner only ever asks ≤45° turns, and one cut spin is a minor artifact
+ * vs. the never-settling class destroying every goal it touches.
+ */
+const SWEEP_RATE_FLOOR_RAD_S = (25 * Math.PI) / 180
+const SWEEP_CONTINUOUS_S = 8
+/**
+ * Never-settling heading OSCILLATION gate (2026-08-09 essence-daybed-nap
+ * LIVE trace, load [1.99, 2.86, 3.54]): the live daybed failure does NOT
+ * present as the monotonic sweep the desk2 tels showed (0°→180° for 68+ s).
+ * It is a yaw that SWINGS ±50-170° with a direction reversal every 2-3 s
+ * (6.1 reversals per 10 s, max 19; 2425° cumulative churn over 123 s;
+ * zero completion) while the root stays upright at standing height. The
+ * monotonic-sweep gate above cannot see it: each swing reversal pauses the
+ * rotation, so continuous in-band runs never exceed ~1 s live (measured:
+ * longest 1.08 s vs the 8 s window) — the sweep story keeps resetting.
+ *
+ * Discriminator — direction REVERSALS of the yaw (the class's unique
+ * signature; everything healthy is monotone):
+ *  - a walk curve (10-16°/s live) is ONE direction — zero reversals;
+ *  - a turn executes one direction then settles — zero reversals (and the
+ *    settle resets the story);
+ *  - a flip tumbles the root — the yaw decomposition is unreliable, and
+ *    the tumbling-lean guard (OSC_TUMBLE_LEAN_DEG, the hard-reject 45°)
+ *    resets the story so acrobatics never trip it (a flip is never a
+ *    heading oscillation);
+ *  - the never-settling oscillation reverses direction every 2-3 s.
+ * ≥ OSC_REVERSALS_N reversals within OSC_WINDOW_S (validated live: fires
+ * ~25 s into the daybed goal, 13 episodes in 123 s; silent on healthy
+ * turns and walk curves) is the class → the same fail-closed hold + one
+ * hard reset as the monotonic sweep, engaged immediately (the reversal
+ * window IS the debounce). A REAL settle (rate below OSC_SETTLE_RATE for
+ * OSC_SETTLE_PAUSE_S) resets the story — a stream that eventually settles
+ * is not the class. The story also resets on stream generation bumps and
+ * rotation discontinuities.
+ *
+ * Deadband: per-sample yaw deltas below OSC_DEADBAND_RAD are not
+ * directional moves (they neither flip the sign nor reset anything) —
+ * sized above the walk curve's per-sample delta (14°/s at 25 fps ≈
+ * 0.56°/sample) so a long curving walk builds no story at all.
+ */
+const OSC_DEADBAND_RAD = (1.0 * Math.PI) / 180
+const OSC_REVERSALS_N = 3
+const OSC_WINDOW_S = 6.0
+const OSC_SETTLE_RATE_DEG_S = 4.0
+const OSC_SETTLE_PAUSE_S = 1.5
+const OSC_TUMBLE_LEAN_DEG = 45
 /** A single-sample root angular speed above this is a discontinuity (a
  * chunk-boundary cut / teleport), not a move — the live flip measures
  * 3.3-7 rad/s, so a jump 2x+ above that is never a real spin. It RESETS
@@ -532,6 +623,14 @@ export class ArdyMotionSource {
   private framesDropped = 0
   private residualResetCount = 0
   private navAbsorbCount = 0
+
+  /** Monotonic nav-rejection frame counter (the treadmill absorb — a
+   * rejected frame never happened). Exposed for the goal planner's
+   * graze-class re-aim (cheap accessor; getTelemetry() builds the full
+   * snapshot per call). */
+  get navAbsorbCountSnapshot(): number {
+    return this.navAbsorbCount
+  }
   private lastReason: string | null = null
   private lastLatencyMs: number | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -556,6 +655,26 @@ export class ArdyMotionSource {
   private prevRootQuat: [number, number, number, number] | null = null
   private prevSampleAtMs: number | null = null
   private moveAccum = 0
+  /**
+   * Never-settling heading sweep story (policy at SWEEP_RATE_FLOOR_RAD_S /
+   * SWEEP_CONTINUOUS_S): wall-clock when the root entered the continuous
+   * in-band rotation window (a yaw that keeps rotating 25-86°/s without
+   * settling — the live 0°→180°→360° sweep class). Null = no sweep story
+   * (settled, curving, flipping, or a fresh stream). Reset on any
+   * below-floor sample (settle), on the acrobatics band (a flip is not a
+   * sweep), on rotation discontinuities, and on stream generation bumps.
+   */
+  private sweepSinceMs: number | null = null
+  /**
+   * Never-settling OSCILLATION story (policy at the OSC_* constants): the
+   * live daybed class reverses yaw direction every 2-3 s. Rolling window
+   * of recent reversal timestamps (ms, pruned to OSC_WINDOW_S) + the sign
+   * of the last meaningful yaw delta + the wall-clock anchor of the
+   * current below-settle-rate pause (a REAL settle resets the story).
+   */
+  private yawReversalAtMs: number[] = []
+  private yawLastSign: 1 | -1 | null = null
+  private yawSettleSinceMs: number | null = null
   // Reflex layer state (policy block at ARDY_REFLEX).
   private reflexActive: { variant: ArdyReflexDirection; restoreAtMs: number } | null = null
   private lastReflexAtMs = -Infinity
@@ -699,6 +818,8 @@ export class ArdyMotionSource {
         leanEmaDeg: this.leanEma,
         rootYEma: this.rootYEma,
         hold: this.sanityHold,
+        sweepSec: this.sweepSinceMs === null ? 0 : (this.nowMs() - this.sweepSinceMs) / 1000,
+        oscReversals: this.yawReversalAtMs.length,
       },
       groundCorrectionM: this.profiled?.groundCorrection ?? null,
       reflex: {
@@ -798,7 +919,15 @@ export class ArdyMotionSource {
     return this.reflexActive !== null
   }
 
-  /** True while the drift watchdog holds the pose (planner suspends). */
+  /** Reset the never-settling oscillation story (settle, flip, discontinuity,
+   * generation bump, session handshake — a fresh slate is a fresh chance). */
+  private resetOscillationStory(): void {
+    this.yawReversalAtMs = []
+    this.yawLastSign = null
+    this.yawSettleSinceMs = null
+  }
+
+  /** True while the pose is suspended (stale release — procedural owns it). */
   isWatchdogHolding(): boolean {
     return this.sanityHold
   }
@@ -840,6 +969,10 @@ export class ArdyMotionSource {
       this.prevRootQuat = null
       this.prevSampleAtMs = null
       this.moveAccum = 0
+      // A new stream starts a fresh sweep story too — a prompt's fresh
+      // rollout is a new chance, not a continuation of the old sweep.
+      this.sweepSinceMs = null
+      this.resetOscillationStory()
       this.beginResetCrossfade()
     }
     this.clock.update(buffer)
@@ -903,25 +1036,88 @@ export class ArdyMotionSource {
       // between samples feeds a leaky sustained-spin accumulator (fills 1x,
       // drains 2x — a one-frame sampling spike never qualifies).
       const sampleAtMs = this.nowMs()
+      // Yaw-invariant lean — computed once per sample, shared by the lean
+      // reject below and the oscillation gate's tumbling guard.
+      const leanDeg = quatLeanDeg(pose.rootQuat)
       if (this.prevRootQuat !== null && this.prevSampleAtMs !== null) {
         const spinDtS = Math.max(1 / 240, (sampleAtMs - this.prevSampleAtMs) / 1000)
         const rootSpin = quatAngleRad(this.prevRootQuat, pose.rootQuat) / spinDtS
+        // Per-sample yaw delta (wrap-aware) — the oscillation gate's input.
+        const yawDelta = wrapAngle(qyaw(pose.rootQuat) - qyaw(this.prevRootQuat))
+        const yawRateDegS = (Math.abs(yawDelta) * 180) / Math.PI / spinDtS
         if (rootSpin > ROOT_SPIN_DISCONTINUITY_RAD_S) {
           // A discontinuity (chunk cut / teleport / static garbage that
           // starts with a huge jump from the last spin frame) breaks the
           // sustained-spin story: fail-closed, the exemption does not
-          // carry across it.
+          // carry across it. The never-settling stories die too — a cut is
+          // not a continuous rotation.
           this.moveAccum = 0
+          this.sweepSinceMs = null
+          this.resetOscillationStory()
         } else if (rootSpin > ROOT_SPIN_RAD_S) {
           this.moveAccum = Math.min(MOVE_ACCUM_S, this.moveAccum + spinDtS)
+          // The acrobatics band (a flip) is never a monotonic sweep: the
+          // flip exemption owns fast spin, and a slow-sweep story must not
+          // survive a flip's rotation either. (The OSCILLATION story is
+          // NOT reset here — a fast upright swing arm is part of the
+          // daybed churn signature; only tumbling lean resets it, below.)
+          this.sweepSinceMs = null
         } else {
           this.moveAccum = Math.max(0, this.moveAccum - 2 * spinDtS)
+          if (rootSpin >= SWEEP_RATE_FLOOR_RAD_S) {
+            // In the sweep band: a yaw rotating at a rate no walk produces
+            // (≥ 25°/s — live walks curve 10-16°/s) that has NOT settled
+            // into the flip band. Start/continue the never-settling story.
+            if (this.sweepSinceMs === null) this.sweepSinceMs = sampleAtMs
+          } else {
+            // Settled (or a walk curve): the story resets. A legit turn
+            // executes in this band but SETTLES within ~2.5 s — the reset
+            // here is what keeps it from ever becoming a sweep.
+            this.sweepSinceMs = null
+          }
+        }
+        // Never-settling OSCILLATION story (daybed live signature 2026-08-09):
+        // the class is a yaw that SWINGS ±50-170° with direction reversals
+        // every 2-3 s while the root stays UPRIGHT. Tumbling (lean ≥ the
+        // hard reject — a flip or garbage tilt) resets the story: a flip is
+        // never a heading oscillation, and its yaw decomposition is
+        // unreliable. The tracking is NOT gated on rootSpin: a fast upright
+        // swing arm (rootSpin above the flip band with LOW lean) is the
+        // class's most meaningful rotation, not a flip — excluding it would
+        // starve the reversal detector exactly at its peaks.
+        if (leanDeg >= OSC_TUMBLE_LEAN_DEG) {
+          this.resetOscillationStory()
+        } else {
+          if (yawRateDegS < OSC_SETTLE_RATE_DEG_S) {
+            // Below the settle floor: track the pause. A REAL settle
+            // (sustained below the floor for OSC_SETTLE_PAUSE_S) resets the
+            // story — a stream that eventually settles is not the class.
+            if (this.yawSettleSinceMs === null) this.yawSettleSinceMs = sampleAtMs
+            else if (sampleAtMs - this.yawSettleSinceMs >= OSC_SETTLE_PAUSE_S * 1000) {
+              this.resetOscillationStory()
+            }
+          } else {
+            this.yawSettleSinceMs = null
+            // Moving: a per-sample delta above the deadband is a directional
+            // move. A sign change against the last meaningful delta is a
+            // REVERSAL — the oscillation's unique signature (everything
+            // healthy — walk curves, turn executions — is monotone).
+            if (Math.abs(yawDelta) > OSC_DEADBAND_RAD) {
+              const sign: 1 | -1 = yawDelta > 0 ? 1 : -1
+              if (this.yawLastSign !== null && sign !== this.yawLastSign) {
+                this.yawReversalAtMs.push(sampleAtMs)
+                this.yawReversalAtMs = this.yawReversalAtMs.filter(
+                  (t) => sampleAtMs - t <= OSC_WINDOW_S * 1000,
+                )
+              }
+              this.yawLastSign = sign
+            }
+          }
         }
       }
       this.prevRootQuat = pose.rootQuat
       this.prevSampleAtMs = sampleAtMs
 
-      const leanDeg = quatLeanDeg(pose.rootQuat)
       const emaAlpha = Math.min(1, dt * LEAN_EMA_RATE)
       this.leanEma += (leanDeg - this.leanEma) * emaAlpha
       this.rootYEma += (pose.rootPos[1] - this.rootYEma) * emaAlpha
@@ -941,9 +1137,49 @@ export class ArdyMotionSource {
       }
     }
     const drifting = this.leanEma > DRIFT_LEAN_DEG && this.rootYEma > DRIFT_ROOT_Y_MIN
-    if (!this.sanityHold && drifting) {
-      if (this.insaneSinceMs === null) this.insaneSinceMs = this.nowMs()
-      if (this.nowMs() - this.insaneSinceMs > INSANE_HOLD_MS) {
+    // Never-settling heading sweep (2026-08-09 essence-daybed-nap class):
+    // the yaw has been rotating in the sweep band continuously for
+    // SWEEP_CONTINUOUS_S, OR reversing direction ≥ OSC_REVERSALS_N times
+    // within OSC_WINDOW_S (the live daybed oscillation signature). The
+    // windows ARE the debounce — unlike lean drift (INSANE_HOLD_MS 2 s on
+    // top of the EMA), a stream that has churned this long is already
+    // unambiguous, and every extra second feeds the planner a
+    // never-settling heading (its 10 s turn cap then hands off into the
+    // garbage). Engage immediately: release to procedural + one hard
+    // reset, exactly the drift fail-closed path.
+    const oscillating = this.yawReversalAtMs.length >= OSC_REVERSALS_N
+    const sweeping =
+      (this.sweepSinceMs !== null && this.nowMs() - this.sweepSinceMs >= SWEEP_CONTINUOUS_S * 1000) ||
+      oscillating
+    if (!this.sanityHold && (drifting || sweeping)) {
+      if (sweeping) {
+        this.sanityHold = true
+        this.lastReason = oscillating
+          ? 'motion stream never settles (heading oscillation — yaw reversing continuously) — ' +
+            'released to procedural idle'
+          : 'motion stream never settles (heading sweep — yaw rotating continuously) — ' +
+            'released to procedural idle'
+        console.warn(`[ardy] ${this.lastReason}; requesting hard stream reset`)
+        try {
+          // Hard reset: drops the service's drifted conditioning history
+          // (the same self-conditioning feedback that drives lean drift).
+          this.client.sendReset()
+        } catch {
+          // Disconnected — the reconnect path owns recovery.
+        }
+        this.recoveredSinceMs = null
+        // NOTE: the oscillation story is deliberately NOT cleared here. Like
+        // the monotonic sweep (sweepSinceMs stays armed while the stream
+        // keeps sweeping), the reversal window must stay armed while the
+        // pre-reset stream keeps churning — otherwise the hold recovers into
+        // the same garbage after RECOVER_HOLD_MS (measured: recovery at 3 s
+        // while the story needs ~6 s to rebuild → cyclic hold/recover, the
+        // rig fed garbage half the time). The story clears on the generation
+        // bump when the service's hard-reset chunk actually lands — a fresh
+        // stream is a fresh chance, and recovery then proceeds honestly.
+      } else if (this.insaneSinceMs === null) {
+        this.insaneSinceMs = this.nowMs()
+      } else if (this.nowMs() - this.insaneSinceMs > INSANE_HOLD_MS) {
         this.sanityHold = true
         this.lastReason =
           `motion stream degraded (hips lean ${this.leanEma.toFixed(0)}° while upright) — ` +
@@ -957,11 +1193,11 @@ export class ArdyMotionSource {
         }
         this.recoveredSinceMs = null
       }
-    } else if (!drifting) {
+    } else if (!drifting && !sweeping) {
       this.insaneSinceMs = null
     }
     if (this.sanityHold) {
-      if (this.leanEma < RECOVER_LEAN_DEG) {
+      if (!sweeping && this.leanEma < RECOVER_LEAN_DEG) {
         if (this.recoveredSinceMs === null) this.recoveredSinceMs = this.nowMs()
         if (this.nowMs() - this.recoveredSinceMs > RECOVER_HOLD_MS) {
           this.sanityHold = false
@@ -1171,6 +1407,8 @@ export class ArdyMotionSource {
     this.insaneSinceMs = null
     this.recoveredSinceMs = null
     this.sanityHold = false
+    this.sweepSinceMs = null
+    this.resetOscillationStory()
     void (async () => {
       let vrmLike: VrmLike | null = null
       try {
