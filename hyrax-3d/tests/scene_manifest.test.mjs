@@ -28,6 +28,7 @@ import {
   loadSceneManifest,
   parseSceneManifest,
 } from '../src/embodiment/room/sceneManifest.ts'
+import { InteractableStateMachine } from '../src/embodiment/room/interactableState.ts'
 import { RoomNavigation } from '../src/embodiment/navigation/RoomNavigation.ts'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -72,7 +73,7 @@ test('DEFAULT_SCENE_MANIFEST (fail-closed empty room) validates', () => {
 
 function validBase() {
   return {
-    manifest_version: '1.0',
+    manifest_version: SCENE_MANIFEST_VERSION,
     room_id: 'tai-loft',
     name: 'The Synthesis Loft',
     bounds: { minX: -3.65, maxX: 3.65, minZ: -3.65, maxZ: 3.65 },
@@ -99,7 +100,12 @@ test('validator rejects: non-object root', () => {
 })
 
 test('validator rejects: unsupported manifest_version', () => {
-  for (const version of ['2.0', '1.1', 1, null]) {
+  const wrongVersions = ['2.0', '9.9', 1, null]
+  // The exact current version is valid — reject anything ELSE (a sibling
+  // slice bumped 1.0 → 1.1; the test must not hardcode a version).
+  assert.equal(parseSceneManifest(validBase()).manifest?.manifest_version, SCENE_MANIFEST_VERSION)
+  for (const version of wrongVersions) {
+    if (version === SCENE_MANIFEST_VERSION) continue
     const { manifest, errors } = parseSceneManifest({ ...validBase(), manifest_version: version })
     assert.equal(manifest, null, String(version))
     assert.match(errors.join('; '), /manifest_version/)
@@ -201,6 +207,89 @@ test('validator accepts: vn omitted or empty', () => {
   assert.ok(manifest)
   const withBg = parseSceneManifest({ ...validBase(), vn: { background: 'x.png' } })
   assert.equal(withBg.manifest?.vn?.background, 'x.png')
+})
+
+// ── pickup attach (spatial layer 5, INTERACTABLES_SPEC.md) ─────────
+
+function pickupBase() {
+  return {
+    ...validBase(),
+    objects: [
+      {
+        id: 'cup',
+        label: 'the mug',
+        position: [0.2, 0.4, 1.15],
+        interactions: [
+          {
+            id: 'pickup',
+            kind: 'pickup',
+            spot: [0.2, 1.15],
+            facingDeg: 180,
+            prompt: 'a person picks up a cup from the table',
+            attach: { bone: 'rightHand', offset: [0, 0.05, 0] },
+          },
+        ],
+      },
+    ],
+  }
+}
+
+test('validator accepts: kind pickup with attach {bone, offset}', () => {
+  const { manifest, errors } = parseSceneManifest(pickupBase())
+  assert.equal(errors.length, 0, JSON.stringify(errors))
+  assert.ok(manifest)
+  assert.deepEqual(manifest.objects[0].interactions[0].attach, {
+    bone: 'rightHand',
+    offset: [0, 0.05, 0],
+  })
+})
+
+test('validator rejects: attach on a non-pickup kind (fail-closed pairing)', () => {
+  const bad = validBase()
+  bad.objects[0].interactions[0].attach = { bone: 'rightHand', offset: [0, 0.05, 0] }
+  const { manifest, errors } = parseSceneManifest(bad)
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /only allowed on kind "pickup"/)
+})
+
+test('validator rejects: kind pickup without an attach spec', () => {
+  const bad = pickupBase()
+  delete bad.objects[0].interactions[0].attach
+  const { manifest, errors } = parseSceneManifest(bad)
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /requires attach/)
+})
+
+test('validator rejects: malformed attach (empty/missing bone, bad offset)', () => {
+  const attaches = [
+    { bone: '', offset: [0, 0.05, 0] },
+    { bone: 'rightHand' },
+    { bone: 'rightHand', offset: [0, 0.05] },
+    { bone: 'rightHand', offset: [0, '0.05', 0] },
+    { bone: 'rightHand', offset: [0, 0.05, NaN] },
+    { bone: 7, offset: [0, 0.05, 0] },
+    'rightHand',
+  ]
+  for (const attach of attaches) {
+    const bad = pickupBase()
+    bad.objects[0].interactions[0].attach = attach
+    const { manifest, errors } = parseSceneManifest(bad)
+    assert.equal(manifest, null, JSON.stringify(attach))
+    assert.match(errors.join('; '), /attach/)
+  }
+})
+
+test('authored tai-loft.json carries the cup with pickup/putdown interactions', async () => {
+  const { manifest, errors } = parseSceneManifest(await readAuthoredManifest())
+  assert.equal(errors.length, 0, JSON.stringify(errors))
+  const cup = manifest.objects.find((o) => o.id === 'cup')
+  assert.ok(cup, 'cup object must be authored')
+  assert.deepEqual(cup.position, [0.2, 0.4, 0.92])
+  const pickup = cup.interactions.find((i) => i.id === 'pickup')
+  assert.equal(pickup.kind, 'pickup')
+  assert.deepEqual(pickup.attach, { bone: 'rightHand', offset: [0, 0.05, 0] })
+  assert.equal(pickup.prompt, 'a person picks up a cup from the table')
+  assert.ok(cup.interactions.some((i) => i.id === 'putdown'), 'putdown interaction authored')
 })
 
 // ── RoomNavigation consumes the manifest (byte-equivalent) ─────────
@@ -340,4 +429,215 @@ test('loadSceneManifest fails closed: malformed JSON → default empty room + wa
   } finally {
     console.warn = originalWarn
   }
+})
+
+// ── stateful interactables (spatial layer 5, INTERACTABLES_SPEC.md) ─
+
+function doorBase() {
+  return {
+    ...validBase(),
+    objects: [
+      {
+        id: 'door_01',
+        label: 'the loft door',
+        position: [-2.4, 1.2, -3.9],
+        state: 'closed',
+        states: {
+          closed: { obstacle: true, mesh_rotation: [0, 0, 0] },
+          open: { obstacle: false, mesh_rotation: [0, -1.57, 0] },
+        },
+        obstacle: { center: [-2.4, -3.5], halfSize: [0.42, 0.25], padding: 0.1 },
+        interactions: [
+          { id: 'open', kind: 'use', spot: [-2.6, -3.1], facingDeg: 180, prompt: 'a person opens a door', requires: 'closed', sets: 'open' },
+          { id: 'close', kind: 'use', spot: [-2.6, -3.1], facingDeg: 180, prompt: 'a person closes a door', requires: 'open', sets: 'closed' },
+        ],
+      },
+    ],
+  }
+}
+
+test('validator accepts: door_01 state machine with requires/sets and obstacle', () => {
+  const { manifest, errors } = parseSceneManifest(doorBase())
+  assert.equal(errors.length, 0, JSON.stringify(errors))
+  assert.ok(manifest)
+  const door = manifest.objects[0]
+  assert.equal(door.state, 'closed')
+  assert.deepEqual(door.states.closed, { obstacle: true, mesh_rotation: [0, 0, 0] })
+  assert.deepEqual(door.states.open, { obstacle: false, mesh_rotation: [0, -1.57, 0] })
+  assert.equal(door.interactions[0].requires, 'closed')
+  assert.equal(door.interactions[0].sets, 'open')
+  assert.deepEqual(door.obstacle, { center: [-2.4, -3.5], halfSize: [0.42, 0.25], padding: 0.1 })
+})
+
+test('authored tai-loft.json carries door_01 with the open/closed machine', async () => {
+  const { manifest, errors } = parseSceneManifest(await readAuthoredManifest())
+  assert.equal(errors.length, 0, JSON.stringify(errors))
+  const door = manifest.objects.find((o) => o.id === 'door_01')
+  assert.ok(door, 'door_01 object must be authored')
+  assert.equal(door.state, 'closed')
+  assert.deepEqual(Object.keys(door.states), ['closed', 'open'])
+  assert.equal(door.interactions.find((i) => i.id === 'open').requires, 'closed')
+  assert.equal(door.interactions.find((i) => i.id === 'open').sets, 'open')
+  assert.equal(door.interactions.find((i) => i.id === 'close').requires, 'open')
+  assert.equal(door.interactions.find((i) => i.id === 'close').sets, 'closed')
+  assert.deepEqual(door.obstacle, { center: [-2.4, -3.5], halfSize: [0.42, 0.25], padding: 0.1 })
+})
+
+test('validator rejects: requires/sets referencing an undeclared state', () => {
+  for (const field of ['requires', 'sets']) {
+    for (const value of ['ajar', 'shut', '']) {
+      const bad = doorBase()
+      bad.objects[0].interactions[0][field] = value
+      const { manifest, errors } = parseSceneManifest(bad)
+      assert.equal(manifest, null, `${field}=${JSON.stringify(value)}`)
+      assert.match(errors.join('; '), /requires|sets|state/)
+    }
+  }
+})
+
+test('validator rejects: state not declared in states / machine without initial state', () => {
+  const badState = doorBase()
+  badState.objects[0].state = 'ajar'
+  let { manifest, errors } = parseSceneManifest(badState)
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /state "ajar" is not declared/)
+
+  const noInitial = doorBase()
+  delete noInitial.objects[0].state
+  ;({ manifest, errors } = parseSceneManifest(noInitial))
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /state is required/)
+})
+
+test('validator rejects: state/requires/sets/obstacle without a state machine', () => {
+  const base = validBase()
+  const noMachine = doorBase()
+  delete noMachine.objects[0].states
+  let { manifest, errors } = parseSceneManifest(noMachine)
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /state machine/)
+
+  const stateOnly = validBase()
+  stateOnly.objects[0].state = 'closed'
+  ;({ manifest, errors } = parseSceneManifest(stateOnly))
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /state machine/)
+
+  const gateOnly = validBase()
+  gateOnly.objects[0].interactions[0].requires = 'closed'
+  ;({ manifest, errors } = parseSceneManifest(gateOnly))
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /state machine/)
+
+  const obstacleOnly = validBase()
+  obstacleOnly.objects[0].obstacle = { center: [0, 0], halfSize: [1, 1], padding: 0.1 }
+  ;({ manifest, errors } = parseSceneManifest(obstacleOnly))
+  assert.equal(manifest, null)
+  assert.match(errors.join('; '), /state machine/)
+})
+
+test('validator rejects: malformed states entries and obstacle geometry', () => {
+  const badStates = [
+    { closed: { obstacle: true } }, // missing mesh_rotation
+    { closed: { obstacle: 'yes', mesh_rotation: [0, 0, 0] } },
+    { closed: { obstacle: true, mesh_rotation: [0, 0] } },
+    { closed: { obstacle: true, mesh_rotation: [0, 0, 'x'] } },
+  ]
+  for (const states of badStates) {
+    const bad = doorBase()
+    bad.objects[0].states = states
+    const { manifest, errors } = parseSceneManifest(bad)
+    assert.equal(manifest, null, JSON.stringify(states))
+    assert.match(errors.join('; '), /mesh_rotation|obstacle/)
+  }
+  for (const obstacle of [
+    { center: [0], halfSize: [1, 1], padding: 0.1 },
+    { center: [0, 0], halfSize: [-1, 1], padding: 0.1 },
+    { center: [0, 0], halfSize: [1, 1], padding: -0.1 },
+    { center: [0, 0], halfSize: [1, 1] },
+    'nope',
+  ]) {
+    const bad = doorBase()
+    bad.objects[0].obstacle = obstacle
+    const { manifest, errors } = parseSceneManifest(bad)
+    assert.equal(manifest, null, JSON.stringify(obstacle))
+    assert.match(errors.join('; '), /obstacle/)
+  }
+})
+
+// ── InteractableStateMachine (state truth + journaled transitions) ─
+
+test('state machine: initial states, applySets transitions, journaled', () => {
+  const { manifest } = parseSceneManifest(doorBase())
+  assert.ok(manifest)
+  const machine = new InteractableStateMachine(manifest, () => 1234)
+  const door = manifest.objects[0]
+
+  assert.equal(machine.stateOf('door_01'), 'closed')
+  assert.equal(machine.stateOf('desk'), null) // no machine → no state
+
+  const open = door.interactions.find((i) => i.id === 'open')
+  const transition = machine.applySets(door, open)
+  assert.deepEqual(transition, { from: 'closed', to: 'open' })
+  assert.equal(machine.stateOf('door_01'), 'open')
+  assert.deepEqual(machine.journal(), [
+    { t: 1234, objectId: 'door_01', from: 'closed', to: 'open', interaction: 'open' },
+  ])
+
+  // No-op when already in the target state (close requires open, sets closed).
+  const close = door.interactions.find((i) => i.id === 'close')
+  assert.equal(machine.applySets(door, close) === null, false)
+  assert.equal(machine.stateOf('door_01'), 'closed')
+  assert.equal(machine.journal().length, 2)
+})
+
+test('state machine: applySets is fail-closed (no sets / unknown target / no machine)', () => {
+  const { manifest } = parseSceneManifest(doorBase())
+  assert.ok(manifest)
+  const machine = new InteractableStateMachine(manifest, () => 0)
+  const door = manifest.objects[0]
+  // A stateless object (not in this fixture — literal shape of the desk).
+  const desk = { id: 'desk', label: 'her desk', position: [-3.83, 1.38, -1.35] }
+
+  // Interaction without `sets` → null.
+  assert.equal(machine.applySets(door, { id: 'look', kind: 'use', spot: [0, 0], facingDeg: 0, prompt: 'looks' }), null)
+  // Unknown target state → null (defense-in-depth; validator rejects at load).
+  assert.equal(machine.applySets(door, { id: 'x', kind: 'use', spot: [0, 0], facingDeg: 0, prompt: 'x', sets: 'ajar' }), null)
+  // Object with no machine → null.
+  assert.equal(machine.applySets(desk, { id: 'work', kind: 'sit', spot: [0, 0], facingDeg: 0, prompt: 'work', sets: 'done' }), null)
+  assert.equal(machine.journal().length, 0)
+})
+
+test('RoomNavigation: stateful obstacle toggles route clearance (blocked closed → clear open)', () => {
+  const { manifest } = parseSceneManifest(doorBase())
+  assert.ok(manifest)
+  const nav = RoomNavigation.fromManifest(manifest, 0.22)
+  // door_01's object-declared obstacle (registered by the scene at load —
+  // same addBoxObstacle math: halfSize*2 full size, authored padding).
+  const door = manifest.objects.find((o) => o.id === 'door_01')
+  nav.addBoxObstacle(
+    door.id,
+    new Vector3(door.obstacle.center[0], 0, door.obstacle.center[1]),
+    new Vector3(door.obstacle.halfSize[0] * 2, 1, door.obstacle.halfSize[1] * 2),
+    door.obstacle.padding,
+  )
+  // The doorway route: from the room's right-center to the back-left
+  // doorway corner — crosses ONLY the door's AABB (the authored manifest
+  // carries the cup + door; this fixture isolates the door).
+  const start = new Vector3(1.5, 0, -1.5)
+  const doorway = new Vector3(-2.3, 0, -3.4)
+
+  assert.equal(nav.setObstacleEnabled('door_01', true), true, 'obstacle exists')
+  assert.equal(nav.isRouteClear(start, [doorway]), false, 'closed: doorway route blocked')
+  const obstacle = nav.listObstacles().find((o) => o.id === 'door_01')
+  assert.equal(obstacle.enabled, true)
+
+  assert.equal(nav.setObstacleEnabled('door_01', false), true)
+  assert.equal(nav.isRouteClear(start, [doorway]), true, 'open: doorway route clear')
+  assert.equal(nav.listObstacles().find((o) => o.id === 'door_01').enabled, false)
+  // Disabled obstacles are skipped by movement constraints too.
+  const probe = nav.constrainMovement(new Vector3(-2.3, 0, -3.5), new Vector3(-2.3, 0, -3.2))
+  assert.equal(probe.hit, false, 'open door does not absorb movement')
+
+  assert.equal(nav.setObstacleEnabled('no-such-obstacle', false), false)
 })

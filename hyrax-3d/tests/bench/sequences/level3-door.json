@@ -1,0 +1,75 @@
+{
+  "name": "GEVS Level 3 — door-open (stateful interactables)",
+  "description": "door_01 state machine (INTERACTABLES_SPEC.md, spatial layer 5): setGoal door_01.open from the room center → she walks to the door's resolved standing point, faces the door, plays the open prompt; on COMPLETION the engine applies the sets transition — the door mesh rotates to the open mesh_rotation ([0,-1.57,0] ≈ 90°), the door's nav obstacle is disabled (states.open.obstacle false), the doorway route (1.5,-1.5)→(-2.3,-3.4) flips from blocked to clear, and the transition is journaled. Evidence comes from the door probes merged into the telemetry samples (state / rotationDeg / nav enabled / route-clear / journal) plus the planner telemetry (goal/phase/promptLog). Assertions: state was closed BEFORE (fail-before), state is open AFTER, mesh rotated ≥80°, nav obstacle disabled, doorway route blocked-then-clear, transition journaled, goal completed, stream live.",
+  "checks": [
+    {
+      "id": "door-open",
+      "level": 3,
+      "category": "interactables",
+      "goal": "door_01.open",
+      "stateObject": "door_01",
+      "doorwayRoute": [1.5, -1.5, -2.3, -3.4],
+      "recenter": [0, 0.15],
+      "settleS": 3,
+      "goalTimeoutS": 120,
+      "assertions": [
+        {
+          "metric": "doorStateBefore",
+          "op": "==",
+          "pass": 1,
+          "basis": "fail-before: the door starts closed (manifest initial state 'closed')"
+        },
+        {
+          "metric": "doorStateOpen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the sets transition applied: state machine says 'open' after completion"
+        },
+        {
+          "metric": "doorRotationDeltaDeg",
+          "op": ">=",
+          "pass": 80,
+          "partial": 70,
+          "basis": "open mesh_rotation [0,-1.57,0] ≈ 90° rotation of the door mesh from closed [0,0,0]"
+        },
+        {
+          "metric": "doorNavEnabledAfter",
+          "op": "==",
+          "pass": 0,
+          "basis": "states.open.obstacle false → the door's nav obstacle is disabled"
+        },
+        {
+          "metric": "doorwayRouteClearBefore",
+          "op": "==",
+          "pass": 0,
+          "basis": "fail-before: while closed, the route through the doorway is blocked"
+        },
+        {
+          "metric": "doorwayRouteClearAfter",
+          "op": "==",
+          "pass": 1,
+          "basis": "once open, the same route is clear (paths can route through the doorway)"
+        },
+        {
+          "metric": "stateJournalSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the closed→open transition is journaled (spec: state transitions journaled in telemetry)"
+        },
+        {
+          "metric": "goalCompleted",
+          "op": "==",
+          "pass": 1,
+          "basis": "the interaction actually completed — sets applies on COMPLETION (arrival + prompt finished), never on cancel/timeout"
+        },
+        {
+          "metric": "livePct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 80,
+          "basis": "stream stays live through turn/walk/arrive/interact"
+        }
+      ]
+    }
+  ]
+}

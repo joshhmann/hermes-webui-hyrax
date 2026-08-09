@@ -161,7 +161,23 @@ function makeSim(x, z, yaw, opts = {}) {
     // landing-window gate uses a USABLE frozen heading: the walk can
     // complete IF the planner lets it land instead of yanking on the
     // OLD stream's pre-landing sweep garbage.
+    // Function form (walk-absorption class, 2026-08-08): a per-walk
+    // freeze — (walkIndex) => deg|null — models the sweep's unlucky
+    // sampling deterministically (the first walk(s) freeze off-heading
+    // into an obstacle, a later walk freezes usable). walkIndex counts
+    // walk prompts that LAND.
     walkFreezeYawDeg: opts.walkFreezeYawDeg ?? null,
+    walkCount: 0,
+    // Obstacle absorption (2026-08-08 walk-absorption class): when a
+    // navigation is provided, walk steps are nav-constrained EXACTLY like
+    // the live RoomNavigationApproval (proposed → constrainMovement →
+    // approved position) — motion into an obstacle AABB is REJECTED and
+    // absorbed (the body stays at the boundary; absorbed++ per rejected
+    // frame), mirroring navAbsorbCount live (desk1: 69 absorbs, travelM
+    // 0.194 — the walk fired but never translated). Default off keeps
+    // every pre-existing test's body free to walk through furniture.
+    navigation: opts.navigation ?? null,
+    absorbed: 0,
     step(dt) {
       this.simS += dt
       if (this.turnTarget !== null) {
@@ -200,8 +216,33 @@ function makeSim(x, z, yaw, opts = {}) {
       }
       if ((this.walking || this.coastLeft > 0) && this.turnTarget === null) {
         if (!this.walking) this.coastLeft = Math.max(0, this.coastLeft - dt)
-        this.x = clamp(this.x + Math.sin(this.yaw) * this.speed * dt, bounds.minX, bounds.maxX)
-        this.z = clamp(this.z + Math.cos(this.yaw) * this.speed * dt, bounds.minZ, bounds.maxZ)
+        if (this.navigation) {
+          // Walk-absorption model (2026-08-08): nav-constrain the step
+          // like the live RoomNavigationApproval — motion that would
+          // enter an obstacle AABB is rejected and ABSORBED: the body
+          // does not move at all (the live treadmill folds the rejected
+          // motion into the origin offset — "an absorbed frame: the
+          // rejected motion never happened"). absorbed++ per rejected
+          // frame mirrors live navAbsorbCount (desk1: 69 absorbs,
+          // travelM 0.194 — the walk fired but never translated).
+          const from = new Vector3(this.x, 0, this.z)
+          const to = new Vector3(
+            this.x + Math.sin(this.yaw) * this.speed * dt,
+            0,
+            this.z + Math.cos(this.yaw) * this.speed * dt,
+          )
+          const res = this.navigation.constrainMovement(from, to)
+          const moved = Math.hypot(res.position.x - to.x, res.position.z - to.z)
+          if (moved > 1e-6) {
+            this.absorbed += 1
+          } else {
+            this.x = res.position.x
+            this.z = res.position.z
+          }
+        } else {
+          this.x = clamp(this.x + Math.sin(this.yaw) * this.speed * dt, bounds.minX, bounds.maxX)
+          this.z = clamp(this.z + Math.cos(this.yaw) * this.speed * dt, bounds.minZ, bounds.maxZ)
+        }
         this.yaw += (this.driftDegS * dt * Math.PI) / 180
       } else if (this.walkLandLeft > 0) {
         // Walk-prompt landing (2026-08-04 never-settling stream class):
@@ -214,9 +255,13 @@ function makeSim(x, z, yaw, opts = {}) {
           // re-anchors on the walk (live yaw-continuity re-anchor), the
           // body starts moving at the frozen heading (walkFreezeYawDeg,
           // the heading the walk actually moves at; null = the current
-          // sweep position, the unlucky case).
-          if (this.walkFreezeYawDeg !== null) {
-            this.yaw = (this.walkFreezeYawDeg * Math.PI) / 180
+          // sweep position, the unlucky case; function = per-walk).
+          this.walkCount += 1
+          const freeze = typeof this.walkFreezeYawDeg === 'function'
+            ? this.walkFreezeYawDeg(this.walkCount - 1)
+            : this.walkFreezeYawDeg
+          if (freeze !== null) {
+            this.yaw = (freeze * Math.PI) / 180
           }
           this.walking = true
         }
@@ -230,7 +275,7 @@ function makePlanner(manifest, navigation, channel, sim, clock, opts = {}) {
     navigation,
     manifest,
     channel,
-    probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw }),
+    probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw, navAbsorbCount: sim.absorbed }),
     nowMs: () => clock.ms,
     random: opts.random ?? (() => 0),
     essenceState: opts.essenceState ?? (() => null),
@@ -572,16 +617,22 @@ test('arrival overshoot: coasting past the spot re-approaches ONCE, then proceed
   const navigation = makeNavigation(manifest)
   const channel = makeChannel()
   // Coast latency far beyond the braking-lead window (ARRIVE_LEAD_S 1.2):
-  // every arrive stop lands past the spot. The planner must re-anchor on
-  // the ACTUAL position and re-approach exactly once (shared replan
-  // budget), then proceed to the interaction with the residual journaled —
-  // never an infinite approach loop (MotionBricks re-anchor, spec §planner
-  // loop "arrival != motion trust").
-  const sim = makeSim(0, 0.15, 0, { speed: 0.6, coastS: 3.0 })
+  // the arrive stop prompt coasts her ~1.4 m past the spot (coast runs at
+  // sim speed for the ARRIVE_PROMPT_S window: 1.0 m/s × 2.5 s ≈ 2.5 m from
+  // a ~1.05 m stop distance) — decisively beyond the close-arrival accept
+  // radius (CLOSE_ARRIVE_ACCEPT_M 0.75, 2026-08-08) so the re-approach
+  // path is what runs. The planner must re-anchor on the ACTUAL position
+  // and re-approach exactly once (shared replan budget), then proceed to
+  // the interaction with the residual journaled — never an infinite
+  // approach loop (MotionBricks re-anchor, spec §planner loop "arrival !=
+  // motion trust"). Couch goal: the desk spot is 0.75 m from the west wall
+  // — the sim's bounds clamp would swallow the overshoot right at the
+  // accept boundary; the couch has 1.45 m of clearance north.
+  const sim = makeSim(0, 0.15, 0, { speed: 1.0, coastS: 4.0 })
   const clock = { ms: 0 }
   const planner = makePlanner(manifest, navigation, channel, sim, clock)
 
-  assert.equal(planner.setGoal('desk.work'), true)
+  assert.equal(planner.setGoal('couch.sit'), true)
   let arriveEndDist = null
   let replansAtFirstMiss = null
   const out = drive(planner, channel, sim, clock, {
@@ -594,14 +645,40 @@ test('arrival overshoot: coasting past the spot re-approaches ONCE, then proceed
   assert.equal(out.tel.goal, null, 'goal finished (not stuck re-approaching)')
   assert.equal(out.tel.lastFailure, null, `unexpected failure: ${out.tel.lastFailure}`)
   assert.equal(out.tel.replans, 1, 'exactly one re-approach (shared replan budget)')
-  assert.ok(arriveEndDist === null || arriveEndDist > 0.35,
-    `the coast model must actually overshoot (arrive-end distance ${arriveEndDist})`)
-  assert.ok(out.allPrompts.includes('a person sits at a desk working'),
+  assert.ok(arriveEndDist === null || arriveEndDist > 0.75,
+    `the coast model must overshoot past the close-accept radius (arrive-end distance ${arriveEndDist})`)
+  assert.ok(out.allPrompts.includes('a person sits on a couch'),
     'proceeds to the interaction after the budget is exhausted')
   // The approaches themselves crossed the spot (min distance), even though
   // the coast carried her past it each time.
   assert.ok(out.minDistanceM !== null && out.minDistanceM <= 0.35,
     `closest approach ${out.minDistanceM} must be ≤ 0.35`)
+})
+
+test('close arrival miss: within CLOSE_ARRIVE_ACCEPT_M the goal proceeds WITHOUT a replan', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Moderate stop-prompt coast: every arrive stop lands ~0.4 m past the
+  // spot — an arrival miss, but inside the close-arrival accept radius
+  // (0.75 m, 2026-08-08 pickup-cup bench: the arrive stop prompt itself
+  // drifts the root 0.4-0.6 m off the spot, and the re-approach turn is
+  // the load-fragile step). The planner must accept the near-arrival and
+  // go straight to face/interact — the interaction prompt supplies the
+  // motion — WITHOUT burning the goal's single replan on a re-approach
+  // walk. Desk goal is fine here: the ~0.4 m overshoot stays inside the
+  // 0.75 m of clearance to the west wall.
+  const sim = makeSim(0, 0.15, 0, { speed: 0.6, coastS: 2.0 })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+
+  assert.equal(planner.setGoal('desk.work'), true)
+  const out = drive(planner, channel, sim, clock)
+  assert.equal(out.tel.goal, null, 'goal finished (not stuck re-approaching)')
+  assert.equal(out.tel.lastFailure, null, `unexpected failure: ${out.tel.lastFailure}`)
+  assert.equal(out.tel.replans, 0, 'a close arrival miss must not consume the replan budget')
+  assert.ok(out.allPrompts.includes('a person sits at a desk working'),
+    'proceeds to the interaction directly from the close-accepted arrival')
 })
 
 test('fallback route (ends AWAY from the target) is a block: replan once, then fail with reason — never interact from afar', async () => {
@@ -622,7 +699,7 @@ test('fallback route (ends AWAY from the target) is a block: replan once, then f
     navigation,
     manifest,
     channel,
-    probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw }),
+    probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw, navAbsorbCount: sim.absorbed }),
     nowMs: () => clock.ms,
     policy: { TARGET_STALL_S: 3 },
   })
@@ -686,7 +763,7 @@ test('path smoothing: a sub-meter waypoint is merged when the merged segment is 
     const clock = { ms: 0 }
     const planner = new GoalPlanner({
       navigation: mkNav(true), manifest, channel,
-      probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw }), nowMs: () => clock.ms,
+      probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw, navAbsorbCount: sim.absorbed }), nowMs: () => clock.ms,
     })
     assert.equal(planner.setGoal('desk.work'), true)
     drive(planner, channel, sim, clock, { maxTicks: 200 })
@@ -700,7 +777,7 @@ test('path smoothing: a sub-meter waypoint is merged when the merged segment is 
     const clock = { ms: 0 }
     const planner = new GoalPlanner({
       navigation: mkNav(false), manifest, channel,
-      probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw }), nowMs: () => clock.ms,
+      probe: () => ({ x: sim.x, z: sim.z, yaw: sim.yaw, navAbsorbCount: sim.absorbed }), nowMs: () => clock.ms,
     })
     assert.equal(planner.setGoal('desk.work'), true)
     drive(planner, channel, sim, clock, { maxTicks: 200 })
@@ -1700,4 +1777,110 @@ test('drift class: stalled walks still fail as blocked after the raw-settle gate
   assert.equal(out.tel.goal, null)
   assert.match(out.tel.lastFailure ?? '', /blocked path.*1 replan/)
   assert.equal(out.walkPrompts.length, 2, `walk prompts: ${out.walkPrompts.join(' | ')}`)
+})
+
+// ── walk-absorption class (2026-08-08 positional class, live desk1) ─
+
+test('walk-absorption class: a walk frozen into an obstacle (nav rejects every frame) must re-aim on the reflex instead of pressing forever — the goal completes (live: walk fires, navAbsorbs 69, travelM 0.194, "blocked path after 1 replan")', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Live desk1 (2026-08-08, HEAD 2081c9d6): walkPromptCount=9 fired but
+  // travelM=0.194 with navAbsorbs=69 — the walk froze at a sweep-garbage
+  // heading that clipped the coffee table 0.27 m north of spawn, the nav
+  // absorbed every frame (treadmill — the rejected motion never
+  // happened), and the stall detector consumed the goal's single replan
+  // ("blocked path after 1 replan — no progress toward spot"). This is
+  // the POSITIONAL absorption class — distinct from the yaw-settle class
+  // the other drift regressions lock (those sims walk THROUGH obstacles;
+  // this one constrains the body like the live RoomNavigationApproval).
+  //
+  // Model: navigation-aware sim (walk steps are nav-constrained — motion
+  // into an obstacle AABB is rejected and ABSORBED: the body does not
+  // translate, exactly the live treadmill). Spawn sits just SOUTH of the
+  // coffee table's padded AABB edge (z=0.40; the AABB's z-min is 0.42)
+  // and the frozen walk heading is -55° (north-west): the FIRST step
+  // enters the AABB and is rejected — the body never moves, so BOTH
+  // steering gates stay silent (the coarse gate reads 50° < 60° heading
+  // error to the desk; the moving-body lateral gate needs movedM > 0.02
+  // which an absorbed body never has). The reflex layer's reaction
+  // (sustained rejection fires one 3 s reaction prompt, then the walk is
+  // restored) is the planner's ONLY signal of the absorption. The
+  // reflex-clear edge must re-aim (turn toward the waypoint) instead of
+  // re-pressing the wall. The frozen heading is a FUNCTION of walk
+  // index: walks 0-3 freeze at -55° (absorbed; models the sweep
+  // sampling the blocked cone across re-aim cycles AND the no-fix
+  // replan), walk 4+ freezes at -105° (the usable desk bearing — a
+  // re-aimed turn converges there).
+  const sim = makeSim(0, 0.40, 0, {
+    navigation,
+    // Live landing latency: the walk prompt's reset chunk takes ~2.2 s
+    // to land, and the frozen heading is applied AT landing (the
+    // yaw-continuity re-anchor) — without this the drive loop starts
+    // walking immediately at the pre-walk yaw and the freeze never
+    // applies (the absorption class never happens).
+    walkLandS: 2.2,
+    walkFreezeYawDeg: (n) => (n < 4 ? -55 : -105),
+  })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+  assert.equal(planner.setGoal('desk.work'), true)
+  // Reflex driver: the ArdyMotionSource reflex layer fires on sustained
+  // rejection (rejectAccum ≥ TRIGGER_ACCUM_M ≈ 0.15 m ≈ a few absorbed
+  // frames) — model it as one 3 s reaction per absorption episode (the
+  // walk is held, then restored), with the live 5 s cooldown.
+  let reflexFiredAtMs = -Infinity
+  let absorbedSeen = 0
+  const out = drive(planner, channel, sim, clock, {
+    beforeEach(ms, _planner, ch, s) {
+      if (s.absorbed > absorbedSeen && !ch.reflexActive && ms - reflexFiredAtMs >= 5000) {
+        absorbedSeen = s.absorbed
+        ch.reflexActive = true
+        reflexFiredAtMs = ms
+      }
+      if (ch.reflexActive && ms - reflexFiredAtMs >= 3000) {
+        ch.reflexActive = false
+      }
+    },
+  })
+  // The class actually happened: walks fired and the nav absorbed the
+  // motion (the walk prompt alone is not the class — the rejection is).
+  assert.ok(sim.absorbed > 0, `the walk was nav-absorbed (absorbed=${sim.absorbed})`)
+  assert.ok(out.walkPrompts.length > 0, `walk prompts fired: ${out.walkPrompts.join(' | ')}`)
+  // The fix: the goal completes despite the absorbed walks — the
+  // reflex-clear re-aim re-aims at the waypoint instead of pressing.
+  assert.equal(out.tel.lastFailure, null, `goal must complete: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person sits at a desk working'), 'interaction prompt played')
+})
+
+test('graze-absorption class (NO reflex): a walk absorbed frame-by-frame with the reflex layer silent must re-aim on the absorption counter and complete — the stall replan is preserved for a real blockage (live r2: 129 absorbs, walkPromptCount 14, travelM 1.05, no reflex line, "blocked path after 1 replan")', async () => {
+  const manifest = await loadManifest()
+  const navigation = makeNavigation(manifest)
+  const channel = makeChannel()
+  // Same wall as the reflex-class test — spawn just south of the coffee
+  // table's padded AABB, walk heading frozen into it — but the reflex
+  // layer NEVER fires (the live slow-graze: the reflex accumulator leaks
+  // below trigger on intermittent rejection, so the planner gets no
+  // reflex edge at all — r2's 129 absorbs produced zero reflex lines).
+  // Every walk freezes at -55° (the sweep's unlucky sampling persists
+  // across re-aims AND the replan — live r2's replanned walk pressed the
+  // same wall) until walk 4+ freezes at the usable desk bearing (-105°).
+  // The absorption counter is the planner's ONLY signal of the rejection.
+  const sim = makeSim(0, 0.40, 0, {
+    navigation,
+    walkLandS: 2.2,
+    walkFreezeYawDeg: (n) => (n < 4 ? -55 : -105),
+  })
+  const clock = { ms: 0 }
+  const planner = makePlanner(manifest, navigation, channel, sim, clock)
+  assert.equal(planner.setGoal('desk.work'), true)
+  // No reflex model: the channel never goes active — the walk is
+  // re-aimed by the absorption counter alone, and the goal's single
+  // replan is never spent on the same wall.
+  const out = drive(planner, channel, sim, clock)
+  assert.ok(sim.absorbed > 0, `the walk was nav-absorbed (absorbed=${sim.absorbed})`)
+  assert.equal(channel.reflexActive, false, 'the reflex never fired (graze class)')
+  assert.ok(out.walkPrompts.length > 2, `re-aimed walks fired: ${out.walkPrompts.join(' | ')}`)
+  assert.equal(out.tel.lastFailure, null, `goal must complete: ${out.tel.lastFailure}`)
+  assert.ok(out.allPrompts.includes('a person sits at a desk working'), 'interaction prompt played')
 })

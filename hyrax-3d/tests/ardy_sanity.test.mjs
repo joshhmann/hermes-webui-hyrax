@@ -115,8 +115,9 @@ function makeMockRig() {
   return {
     scene: { position: { x: 0, z: 0.15 } },
     poseWrites: 0,
+    facingYaws: [],
     setRootPosition(x, z) { this.scene.position.x = x; this.scene.position.z = z },
-    setFacingYaw() {},
+    setFacingYaw(yaw) { this.facingYaws.push(yaw) },
     markPoseWrite() { this.poseWrites += 1 },
   }
 }
@@ -132,7 +133,7 @@ const LEAN80 = qAxisAngle([1, 0, 0], (80 * Math.PI) / 180) // garbage: bent 80°
 const LEAN20 = qAxisAngle([1, 0, 0], (20 * Math.PI) / 180) // drift-zone lean
 const YAW180 = qAxisAngle([0, 1, 0], Math.PI) // legit 180° turn (lean reads 0°)
 
-function makeChunk({ t0, frameCount, frameSeqStart, fps = 20, rootQuat = QIDENT, rootY = 0.95, reset = false }) {
+function makeChunk({ t0, frameCount, frameSeqStart, fps = 20, rootQuat = QIDENT, rootY = 0.95, reset = false, rootQuatFn = null }) {
   const jointCount = JOINT_NAMES.length
   const timestamps = new Float32Array(frameCount)
   const localRots = new Float32Array(frameCount * jointCount * 4)
@@ -140,10 +141,11 @@ function makeChunk({ t0, frameCount, frameSeqStart, fps = 20, rootQuat = QIDENT,
   const root = []
   for (let i = 0; i < frameCount; i += 1) {
     timestamps[i] = t0 + i / fps
-    root.push({ position_m: [0, rootY, 0], orientation_wxyz: rootQuat })
+    const quat = rootQuatFn ? rootQuatFn(i) : rootQuat
+    root.push({ position_m: [0, rootY, 0], orientation_wxyz: quat })
     for (let j = 0; j < jointCount; j += 1) localRots[(i * jointCount + j) * 4] = 1
     // Hips (joint 0, parent -1): its local rotation IS its global rotation.
-    localRots.set(rootQuat, (i * jointCount) * 4)
+    localRots.set(quat, (i * jointCount) * 4)
   }
   return {
     session_id: 's1',
@@ -346,5 +348,190 @@ test('user prompt during the hold: clears the hold and hard-resets for a fresh r
   const reclaimed = tick(source, nowRef, 6.0)
   assert(reclaimed, 'ownership resumes on the fresh generation')
   assert.equal(source.state, 'live')
+  source.dispose()
+})
+
+test('never-settling heading sweep: a root yaw rotating continuously (upright, standing height) releases ownership + one hard reset, and the rig heading FREEZES (essence-daybed-nap class)', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  // Sane stream: 3 s idle.
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 60, frameSeqStart: 0 }))
+  assert(tick(source, nowRef, 1.8), 'live on the sane stream')
+
+  // Never-settling sweep (live signature 2026-08-04/08-09): the root yaw
+  // rotates 40°/s CONTINUOUSLY (0°→180°→360°...) while the root stays
+  // upright (lean 0° — yaw-invariant) at standing height, for 30 s. The
+  // lean/height gates cannot see it (a pure yaw rotation reads 0° lean)
+  // and 40°/s = 0.7 rad/s is below the acrobatics band (≥ 1.5 rad/s), so
+  // pre-fix the source keeps feeding the sweep heading to the rig forever.
+  // 20 fps → 2°/frame.
+  const degPerFrame = 2
+  client.buffer.push(makeChunk({
+    t0: 8,
+    frameCount: 600,
+    frameSeqStart: 60,
+    rootQuatFn: (i) => qAxisAngle([0, 1, 0], (i * degPerFrame * Math.PI) / 180),
+  }))
+
+  // Playback reaches the sweep at now ≈ 4000. 14 s of sweep: 8 s of
+  // continuous in-band rotation must trip the gate → release + one reset.
+  const ownedAfter = tick(source, nowRef, 14.0)
+  assert(!ownedAfter, 'ownership released after sustained heading sweep')
+  assert.equal(source.state, 'stale', 'held state presents as stale')
+  assert(client.resets >= 1, 'one hard reset requested on sweep release')
+  assert(
+    source.getTelemetry().lastReason?.includes('never settles'),
+    `journaled reason names the sweep class (got ${source.getTelemetry().lastReason})`,
+  )
+  // The rig heading must FREEZE once the hold engages — the sweep must not
+  // keep being written to the rig (a frozen garbage heading is what the
+  // planner's walk then re-anchors on; the fix must stop the feed).
+  const writesAtHold = rig.facingYaws.length
+  tick(source, nowRef, 2.0)
+  assert.equal(
+    rig.facingYaws.length,
+    writesAtHold,
+    `rig heading writes stop after the sweep hold (${rig.facingYaws.length - writesAtHold} more writes)`,
+  )
+  source.dispose()
+})
+
+test('sweep gate recovery: a sane reset chunk after the sweep hold reclaims ownership (the hard reset breaks the conditioning loop)', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 60, frameSeqStart: 0 }))
+  assert(tick(source, nowRef, 1.8), 'live on the sane stream')
+
+  const degPerFrame = 2
+  client.buffer.push(makeChunk({
+    t0: 8,
+    frameCount: 600,
+    frameSeqStart: 60,
+    rootQuatFn: (i) => qAxisAngle([0, 1, 0], (i * degPerFrame * Math.PI) / 180),
+  }))
+  const ownedAfter = tick(source, nowRef, 14.0)
+  assert(!ownedAfter, 'sweep hold engaged')
+  assert(client.resets >= 1)
+  const resetsBefore = client.resets
+
+  // Service honours the reset: fresh, sane generation (reset chunk) —
+  // ownership must be reclaimed, exactly like the drift recovery path.
+  client.buffer.push(makeChunk({ t0: 23, frameCount: 200, frameSeqStart: 660, reset: true }))
+  const reclaimed = tick(source, nowRef, 8.0)
+  assert(reclaimed, 'ownership reclaimed after the sweep reset chunk')
+  assert.equal(source.state, 'live')
+  assert.equal(client.resets, resetsBefore, 'no extra reset on a sane recovery')
+  source.dispose()
+})
+
+test('guard: a turn that executes then SETTLES is not a sweep — no release, no reset (the band + window discriminator)', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 60, frameSeqStart: 0 }))
+  assert(tick(source, nowRef, 1.8), 'live on the sane stream')
+
+  // A legit turn: rotate 90° at 45°/s (2 s — inside the sweep band
+  // 25-86°/s but a REAL turn settles), then HOLD the heading for the rest
+  // of the 20 s chunk. The sweep story must reset on the settle — no
+  // release, no reset (the planner's own turn-then-walk path depends on
+  // this: a healthy turn completes in ~4.5 s far under the 8 s window).
+  const turnFrames = 40 // 2 s at 20 fps
+  const turnDegPerFrame = 90 / turnFrames
+  client.buffer.push(makeChunk({
+    t0: 8,
+    frameCount: 400,
+    frameSeqStart: 60,
+    rootQuatFn: (i) => qAxisAngle([0, 1, 0], (Math.min(i, turnFrames) * turnDegPerFrame * Math.PI) / 180),
+  }))
+  const owned = tick(source, nowRef, 14.0)
+  assert(owned, 'ownership kept: a settled turn is not a sweep')
+  assert.equal(source.state, 'live')
+  assert.equal(client.resets, 0, 'no hard reset for a settled turn')
+  source.dispose()
+})
+
+test('guard: a walk curve (≤16°/s, the live measured walk drift) is not a sweep — no release, no reset', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 60, frameSeqStart: 0 }))
+  assert(tick(source, nowRef, 1.8), 'live on the sane stream')
+
+  // Live walks curve ~10-16°/s (T1 mocap drift) for the whole walk. 14°/s
+  // continuous for 20 s — below the sweep floor (25°/s), the gate must
+  // stay silent (long walks must not be cut by the sweep detector).
+  const degPerFrame = 14 / 20 // 14°/s at 20 fps = 0.7°/frame
+  client.buffer.push(makeChunk({
+    t0: 8,
+    frameCount: 400,
+    frameSeqStart: 60,
+    rootQuatFn: (i) => qAxisAngle([0, 1, 0], (i * degPerFrame * Math.PI) / 180),
+  }))
+  const owned = tick(source, nowRef, 14.0)
+  assert(owned, 'ownership kept: a curving walk is not a sweep')
+  assert.equal(source.state, 'live')
+  assert.equal(client.resets, 0, 'no hard reset for a walk curve')
+  source.dispose()
+})
+
+test('never-settling heading OSCILLATION (daybed live signature 2026-08-09): a yaw that swings back and forth with direction reversals — never settling — releases ownership + one hard reset', async () => {
+  const nowRef = { now: 1000 }
+  const client = makeMockClient()
+  const rig = makeMockRig()
+  const source = makeSource(client, rig, nowRef)
+  await connectAndBuild(client, source)
+
+  client.buffer.push(makeChunk({ t0: 5, frameCount: 60, frameSeqStart: 0 }))
+  assert(tick(source, nowRef, 1.8), 'live on the sane stream')
+
+  // Live essence-daybed-nap trace (t_e69f3602, load [1.99, 2.86, 3.54]):
+  // the yaw SWINGS ±50-170° with a direction reversal every 2-3 s
+  // (6.1 reversals per 10 s, max 19) while the root stays upright at
+  // standing height — 2425° of cumulative churn, zero completion. This is
+  // the never-settling class's daybed variant: the monotonic-sweep gate
+  // (continuous 25-86°/s for 8 s) cannot see it because each swing
+  // reversal pauses the rotation (in-band runs ≤ 1.08 s live). Model: a
+  // 60°-amplitude, 0.25 Hz yaw swing (peak rate ~94°/s — inside the
+  // sweep band) for 30 s. The reversal gate (≥3 direction changes in 6 s,
+  // with a real settle resetting the story) must classify it and fail
+  // closed exactly like the sweep: release + one hard reset.
+  const A = (60 * Math.PI) / 180 // 60° amplitude
+  const F = 0.25 // Hz — 4 s period, 2 reversals per period
+  client.buffer.push(makeChunk({
+    t0: 8,
+    frameCount: 600, // 30 s
+    frameSeqStart: 60,
+    rootQuatFn: (i) => qAxisAngle([0, 1, 0], A * Math.sin(2 * Math.PI * F * (i / 20))),
+  }))
+  const ownedAfter = tick(source, nowRef, 14.0)
+  assert(!ownedAfter, 'ownership released after sustained heading oscillation')
+  assert.equal(source.state, 'stale', 'held state presents as stale')
+  assert(client.resets >= 1, 'one hard reset requested on oscillation release')
+  assert(
+    source.getTelemetry().lastReason?.includes('never settles'),
+    `journaled reason names the never-settling class (got ${source.getTelemetry().lastReason})`,
+  )
+  const writesAtHold = rig.facingYaws.length
+  tick(source, nowRef, 2.0)
+  assert.equal(
+    rig.facingYaws.length,
+    writesAtHold,
+    `rig heading writes stop after the oscillation hold (${rig.facingYaws.length - writesAtHold} more writes)`,
+  )
   source.dispose()
 })

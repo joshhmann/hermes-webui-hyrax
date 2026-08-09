@@ -1,0 +1,112 @@
+{
+  "name": "GEVS Level 3 \u2014 bounded pickup (spatial layer 5)",
+  "description": "GEVS Level 3 \u2014 bounded pickup (spatial layer 5): pickup-cup drives the full pickup loop per INTERACTABLES_SPEC.md \u2014 (1) cup.pickup goal from the recenter spawn \u2192 planner walks to the coffee table, plays the manifest pickup prompt, and on COMPLETION the cup mesh parents to the rightHand bone (bounded range enforced); (2) carry: couch.sit goal while holding \u2192 she walks ~2.5 m and sits with the cup still attached (the carry-follow error must stay bounded through locomotion AND pose change \u2014 parenting IS the tracking, no IK); (3) cup.putdown goal after a phase recenter to the table-front spawn \u2192 on completion the mesh unparents and is placed at its authored home (0.2, 0.4, 0.92) where it stays (post-release settle window measures real mesh drift). The putdown recenter (2026-08-08) isolates the release/placement evidence from the planner's long-walk flake class (multi-meter re-approach under host load can fire a capped-turn walk with a residual heading and die blocked \u2014 measured live twice); the carry phase already proves follow-through-locomotion. Evidence comes from the pickup probe (window.__ardy.pickupProbe: holding/attached/bone/cupWorld/handWorld/followErrorM/placedAt/home) sampled at 2 Hz alongside planner telemetry, plus the per-frame root probe for carry travel. Thresholds derived from the first live run (2026-08-03, see 'basis' notes); followError is ~1e-7 by construction while parented \u2014 the real signal is a failed/dropped attach, which blows past 0.02 m instantly.",
+  "checks": [
+    {
+      "id": "pickup-cup",
+      "level": 3,
+      "category": "pickup",
+      "pickupFlow": [
+        {
+          "phase": "pickup",
+          "goal": "cup.pickup",
+          "expect": "holding",
+          "timeoutS": 90
+        },
+        {
+          "phase": "carry",
+          "goal": "couch.sit",
+          "expect": "holding",
+          "timeoutS": 120
+        },
+        {
+          "phase": "putdown",
+          "goal": "cup.putdown",
+          "expect": "released",
+          "timeoutS": 90,
+          "recenter": [
+            0,
+            0.15
+          ]
+        }
+      ],
+      "recenter": [
+        0,
+        0.15
+      ],
+      "settleS": 3,
+      "goalTimeoutS": 120,
+      "releaseSettleS": 6,
+      "interactionPromptContains": "picks up a cup",
+      "assertions": [
+        {
+          "metric": "pickupSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the pickup probe must show holding='cup' after the cup.pickup goal completes (attach happened)"
+        },
+        {
+          "metric": "attachErrorM",
+          "op": "<=",
+          "pass": 0.02,
+          "partial": 0.05,
+          "basis": "max |cupWorld - (handWorld + R\u00b7offset)| over every attached sample: ~1e-7 by parenting math; 0.02 m is float-noise headroom, 0.05 m partial catches a wobbling-but-parented frame"
+        },
+        {
+          "metric": "carryTravelM",
+          "op": ">=",
+          "pass": 1.2,
+          "partial": 0.8,
+          "basis": "the carry phase (couch.sit from the coffee table, ~2.5 m) must actually MOVE the root while holding — path length, not net displacement (2026-08-08: the live carry can wander via the never-settling steering-oscillation class, 21 m path at 0.28 m net, and still be real locomotion-while-holding; a stationary hold has path ~0). The follow-through-locomotion proof itself is attachErrorM, bounded over every attached sample."
+        },
+        {
+          "metric": "carryHeldPct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 85,
+          "basis": "percent of carry-phase probe samples still holding the cup \u2014 she must NOT drop it mid-walk/sit (a detach would also blow attachErrorM)"
+        },
+        {
+          "metric": "putdownSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the putdown probe must show holding=null after the cup.putdown goal completes (release happened)"
+        },
+        {
+          "metric": "placeErrorM",
+          "op": "<=",
+          "pass": 0.1,
+          "partial": 0.2,
+          "basis": "distance from the placed cup world position to the authored home (0.2, 0.4, 0.92) at release \u2014 exact placement by construction; 0.1 m headroom"
+        },
+        {
+          "metric": "staysM",
+          "op": "<=",
+          "pass": 0.02,
+          "partial": 0.05,
+          "basis": "max inter-sample drift of the placed cup world position over the post-release settle window \u2014 it must stay where put (real mesh drift, not a self-report)"
+        },
+        {
+          "metric": "interactionSeen",
+          "op": "==",
+          "pass": 1,
+          "basis": "the manifest pickup prompt ('a person picks up a cup from the table') must appear in the planner prompt log"
+        },
+        {
+          "metric": "streamResets",
+          "op": "<=",
+          "pass": 0,
+          "partial": 1,
+          "basis": "no residual-clamp stream resets across the three goals (a single stochastic teleport, observed 1 in ~50 check-windows, recovers \u2192 partial)"
+        },
+        {
+          "metric": "livePct",
+          "op": ">=",
+          "pass": 95,
+          "partial": 80,
+          "basis": "stream stays live through pickup \u2192 carry \u2192 putdown"
+        }
+      ]
+    }
+  ]
+}

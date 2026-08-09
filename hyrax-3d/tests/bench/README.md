@@ -45,10 +45,27 @@ python3 tests/bench/gevs.py                       # full Level 1 + Level 2 (~8 m
 python3 tests/bench/gevs.py --checks level1       # Level 1 only
 python3 tests/bench/gevs.py --checks wall-absorb  # single check
 python3 tests/bench/gevs.py --out /tmp/gevs-run --label "scratch"
+python3 tests/bench/gevs.py --promote             # also refresh scoreboard.json (+ flake stats)
 ```
 
 Exit code: 0 = no failing checks, 1 = at least one FAIL, 2 = setup failure.
 Reports land in `tests/bench/out/<timestamp>/` unless `--out` is given.
+
+## Time-of-day visibility
+
+Every report carries a `runContext` stamp captured at run START: wall-clock
+time plus the motion host's loadavg / GPU util / uptime (ssh to the upstream
+host, fail-soft — a missing stamp records a note, never fails the run).
+Flaky checks (planner ones especially) have been observed passing at one
+hour and failing at another with identical code — host load shifts ARDY
+stream latency. With the stamp, a pass/fail verdict carries its environment.
+
+Per-check flake history accumulates in `hyrax-3d/tests/bench/run_history.json`
+(append-only, capped at 50 runs, gitignored). `--promote` writes
+`scoreboard.json` (the file the loft's Scores panel reads) as the newest
+report plus a `flake` map: per check — pass rate, counts, last pass/fail,
+and the runner-local hour window in which it has passed. The markdown report
+gains a "Flake pattern (history)" table when history exists.
 
 ## Safety
 

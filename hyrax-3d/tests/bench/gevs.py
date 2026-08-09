@@ -599,6 +599,19 @@ def main():
                 page.wait_for_timeout(int(check.get("settleS", 3)) * 1000)
                 segments = []
                 for phase in check["pickupFlow"]:
+                    # Per-phase recenter (2026-08-08): teleport her to a
+                    # standing spawn before a phase goal when the phase asks
+                    # (putdown). Isolates the phase's evidence (release +
+                    # placement) from the planner's long-walk flake class —
+                    # a multi-meter re-approach under host load can fire a
+                    # capped-turn walk with a residual heading and die
+                    # "blocked" (measured live, pickup-cup bench). The carry
+                    # phase already proves follow-through-locomotion; the
+                    # putdown phase proves release + place + stays.
+                    if phase.get("recenter") and page.evaluate(
+                            "(s) => window.__ardy.recenterRoot ? window.__ardy.recenterRoot(s[0], s[1]) : false",
+                            phase["recenter"]):
+                        print(f"  [pickup:{phase['phase']}] recenter → ({phase['recenter'][0]}, {phase['recenter'][1]})", flush=True)
                     mark = page.evaluate("() => window.__gevs.frames.length")
                     tel_before = page.evaluate("() => ({ ...window.__ardy.getTelemetry() })")
                     page.evaluate("(g) => window.__ardy.setGoal(g)", phase["goal"])

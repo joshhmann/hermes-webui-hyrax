@@ -91,3 +91,7 @@ hyrax-assets/embodiment/*.vrm
 hyrax-assets/vn/**/*.png
 hyrax-assets/essence/frames/*-emotion-*.png
 hyrax-assets/essence/frames/thumbs/*.webp
+
+# GEVS run-history evidence — accumulates per-run verdicts for flake
+# pattern analysis (time-of-day visibility). Evidence, not a deliverable.
+hyrax-3d/tests/bench/run_history.json

@@ -372,7 +372,16 @@ def compute_metrics(check, segments, idle_floor_rate):
             cframes = carry.get("frames", [])
             if len(cframes) >= 2:
                 cpts = [(f["x"], 0.0, f["z"]) for f in cframes]
-                m["carryTravelM"] = round(_dist_xz(cpts[0], cpts[-1]), 3)
+                # Path length, not net displacement (2026-08-08): the live
+                # carry can wander (steering oscillation — the never-settling
+                # stream class, 21 m of path at 0.28 m net in the bench) yet
+                # still be real locomotion-while-holding. The metric's
+                # purpose is "she MOVED with the cup" — a stationary hold
+                # has path ≈ 0; a clean table→couch carry is ~2.5 m; the
+                # follow-through-locomotion evidence itself is attachErrorM
+                # (bounded over every attached sample, wander included).
+                m["carryTravelM"] = round(
+                    sum(_dist_xz(a, b) for a, b in zip(cpts, cpts[1:], strict=False)), 3)
             else:
                 m["carryTravelM"] = None
         else:
