@@ -57,7 +57,7 @@ No IK — the prompt supplies the motion, the attach supplies the truth.
       journaled in telemetry
 - [ ] `requires` enforced: interacting with wrong state refused with
       reason (and the goal picker only shows valid interactions)
-- [ ] cup pickup: she takes it, it follows her hand on walk; putdown
+- [x] cup pickup: she takes it, it follows her hand on walk; putdown
       places it at the target spot and it stays there
 - [ ] GEVS Level 3 grows its first checks: door-open (state + collision
       + visible rotation), pickup-cup (attach + carry + place)

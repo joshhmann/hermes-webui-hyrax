@@ -6,7 +6,7 @@
 ┌─────────────────────────────────────────────────────┐
 │ ① Hermes Native Dashboard (:9119)                   │
 │   Built into `hermes agent` — official Hermes UI    │
-│   Status: NOT USED — community WebUI replaces this  │
+│   Status: IN USE — hermes-dashboard.service, pid 241│
 └─────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────┐
@@ -106,6 +106,7 @@ Every component of our control plane is classified into one of four categories.
 - [ ] Remove `frontend/src/main.ts` from control plane repo
 - [ ] Remove `frontend/src/style.css` (keep only hyrax.css)
 - [ ] Update Caddy/nginx to point root to WebUI fork
+- [ ] Retire native dashboard — stop/disable `hermes-dashboard.service` (:9119, pid 241, loopback-only, active since 2026-08-06; verified 2026-08-09) once WebUI :8787 is fully primary
 - [ ] Archive old division-gateway systemd service
 
 ## Verify Checklist (per component)
