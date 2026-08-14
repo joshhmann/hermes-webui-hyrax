@@ -124,6 +124,17 @@
   object-fit: contain;
   display: block;
   margin: auto;
+  /* DIRECT-3B: the stand sprites are dark line-art (~50% of pixels
+     below 60 luma) on the #161b22 iso floor, so a bare img was ~82%
+     invisible on the map. The sprite's own transparent areas now show
+     a soft spotlight ellipse (pad under the character) and the alpha
+     edge gets a faint cool rim light — assets untouched. */
+  background: radial-gradient(circle at 50% 62%,
+    rgba(185, 200, 230, .30) 0%,
+    rgba(185, 200, 230, .12) 42%,
+    rgba(185, 200, 230, 0) 64%);
+  filter: drop-shadow(0 0 2px rgba(185, 200, 230, .45))
+          drop-shadow(0 0 9px rgba(185, 200, 230, .18));
 }
 .chibi strong,
 .chibi span {
@@ -1287,7 +1298,7 @@ main.main > .main-view[id$="Hq"] { display: none; flex-direction: column; flex: 
 }
 .hyrax-op-card:hover { border-color: #8b949e; }
 .hyrax-op-card:focus-visible { outline: 2px solid currentColor; }
-.hyrax-op-card img { width: 40px; height: 40px; object-fit: contain; }
+.hyrax-op-card img { width: 40px; height: 40px; object-fit: contain; background: radial-gradient(circle at 50% 62%, rgba(185, 200, 230, .28) 0%, rgba(185, 200, 230, .10) 45%, rgba(185, 200, 230, 0) 68%); filter: drop-shadow(0 0 2px rgba(185, 200, 230, .4)) drop-shadow(0 0 7px rgba(185, 200, 230, .15)); }
 .hyrax-op-meta { display: flex; flex-direction: column; gap: 2px; }
 .hyrax-op-meta strong { font-size: 13px; color: #e6edf3; }
 .hyrax-op-meta span { font-size: 11px; color: var(--muted, #8b949e); }
@@ -1561,4 +1572,245 @@ main.main > #mainProjects .panel-page {
   main.main > #mainProjects .panel-page { padding: 14px 12px 40px; }
   .project-row { flex-wrap: wrap; }
   .project-row .project-summary { flex-basis: 100%; order: 3; }
+}
+
+/* ── War Room panel ────────────────────────────────────────────────────── */
+/* Visibility: the upstream :not() chain hides #mainChat for its own panel
+   ids only — extension ids need !important to win the cascade (#2070).
+   Default-hidden rule required by the upstream main-view contract
+   (style.css: "inclusion in the hidden-by-default list") — without it the
+   flex:1 host div stays visible on every panel. */
+main.main > #mainWarRoom { display: none; }
+main.main.showing-war-room > #mainChat { display: none !important; }
+main.main.showing-war-room > #mainWarRoom { display: flex; flex: 1; min-height: 0; overflow: auto; }
+
+.wr-title-row { display: flex; align-items: center; gap: 10px; }
+.wr-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #f5c542;
+  border: 1px solid rgba(245, 197, 66, .4);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.wr-status {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--muted, #8b949e);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.wr-status-gate { color: #d29922; }
+.wr-status-gate:empty { display: none; }
+
+.wr-section {
+  background: var(--panel, #161b22);
+  border: 1px solid var(--line, #30363d);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.wr-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 1px solid rgba(48, 54, 61, .6);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.wr-section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: #e6edf3;
+}
+.wr-section-hint {
+  font-size: 11px;
+  color: var(--muted, #8b949e);
+}
+.wr-section-body { display: flex; flex-direction: column; gap: 8px; }
+.wr-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #8b949e);
+  padding: 6px 0;
+}
+
+.wr-chip {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  color: #c9d1d9;
+  background: rgba(48, 54, 61, .8);
+  border-radius: 3px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.wr-chip-running { color: #58a6ff; background: rgba(88, 166, 255, .12); }
+.wr-chip-blocked { color: #f85149; background: rgba(248, 81, 73, .12); }
+.wr-chip-todo, .wr-chip-ready, .wr-chip-scheduled, .wr-chip-triage { color: #d29922; background: rgba(210, 153, 34, .12); }
+.wr-chip-done { color: #3fb950; background: rgba(63, 185, 80, .12); }
+.wr-chip-review { color: #bc8cff; background: rgba(188, 140, 255, .12); }
+.wr-chip-lane { color: #6ecbf5; background: rgba(110, 203, 245, .1); }
+.wr-chip-kind { color: #f5c542; background: rgba(245, 197, 66, .1); }
+.wr-chip-progress { color: #3fb950; background: rgba(63, 185, 80, .1); }
+.wr-chip-completed { color: #3fb950; background: rgba(63, 185, 80, .1); }
+.wr-chip-created, .wr-chip-promoted, .wr-chip-promoted_manual { color: #58a6ff; background: rgba(88, 166, 255, .1); }
+.wr-chip-blocked, .wr-chip-crashed, .wr-chip-timed_out, .wr-chip-gave_up,
+.wr-chip-reclaimed, .wr-chip-protocol_violation { color: #f85149; background: rgba(248, 81, 73, .1); }
+.wr-chip-commented, .wr-chip-attached, .wr-chip-linked, .wr-chip-decomposed { color: #8b949e; background: rgba(139, 148, 158, .1); }
+
+.wr-directive {
+  border: 1px solid var(--line, #30363d);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wr-directive.wr-done { opacity: .55; }
+.wr-directive-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wr-directive-title { font-size: 13px; font-weight: 600; color: #e6edf3; }
+.wr-directive-lane { font-size: 11px; color: var(--muted, #8b949e); margin-left: auto; }
+.wr-directive-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--muted, #8b949e);
+  font-variant-numeric: tabular-nums;
+}
+
+.wr-bar {
+  height: 5px;
+  background: rgba(48, 54, 61, .5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.wr-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2ea043, #3fb950);
+  border-radius: 3px;
+  transition: width .3s;
+}
+
+.wr-lane-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.wr-lane {
+  border: 1px solid var(--line, #30363d);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: rgba(22, 27, 34, .5);
+}
+.wr-lane-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #8b949e;
+  margin-bottom: 6px;
+}
+.wr-lane-counts { display: flex; gap: 12px; }
+.wr-num { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wr-num-running { color: #58a6ff; }
+.wr-num-blocked { color: #f85149; }
+.wr-num-queued { color: #d29922; }
+.wr-lane-labels { display: flex; gap: 12px; }
+.wr-lane-labels span { font-size: 9px; color: var(--muted, #8b949e); flex: 1; }
+
+.wr-subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8b949e;
+}
+.wr-subhead-count {
+  color: #f5c542;
+  background: rgba(245, 197, 66, .1);
+  border-radius: 8px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+
+.wr-blocked, .wr-gate-row, .wr-feed-row, .wr-ask {
+  border: 1px solid var(--line, #30363d);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wr-blocked.wr-stale, .wr-ask.wr-stale {
+  border-color: rgba(248, 81, 73, .6);
+  background: rgba(248, 81, 73, .05);
+}
+.wr-blocked-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wr-blocked-age { font-size: 10px; color: var(--muted, #8b949e); font-variant-numeric: tabular-nums; }
+.wr-stale-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, .5);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.wr-blocked-title { font-size: 12.5px; color: #e6edf3; }
+.wr-blocked-reason, .wr-feed-detail, .wr-ask-reason {
+  font-size: 11px;
+  color: #9da7b3;
+  line-height: 1.45;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.wr-ask-hint { font-size: 10px; color: var(--muted, #8b949e); font-style: italic; }
+.wr-ask-title { font-size: 12.5px; font-weight: 600; color: #f5c542; }
+
+.wr-gauge { margin-bottom: 10px; }
+.wr-gauge-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted, #8b949e);
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.wr-gauge-label strong { color: #e6edf3; font-size: 12px; }
+.wr-gauge-tag {
+  color: #f85149;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border: 1px solid rgba(248, 81, 73, .5);
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 9px;
+}
+.wr-gauge-over .wr-bar-fill { background: linear-gradient(90deg, #da3633, #f85149); }
+.wr-gauge-over .wr-gauge-label strong { color: #f85149; }
+
+.wr-feed-row { gap: 3px; }
+.wr-feed-title { font-size: 12px; color: #c9d1d9; }
+.wr-feed-detail { color: #8b949e; }
+
+@media (max-width: 640px) {
+  main.main > #mainWarRoom .panel-page { padding: 14px 12px 40px; }
+  .wr-lane-grid { grid-template-columns: repeat(2, 1fr); }
 }
