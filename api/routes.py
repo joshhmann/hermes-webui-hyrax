@@ -12013,7 +12013,9 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path in ("/session/manifest.json", "/session/manifest.webmanifest"):
         return _serve_manifest(handler)
 
-    if parsed.path in ("/", "/index.html") or parsed.path.startswith("/session/"):
+    # The War Room panel (/war-room) serves the same app shell as "/" —
+    # bootstrap.js switches to the war-room panel when the pathname matches.
+    if parsed.path in ("/", "/index.html", "/war-room") or parsed.path.startswith("/session/"):
         try:
             from api.extensions import inject_extension_tags
 

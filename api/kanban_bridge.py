@@ -190,6 +190,360 @@ def _comment_counts(conn):
     return {row["task_id"]: int(row["n"] or 0) for row in rows}
 
 
+# ---------------------------------------------------------------------------
+# War Room — read-only factory-floor view (GET /api/kanban/war-room)
+# ---------------------------------------------------------------------------
+# One aggregated snapshot for the Hyrax War Room panel. This is a VIEW over
+# the same board data every other GET endpoint serves — directives, lane
+# counts, blocked cards, gate queue, substance feed, and Josh-decision
+# parking. It performs NO writes: no task mutations, no event rows, no
+# comments, no config. Every sibling payload helper (_board_payload,
+# _events_payload, _stats_payload) uses the same _conn() read path.
+#
+# ``commitments`` is a read-only projection of the canonical Promise tables
+# owned by hermes_cli.kanban_workflow. The War Room never infers commitments
+# from titles or legacy JSON and never mutates the control plane.
+import re as _re
+
+_WAR_ROOM_LANES = ("tai", "rei", "nei", "mai", "aya")
+# Event kinds that carry no substance for the feed: pure liveness/dispatch
+# mechanics. The progress-substance plugin writes kind='progress' rows —
+# real work happened — so those ARE substance and always appear.
+_WAR_ROOM_NOISE_KINDS = frozenset(
+    {"heartbeat", "claimed", "spawned", "status", "liveness_manifest_set"}
+)
+_WAR_ROOM_OPEN_STATUSES = {"todo", "ready", "running", "blocked", "review"}
+_WAR_ROOM_STALE_SECONDS = 24 * 3600
+_WAR_ROOM_GATE_HIGH_MARK = 8
+_WAR_ROOM_FEED_LIMIT = 20
+_WAR_ROOM_EVENT_WINDOW = 500
+
+_DIRECTIVE_TITLE_RE = _re.compile(r"^\s*direct\s*:", _re.IGNORECASE)
+_GATE_TITLE_RE = _re.compile(r"\bgate\b", _re.IGNORECASE)
+
+
+def _war_room_link_rows(conn):
+    """All (parent_id, child_id) pairs, for child-chain progress."""
+    try:
+        rows = conn.execute("SELECT parent_id, child_id FROM task_links").fetchall()
+        return [(row["parent_id"], row["child_id"]) for row in rows]
+    except Exception:
+        return []
+
+
+def _war_room_block_reasons(conn, task_ids):
+    """Latest kind='blocked' event payload per task id.
+
+    Queried per-task (not from the feed's recent-events window) so old
+    blocks keep their reasons even when the board is busy enough that
+    their blocked event fell out of the last 500 rows.
+    """
+    out = {}
+    for task_id in task_ids:
+        try:
+            row = conn.execute(
+                "SELECT payload FROM task_events "
+                "WHERE task_id = ? AND kind = 'blocked' "
+                "ORDER BY id DESC LIMIT 1",
+                (task_id,),
+            ).fetchone()
+            if row and row["payload"]:
+                payload = json.loads(row["payload"])
+                if isinstance(payload, dict):
+                    out[task_id] = payload
+        except Exception:
+            continue
+    return out
+
+
+def _war_room_recent_events(conn):
+    """The most recent event rows board-wide, newest first."""
+    try:
+        return conn.execute(
+            "SELECT id, task_id, run_id, kind, payload, created_at "
+            "FROM task_events ORDER BY id DESC LIMIT ?",
+            (_WAR_ROOM_EVENT_WINDOW,),
+        ).fetchall()
+    except Exception:
+        return []
+
+
+def _war_room_commitments(conn):
+    """Project canonical Promises for the read-only War Room.
+
+    The control-plane schema is additive and may not exist while an older
+    Hermes Agent is installed. In that case the UI receives an explicit
+    unavailable state rather than fabricated legacy commitments.
+    """
+    try:
+        promises = conn.execute(
+            """SELECT id,title,owner_id,status,priority,root_task_id,
+                      max_attempts,max_llm_calls,max_tokens,max_wall_seconds,
+                      attempts_used,llm_calls_used,tokens_used,wall_seconds_used,
+                      created_at,updated_at
+                 FROM promises
+                ORDER BY CASE status WHEN 'blocked' THEN 0 WHEN 'running' THEN 1
+                                     WHEN 'planned' THEN 2 ELSE 3 END,
+                         priority DESC, created_at"""
+        ).fetchall()
+    except Exception:
+        return {"available": False, "items": []}
+
+    items = []
+    for promise in promises:
+        promise_id = promise["id"]
+        try:
+            task_rows = conn.execute(
+                """SELECT t.id,t.status,pt.role FROM promise_tasks pt
+                     JOIN tasks t ON t.id=pt.task_id
+                    WHERE pt.promise_id=?""",
+                (promise_id,),
+            ).fetchall()
+            pending_row = conn.execute(
+                """SELECT COUNT(*) AS n FROM workflow_outbox
+                    WHERE status='pending' AND aggregate_type='promise'
+                      AND aggregate_id=?""",
+                (promise_id,),
+            ).fetchone()
+            relation_rows = conn.execute(
+                """SELECT relation_type,target_promise_id FROM promise_relations
+                    WHERE source_promise_id=? ORDER BY target_promise_id""",
+                (promise_id,),
+            ).fetchall()
+        except Exception:
+            # A partially migrated database must fail closed: do not present
+            # a Promise as healthy when its canonical membership cannot load.
+            return {"available": False, "items": []}
+
+        statuses = [row["status"] for row in task_rows]
+        done = sum(status == "done" for status in statuses)
+        blocked = sum(status == "blocked" for status in statuses)
+        relations = [
+            {"type": row["relation_type"], "target_id": row["target_promise_id"]}
+            for row in relation_rows
+        ]
+        items.append({
+            "id": promise_id,
+            "title": promise["title"],
+            "owner": promise["owner_id"],
+            "status": promise["status"],
+            "root_task_id": promise["root_task_id"],
+            "tasks": {"done": done, "total": len(task_rows), "blocked": blocked},
+            "budgets": {
+                "attempts": {"used": promise["attempts_used"], "max": promise["max_attempts"]},
+                "llm_calls": {"used": promise["llm_calls_used"], "max": promise["max_llm_calls"]},
+                "tokens": {"used": promise["tokens_used"], "max": promise["max_tokens"]},
+                "wall_seconds": {"used": promise["wall_seconds_used"], "max": promise["max_wall_seconds"]},
+            },
+            "pending_notifications": int(pending_row["n"] or 0),
+            "relations": relations,
+        })
+    return {"available": True, "items": items}
+
+
+def _war_room_payload(parsed):
+    """Assemble the War Room snapshot. Read-only — SELECTs only."""
+    board = _resolve_board(parsed)
+    kb = _kb()
+    now = int(time.time())
+
+    with _conn(board=board) as conn:
+        tasks = kb.list_tasks(conn, include_archived=False)
+        link_rows = _war_room_link_rows(conn)
+        event_rows = _war_room_recent_events(conn)
+        block_reasons = _war_room_block_reasons(
+            conn, [task.id for task in tasks if task.status == "blocked"]
+        )
+        commitments = _war_room_commitments(conn)
+
+    task_by_id = {task.id: task for task in tasks}
+    children_by_parent: dict[str, list] = {}
+    for parent_id, child_id in link_rows:
+        children_by_parent.setdefault(parent_id, []).append(child_id)
+
+    feed_events = []
+    for row in event_rows:
+        payload = None
+        try:
+            payload = json.loads(row["payload"]) if row["payload"] else None
+        except Exception:
+            payload = None
+        entry = {
+            "id": int(row["id"]),
+            "task_id": row["task_id"],
+            "run_id": row["run_id"],
+            "kind": row["kind"],
+            "payload": payload,
+            "created_at": int(row["created_at"]) if row["created_at"] is not None else None,
+        }
+        if entry["kind"] not in _WAR_ROOM_NOISE_KINDS:
+            feed_events.append(entry)
+
+    def age_of(task) -> int:
+        try:
+            age = kb.task_age(task)
+            if isinstance(age, dict):
+                return int(age.get("created_age_seconds") or 0)
+            return int(age or 0)
+        except Exception:
+            return 0
+
+    # ── 1. DIRECTIVES ──
+    directives = []
+    for task in tasks:
+        if not _DIRECTIVE_TITLE_RE.search(task.title or ""):
+            continue
+        child_ids = children_by_parent.get(task.id, [])
+        done = sum(1 for cid in child_ids if task_by_id.get(cid) and task_by_id[cid].status == "done")
+        current_stage = None
+        for cid in sorted(child_ids, key=lambda c: task_by_id[c].created_at if task_by_id.get(c) else 0):
+            child = task_by_id.get(cid)
+            if child and child.status != "done":
+                current_stage = child.status
+                break
+        directives.append({
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "assignee": task.assignee,
+            "age_seconds": age_of(task),
+            "children": {"done": done, "total": len(child_ids)},
+            "current_stage": current_stage or ("complete" if child_ids else None),
+        })
+    directives.sort(key=lambda d: (d["status"] == "done", d["age_seconds"]))
+
+    # ── 2. THE FLOOR ──
+    lanes = []
+    lane_names = list(_WAR_ROOM_LANES)
+    extra = sorted({task.assignee or "unassigned" for task in tasks}
+                   - set(_WAR_ROOM_LANES))
+    for lane in lane_names + ([{"lane": "other", "names": extra}] if extra else []):
+        if isinstance(lane, dict):
+            names, lane_id = lane["names"], lane["lane"]
+        else:
+            names, lane_id = (lane,), lane
+        lane_tasks = [t for t in tasks if (t.assignee or "unassigned") in names]
+        counts = {"running": 0, "blocked": 0, "todo": 0, "ready": 0, "review": 0, "done": 0}
+        for t in lane_tasks:
+            if t.status in counts:
+                counts[t.status] += 1
+            elif t.status in ("triage", "scheduled"):
+                counts["todo"] += 1
+        lanes.append({"lane": lane_id, "counts": counts})
+
+    blocked = []
+    for task in tasks:
+        if task.status != "blocked":
+            continue
+        payload = block_reasons.get(task.id, {})
+        age = age_of(task)
+        blocked.append({
+            "id": task.id,
+            "title": task.title,
+            "assignee": task.assignee or "unassigned",
+            "lane": task.assignee if task.assignee in _WAR_ROOM_LANES else "other",
+            "age_seconds": age,
+            "stale": age > _WAR_ROOM_STALE_SECONDS,
+            "block_kind": getattr(task, "block_kind", None) or payload.get("kind"),
+            "reason": payload.get("reason") or "",
+        })
+    blocked.sort(key=lambda b: -b["age_seconds"])
+
+    # ── 3. GATE QUEUE ──
+    review_gates = []
+    for task in tasks:
+        if task.assignee != "rei" or task.status not in _WAR_ROOM_OPEN_STATUSES:
+            continue
+        if not _GATE_TITLE_RE.search(task.title or ""):
+            continue
+        review_gates.append({
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "age_seconds": age_of(task),
+        })
+    review_blocks = []
+    for task in tasks:
+        if task.status != "blocked":
+            continue
+        payload = block_reasons.get(task.id, {})
+        reason = payload.get("reason") or ""
+        if reason.lower().startswith("review-required"):
+            review_blocks.append({
+                "id": task.id,
+                "title": task.title,
+                "assignee": task.assignee or "unassigned",
+                "status": "blocked",
+                "age_seconds": age_of(task),
+                "reason": reason,
+            })
+    depth = len(review_gates) + len(review_blocks)
+    mechanical = [
+        {
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "age_seconds": age_of(task),
+        }
+        for task in tasks
+        if task.assignee == "hx-tester" and task.status in _WAR_ROOM_OPEN_STATUSES
+    ]
+    mechanical.sort(key=lambda g: g["age_seconds"], reverse=True)
+
+    # ── 4. SUBSTANCE FEED ──
+    substance_feed = []
+    for ev in feed_events:
+        task = task_by_id.get(ev["task_id"])
+        substance_feed.append({
+            "id": ev["id"],
+            "kind": ev["kind"],
+            "task_id": ev["task_id"],
+            "title": task.title if task else "",
+            "payload": ev["payload"],
+            "created_at": ev["created_at"],
+            "age_seconds": max(0, now - ev["created_at"]) if ev["created_at"] else None,
+        })
+        if len(substance_feed) >= _WAR_ROOM_FEED_LIMIT:
+            break
+
+    # ── 5. JOSH ASKS ──
+    josh_asks = []
+    for task in tasks:
+        if task.status != "blocked":
+            continue
+        payload = block_reasons.get(task.id, {})
+        block_kind = getattr(task, "block_kind", None) or payload.get("kind")
+        if block_kind != "needs_input":
+            continue
+        josh_asks.append({
+            "id": task.id,
+            "title": task.title,
+            "assignee": task.assignee or "unassigned",
+            "age_seconds": age_of(task),
+            "block_kind": block_kind,
+            "reason": payload.get("reason") or "",
+        })
+    josh_asks.sort(key=lambda a: -a["age_seconds"])
+
+    return {
+        "read_only": True,
+        "generated_at": now,
+        "directives": directives,
+        "floor": {"lanes": lanes, "blocked": blocked},
+        "gate_queue": {
+            "depth": depth,
+            "high_mark": _WAR_ROOM_GATE_HIGH_MARK,
+            "over": depth >= _WAR_ROOM_GATE_HIGH_MARK,
+            "review_gates": review_gates,
+            "review_blocks": review_blocks,
+            "mechanical": mechanical,
+        },
+        "substance_feed": substance_feed,
+        "josh_asks": josh_asks,
+        "commitments": commitments,
+    }
+
+
 def _board_payload(parsed):
     """Build the full board JSON payload: kanban columns with tasks, filter state, and latest_event_id."""
     board = _resolve_board(parsed)
@@ -1175,6 +1529,8 @@ def handle_kanban_get(handler, parsed) -> bool | None:
             return j(handler, _assignees_payload(board=_resolve_board(parsed))) or True
         if path == "/api/kanban/events":
             return j(handler, _events_payload(parsed)) or True
+        if path == "/api/kanban/war-room":
+            return j(handler, _war_room_payload(parsed)) or True
         if path == "/api/kanban/events/stream":
             return _handle_events_sse_stream(handler, parsed)
         if path.startswith(_TASK_PREFIX) and path.endswith("/log"):

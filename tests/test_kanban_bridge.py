@@ -12,6 +12,7 @@ requiring the external package.
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 import time
 import types
@@ -28,6 +29,8 @@ class FakeTask:
     tenant: str | None = None
     priority: int = 0
     body: str | None = None
+    block_kind: str | None = None
+    created_at: int = 0
 
 
 @dataclass
@@ -46,9 +49,10 @@ class FakeRow(dict):
 
 
 class FakeConn:
-    def __init__(self, tasks, events):
+    def __init__(self, tasks, events, links=None):
         self.tasks = tasks
         self.events = events
+        self.links = links if links is not None else []
 
     def __enter__(self):
         return self
@@ -61,7 +65,28 @@ class FakeConn:
             latest = max((event.id for event in self.events), default=0)
             return SimpleNamespace(fetchone=lambda: FakeRow(latest=latest))
         if "FROM task_links" in sql:
-            return SimpleNamespace(fetchall=lambda: [])
+            rows = [FakeRow(parent_id=p, child_id=c) for p, c in self.links]
+            return SimpleNamespace(fetchall=lambda: rows)
+        if "AND kind = 'blocked'" in sql:
+            task_id = params[0]
+            for event in sorted(self.events, key=lambda e: e.id, reverse=True):
+                if event.task_id == task_id and event.kind == "blocked":
+                    return SimpleNamespace(fetchone=lambda: FakeRow(payload=json.dumps(event.payload) if event.payload else None))
+            return SimpleNamespace(fetchone=lambda: None)
+        if "FROM task_events ORDER BY id DESC" in sql:
+            limit = params[0]
+            rows = [
+                FakeRow(
+                    id=e.id,
+                    task_id=e.task_id,
+                    run_id=e.run_id,
+                    kind=e.kind,
+                    payload=json.dumps(e.payload) if e.payload else None,
+                    created_at=e.created_at,
+                )
+                for e in sorted(self.events, key=lambda e: e.id, reverse=True)
+            ][:limit]
+            return SimpleNamespace(fetchall=lambda: rows)
         if "FROM task_comments" in sql:
             return SimpleNamespace(fetchall=lambda: [])
         if "SELECT status, assignee, COUNT(*) AS n FROM tasks" in sql:
@@ -123,7 +148,7 @@ class FakeKanbanDB:
         return None
 
     def connect(self, *, board=None):
-        return FakeConn(self.tasks, self.events)
+        return FakeConn(self.tasks, self.events, self.links)
 
     def list_tasks(self, conn, tenant=None, assignee=None, include_archived=False, **_kwargs):
         tasks = list(conn.tasks)
@@ -1332,3 +1357,249 @@ def test_board_payload_includes_unassigned_ready_tasks_without_assignee_filter(m
         "Unassigned task must have a falsy assignee in the payload so the "
         "frontend _kanbanLaneKey() maps it to KANBAN_UNASSIGNED_LANE."
     )
+
+
+# ---------------------------------------------------------------------------
+# War Room — read-only factory-floor view
+# ---------------------------------------------------------------------------
+
+
+def _war_room_board():
+    """Seed a FakeKanbanDB with a realistic board for War Room tests.
+
+    Returns (fake_kanban, task_age_map) where task_age_map lets a test
+    install per-task ages (the default fake returns a flat 42).
+    """
+    fake = FakeKanbanDB()
+    fake.tasks = [
+        # Directive card + child chain (1 done, 2 open). Children live on
+        # other lanes so they don't pollute the tai floor counts.
+        FakeTask("t_direct", "DIRECT: Bot control plane initiative", "todo", "aya",
+                 created_at=1000),
+        FakeTask("t_c1", "child one", "done", "mai", created_at=900),
+        FakeTask("t_c2", "child two", "running", "mai", created_at=1050),
+        FakeTask("t_c3", "child three", "todo", "mai", created_at=1100),
+        # Mid-title "direct" must NOT count as a directive card.
+        FakeTask("t_notdir", "Rei gate (direct): 1391 drop", "done", "rei", created_at=800),
+        # Floor lanes.
+        FakeTask("t_run_tai", "running work", "running", "tai", created_at=2000),
+        FakeTask("t_q_tai1", "queued work a", "todo", "tai", created_at=2100),
+        FakeTask("t_q_tai2", "queued work b", "ready", "tai", created_at=2200),
+        FakeTask("t_unassigned", "unassigned queued", "todo", None, created_at=2300),
+        # Blocked cards.
+        FakeTask("t_b_tai", "review-required block", "blocked", "tai", created_at=3000),
+        FakeTask("t_b_nei", "envelope decision", "blocked", "nei",
+                 block_kind="needs_input", created_at=3100),
+        FakeTask("t_b_mai", "parked decision", "blocked", "mai",
+                 block_kind="needs_input", created_at=100),  # stale
+        FakeTask("t_b_cap", "hard wall", "blocked", "tai",
+                 block_kind="capability", created_at=3200),
+        # Gate queue.
+        FakeTask("t_gate1", "REI GATE: control-plane API contract surface", "todo", "rei",
+                 created_at=4000),
+        FakeTask("t_gate2", "Rei gate: shadow hook wiring", "ready", "rei", created_at=4100),
+        FakeTask("t_gate_done", "REI GATE: already verified", "done", "rei", created_at=4200),
+        FakeTask("t_hx", "TRIAL GATE (Yui): mechanical rerun", "blocked", "hx-tester",
+                 created_at=4300),
+        FakeTask("t_hx_done", "TRIAL GATE (Yui): finished", "done", "hx-tester", created_at=4400),
+    ]
+    fake.links = [("t_direct", "t_c1"), ("t_direct", "t_c2"), ("t_direct", "t_c3")]
+    fake.events = [
+        FakeEvent(1, "t_b_tai", None, "created", {}, 3000),
+        FakeEvent(2, "t_b_tai", None, "blocked", {"reason": "review-required: control-plane API shipped"}, 3001),
+        FakeEvent(3, "t_b_nei", None, "blocked", {"reason": "Josh decision required: approve envelope", "kind": "needs_input"}, 3101),
+        FakeEvent(4, "t_b_mai", None, "blocked", {"reason": "Parked: Josh returns Tue", "kind": "needs_input"}, 101),
+        FakeEvent(5, "t_b_cap", None, "blocked", {"reason": "no access", "kind": "capability"}, 3201),
+        FakeEvent(6, "t_gate1", None, "created", {"status": "todo"}, 4001),
+        FakeEvent(7, "t_c2", None, "heartbeat", {"n": 1}, 4500),
+        FakeEvent(8, "t_c2", None, "progress", {"tool": "patch", "artifact": "x.py", "delta": "patched"}, 4501),
+        FakeEvent(9, "t_c1", None, "completed", {"summary": "REI GATE ACCEPT — verified independently"}, 4502),
+        FakeEvent(10, "t_hx", None, "blocked", {"reason": "mechanical gate awaiting runner"}, 4301),
+    ]
+    return fake
+
+
+def test_war_room_payload_shape_and_sections(monkeypatch):
+    bridge = _load_bridge(monkeypatch)
+    fake_kanban = sys.modules["hermes_cli.kanban_db"]
+    fake = _war_room_board()
+    fake_kanban.tasks = fake.tasks
+    fake_kanban.links = fake.links
+    fake_kanban.events = fake.events
+
+    ages = {task.id: {"created_age_seconds": 25 * 3600 if task.id == "t_b_mai" else 100}
+            for task in fake.tasks}
+    monkeypatch.setattr(fake_kanban, "task_age",
+                        lambda task: ages.get(task.id, {"created_age_seconds": 100}))
+
+    data = bridge._war_room_payload(_parsed(path="/api/kanban/war-room"))
+
+    assert data["read_only"] is True
+    assert "generated_at" in data
+
+    # 1. DIRECTIVES — DIRECT: prefix only, child-chain progress.
+    assert [d["id"] for d in data["directives"]] == ["t_direct"]
+    directive = data["directives"][0]
+    assert directive["children"] == {"done": 1, "total": 3}
+    assert directive["current_stage"] == "running"  # oldest open child
+
+    # 2. THE FLOOR — five sister lanes + other, with counts.
+    lanes = {l["lane"]: l["counts"] for l in data["floor"]["lanes"]}
+    assert set(lanes) == {"tai", "rei", "nei", "mai", "aya", "other"}
+    assert lanes["tai"]["running"] == 1
+    assert lanes["tai"]["blocked"] == 2  # t_b_tai + t_b_cap
+    assert lanes["tai"]["todo"] == 1
+    assert lanes["other"]["todo"] == 1  # unassigned
+    assert lanes["other"]["blocked"] == 1  # t_hx (hx-tester)
+
+    # Blocked cards carry age, reason, block_kind, and stale flag (>24h).
+    blocked = {b["id"]: b for b in data["floor"]["blocked"]}
+    assert set(blocked) == {"t_b_tai", "t_b_nei", "t_b_mai", "t_b_cap", "t_hx"}
+    assert blocked["t_b_tai"]["reason"].startswith("review-required")
+    assert blocked["t_b_mai"]["stale"] is True
+    assert blocked["t_b_tai"]["stale"] is False
+    assert blocked["t_b_nei"]["block_kind"] == "needs_input"
+
+    # 3. GATE QUEUE — rei gates + review-required blocks vs HIGH=8; Yui split.
+    gq = data["gate_queue"]
+    assert gq["high_mark"] == 8
+    assert gq["depth"] == 3  # t_gate1 + t_gate2 + t_b_tai review-required
+    assert gq["over"] is False
+    assert {g["id"] for g in gq["review_gates"]} == {"t_gate1", "t_gate2"}
+    assert [g["id"] for g in gq["review_blocks"]] == ["t_b_tai"]
+    assert [g["id"] for g in gq["mechanical"]] == ["t_hx"]
+    assert data["gate_queue"]["depth"] < data["gate_queue"]["high_mark"]
+
+    # 4. SUBSTANCE FEED — no heartbeats, newest first, progress included.
+    kinds = [e["kind"] for e in data["substance_feed"]]
+    assert "heartbeat" not in kinds
+    assert "progress" in kinds
+    assert "completed" in kinds
+    assert kinds == kinds  # sanity
+    # Newest first: event 10 is the newest substance event.
+    assert data["substance_feed"][0]["id"] == 10
+    assert data["substance_feed"][0]["kind"] == "blocked"
+
+    # 5. JOSH ASKS — only needs_input blocks, with reasons.
+    asks = {a["id"]: a for a in data["josh_asks"]}
+    assert set(asks) == {"t_b_nei", "t_b_mai"}
+    assert asks["t_b_nei"]["reason"].startswith("Josh decision required")
+    assert asks["t_b_mai"]["age_seconds"] == 25 * 3600
+
+
+def test_war_room_commitments_use_canonical_promise_tables(monkeypatch):
+    """Promise cards are projected from the canonical schema, never guessed
+    from legacy notes or task title conventions."""
+    bridge = _load_bridge(monkeypatch)
+
+    class PromiseConn:
+        def execute(self, sql, params=()):
+            if "FROM promises" in sql:
+                return SimpleNamespace(fetchall=lambda: [FakeRow(
+                    id="p_1", title="Ship verified exit", owner_id="josh",
+                    status="blocked", priority=2, root_task_id="t_root",
+                    max_attempts=10, max_llm_calls=20, max_tokens=None,
+                    max_wall_seconds=3600, attempts_used=3, llm_calls_used=7,
+                    tokens_used=0, wall_seconds_used=120, created_at=1, updated_at=2,
+                )])
+            if "FROM promise_tasks" in sql:
+                return SimpleNamespace(fetchall=lambda: [
+                    FakeRow(id="t_root", status="done", role="root"),
+                    FakeRow(id="t_delivery", status="blocked", role="delivery"),
+                ])
+            if "FROM workflow_outbox" in sql:
+                return SimpleNamespace(fetchone=lambda: FakeRow(n=1))
+            if "FROM promise_relations" in sql:
+                return SimpleNamespace(fetchall=lambda: [
+                    FakeRow(relation_type="depends_on", target_promise_id="p_0")
+                ])
+            raise AssertionError(f"unexpected SQL: {sql}")
+
+    payload = bridge._war_room_commitments(PromiseConn())
+    assert payload["available"] is True
+    assert payload["items"] == [{
+        "id": "p_1", "title": "Ship verified exit", "owner": "josh",
+        "status": "blocked", "root_task_id": "t_root",
+        "tasks": {"done": 1, "total": 2, "blocked": 1},
+        "budgets": {
+            "attempts": {"used": 3, "max": 10},
+            "llm_calls": {"used": 7, "max": 20},
+            "tokens": {"used": 0, "max": None},
+            "wall_seconds": {"used": 120, "max": 3600},
+        },
+        "pending_notifications": 1,
+        "relations": [{"type": "depends_on", "target_id": "p_0"}],
+    }]
+
+
+def test_war_room_feed_caps_at_twenty(monkeypatch):
+    bridge = _load_bridge(monkeypatch)
+    fake_kanban = sys.modules["hermes_cli.kanban_db"]
+    fake_kanban.tasks = [FakeTask("t_a", "feed task", "running", "tai")]
+    fake_kanban.events = [
+        FakeEvent(i, "t_a", None, "heartbeat" if i % 2 else "progress", {"tool": "patch"}, i)
+        for i in range(1, 60)
+    ]
+
+    data = bridge._war_room_payload(_parsed(path="/api/kanban/war-room"))
+
+    assert len(data["substance_feed"]) == 20
+    assert all(e["kind"] == "progress" for e in data["substance_feed"])
+
+
+def test_war_room_payload_never_writes(monkeypatch):
+    """Behavioral read-only proof: invoking the War Room snapshot must not
+    change tasks, events, links, or comments on the board."""
+    bridge = _load_bridge(monkeypatch)
+    fake_kanban = sys.modules["hermes_cli.kanban_db"]
+    fake = _war_room_board()
+    fake_kanban.tasks = fake.tasks
+    fake_kanban.links = fake.links
+    fake_kanban.events = fake.events
+
+    def snapshot():
+        return (
+            [(t.id, t.status, t.assignee) for t in fake_kanban.tasks],
+            [(e.id, e.kind) for e in fake_kanban.events],
+            list(fake_kanban.links),
+            list(fake_kanban.comments),
+        )
+
+    before = snapshot()
+    for _ in range(3):  # repeated refreshes (the 30s poll)
+        data = bridge._war_room_payload(_parsed(path="/api/kanban/war-room"))
+        assert data["read_only"] is True
+    assert snapshot() == before, (
+        "War Room payload must be read-only: board state changed after the call"
+    )
+
+
+def test_war_room_route_dispatched(monkeypatch):
+    import io as _io
+
+    bridge = _load_bridge(monkeypatch)
+
+    class FakeHandler:
+        def __init__(self):
+            self.wfile = _io.BytesIO()
+            self.status = None
+            self.headers = {}
+
+        def send_response(self, status): self.status = status
+        def send_header(self, k, v): pass
+        def end_headers(self): pass
+
+    handler = FakeHandler()
+    result = bridge.handle_kanban_get(
+        handler, _parsed(path="/api/kanban/war-room")
+    )
+    assert result is True
+    import json as _json
+    payload = _json.loads(handler.wfile.getvalue().decode("utf-8"))
+    assert payload["read_only"] is True
+    assert "directives" in payload and "gate_queue" in payload
+
+    # Sibling paths under /api/kanban/war-room/* stay unmatched (404 path).
+    assert bridge.handle_kanban_get(
+        FakeHandler(), _parsed(path="/api/kanban/war-room/extra")
+    ) is False

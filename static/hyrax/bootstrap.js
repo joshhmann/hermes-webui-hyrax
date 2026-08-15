@@ -27,17 +27,19 @@
   window.__hyraxBootstrapped = true;
 
   // ── Panel definitions ──
-  // Exactly the working panels: projects (native kanban aggregation) and HQ.
-  // Retired 2026-08-04: approvals / warroom / dispatch / verify / promises
+  // Exactly the working panels: projects (native kanban aggregation), HQ,
+  // and the War Room (read-only factory-floor view of the kanban board).
+  // Retired 2026-08-04: approvals / dispatch / verify / promises
   // placeholder panels (dead DOM + nav removed; approvals data still reaches
   // the UI through presence pending-approval dots).
   var HYRAX_PANELS = [
     { id: 'projects', label: 'Projects', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
     { id: 'hq', label: 'HQ', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { id: 'war-room', label: 'War Room', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
   ];
 
   // Panels whose main view renders entirely from JS (no placeholder chrome).
-  var MAIN_ONLY_PANELS = ['hq', 'projects'];
+  var MAIN_ONLY_PANELS = ['hq', 'projects', 'war-room'];
 
   // Panels whose sidebar shows another panel's view while active.
   var SIDEBAR_FALLBACKS = { 'projects': 'hq' };
@@ -76,6 +78,15 @@
         }
       });
     }
+    if (id === 'war-room') {
+      return loadModule('warroom').then(function(m) {
+        if (typeof m.mount === 'function') return m.mount(id);
+      }).catch(function() {
+        if (typeof window.showToast === 'function') {
+          try { window.showToast('War Room failed to load — refresh the page.'); } catch (_) {}
+        }
+      });
+    }
     return Promise.resolve();
   }
 
@@ -87,6 +98,11 @@
     }
     if (id === 'hq') {
       return loadModule('hq').then(function(m) {
+        if (typeof m.unmount === 'function') m.unmount(id);
+      }).catch(function() { /* already gone — nothing to unmount */ });
+    }
+    if (id === 'war-room') {
+      return loadModule('warroom').then(function(m) {
         if (typeof m.unmount === 'function') m.unmount(id);
       }).catch(function() { /* already gone — nothing to unmount */ });
     }
@@ -122,6 +138,7 @@
     injectNavButtons();
     injectHqSidebarView();
     injectProjectsHost();
+    injectWarRoomHost();
     injectCss();
     scheduleHomePanel();
   }
@@ -163,6 +180,8 @@
       var hash = typeof loc.hash === 'string' ? loc.hash : '';
       var m = search.match(/[?&]panel=([a-z][a-z0-9-]{0,31})([&#]|$)/);
       var requested = m ? m[1] : null;
+      // /war-room is a real URL — land directly on the War Room panel.
+      if (path === '/war-room') requested = 'war-room';
       if (!isHyraxPanel(requested)) {
         if (hasExplicitIntent(search, path, hash)) return;
         if (homePref() === 'chat') return;
@@ -204,6 +223,19 @@
     if (!mainEl) return;
     var div = document.createElement('div');
     div.id = 'mainProjects';
+    div.className = 'main-view';
+    mainEl.appendChild(div);
+  }
+
+  // ── Ensure the war-room main-view host exists ──
+  // Injected into main.main matching the upstream #main<Name> pattern; the
+  // controller (warroom.js) fills it on mount.
+  function injectWarRoomHost() {
+    if (document.getElementById('mainWarRoom')) return;
+    var mainEl = document.querySelector('main.main');
+    if (!mainEl) return;
+    var div = document.createElement('div');
+    div.id = 'mainWarRoom';
     div.className = 'main-view';
     mainEl.appendChild(div);
   }

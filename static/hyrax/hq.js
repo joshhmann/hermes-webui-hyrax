@@ -189,7 +189,7 @@ function render2dFallback(container) {
   warroom.title = 'Open kanban board';
   warroom.setAttribute('aria-label', 'Open the kanban war room');
   warroom.addEventListener('click', function() {
-    if (typeof switchPanel === 'function') switchPanel('kanban');
+    if (typeof switchPanel === 'function') switchPanel('war-room');
   });
   page.appendChild(warroom);
 
