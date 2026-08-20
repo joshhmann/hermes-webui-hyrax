@@ -1958,6 +1958,9 @@ main.main.showing-war-room > #mainWarRoom { display: flex; flex: 1; min-height: 
 /* ── QAT panel ── */
 main.main > #mainQat { display: flex; flex-direction: column; height: 100%; }
 main.main:not(.showing-qat) > #mainQat { display: none; }
+/* Upstream's :not() chain (style.css:4916) shows #mainChat for any class it
+   doesn't know — extension ids need !important to hide it (#2070). */
+main.main.showing-qat > #mainChat { display: none !important; }
 .qat-page { max-width: 980px; padding: 18px 20px 60px; }
 .qat-header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .qat-header h2 { margin: 0; font-size: 18px; color: #e6edf3; }

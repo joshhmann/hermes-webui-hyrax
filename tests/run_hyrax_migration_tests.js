@@ -509,9 +509,9 @@ async function loadProjects() { return import('file://' + path.join(HYRAX, 'proj
 async function testBootstrap() {
   await loadBootstrap();
 
-  assertEqual(registeredPanels.map(p => p.id), ['projects', 'hq', 'war-room'],
-    'bootstrap registers exactly [projects, hq, war-room]');
-  assertEqual(registeredPanels.map(p => p.mainView), [true, true, true],
+  assertEqual(registeredPanels.map(p => p.id), ['projects', 'hq', 'war-room', 'qat'],
+    'bootstrap registers exactly [projects, hq, war-room, qat]');
+  assertEqual(registeredPanels.map(p => p.mainView), [true, true, true, true],
     'all panels are mainView');
   assert(registeredPanels.every(p => typeof p.label === 'string' && p.label),
     'every panel has a label');
