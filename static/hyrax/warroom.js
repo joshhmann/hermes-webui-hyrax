@@ -7,7 +7,8 @@
  * served by GET /api/kanban/war-room (kanban_bridge.py). No writes, ever:
  * the panel only fetches and renders.
  *
- * Sections (single auto-refreshing view, ~30s, quiet by default):
+ * Sections (single auto-refreshing view, ~30s, quiet by default; laid out
+ * as a two-column card grid on wide desktop, one column below ~1100px):
  *   1. WHERE EVERYONE IS — ledger table, one row per sister: now / working
  *                    on / waiting / stuck, plus a stuck-card list with
  *                    reasons (presence state from GET /api/hyrax/presence,
@@ -963,24 +964,33 @@ function _render(host, payload, error, lastUpdated, presenceItems) {
 
   var w = _section('Where everyone is', 'one row per sister — now, working on, waiting, stuck');
   _renderWhere(w.body, payload.floor, presenceItems);
-  content.appendChild(w.sec);
 
   var n = _section('Needs you', 'waiting on you — answer on Discord or the board');
   _renderNeedsYou(n.body, payload.josh_asks);
-  content.appendChild(n.sec);
 
   var a = _section('Recent activity', 'completions · blocks · review verdicts — tool chatter hidden');
   var feedToggle = _renderRecentActivity(a.body, payload.substance_feed);
   if (feedToggle) a.head.appendChild(feedToggle);
-  content.appendChild(a.sec);
 
   var p = _section('Programs', 'active work — cards N/M done');
   _renderPrograms(p.body, payload.directives, payload.commitments);
-  content.appendChild(p.sec);
 
   var q = _section('QA queue', 'review backlog, plain and simple');
   _renderQaQueue(q.body, payload.gate_queue);
-  content.appendChild(q.sec);
+
+  // Two-column card grid on wide desktop (pulse header stays full-width in
+  // the page header): lanes + needs-you, then activity + programs, then the
+  // QA queue spanning the row. Collapses to one column below ~1100px
+  // (.wr-grid rules in hyrax.css). Pure layout — section order in the DOM
+  // matches the visual reading order.
+  var grid = _el('div', 'wr-grid');
+  grid.appendChild(w.sec);
+  grid.appendChild(n.sec);
+  grid.appendChild(a.sec);
+  grid.appendChild(p.sec);
+  q.sec.className += ' wr-span-2';
+  grid.appendChild(q.sec);
+  content.appendChild(grid);
 
   page.appendChild(content);
   host.appendChild(page);

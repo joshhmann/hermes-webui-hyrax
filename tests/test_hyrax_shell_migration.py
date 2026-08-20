@@ -126,17 +126,21 @@ class TestIndexShell:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 2. Bootstrap: exactly projects + hq via HermesPanels
+# 2. Bootstrap: exactly the shipped extension panels via HermesPanels
 # ══════════════════════════════════════════════════════════════════════
 
 
 class TestBootstrapRegistration:
-    def test_panels_exactly_projects_and_hq(self):
+    def test_panels_exactly_the_shipped_set(self):
         src = _src(BOOTSTRAP)
         m = re.search(r"var HYRAX_PANELS = \[(.*?)\];", src, re.S)
         assert m, "HYRAX_PANELS array not found"
         ids = re.findall(r"id: '([^']+)'", m.group(1))
-        assert ids == ["projects", "hq"], f"expected exactly ['projects','hq'], got {ids}"
+        # The fork legitimately ships four extension panels: projects (native
+        # kanban aggregation), hq, war-room (read-only floor view), and qat
+        # (human test packet). Assert the intended set, not a stale snapshot.
+        assert ids == ["projects", "hq", "war-room", "qat"], \
+            f"expected exactly ['projects','hq','war-room','qat'], got {ids}"
 
     def test_uses_hermes_panels_register(self):
         src = _src(BOOTSTRAP)
@@ -279,7 +283,17 @@ class TestCssContracts:
         for m in re.finditer(r"^\s*([a-zA-Z*][a-zA-Z0-9-]*)\s*[,{]", css, re.M):
             assert m.group(1) not in ("body", "html", "*"), \
                 f"global element selector {m.group(1)} in hyrax.css"
-        assert "overflow-x" not in css, "no horizontal overflow rules allowed"
+        # Horizontal overflow: the invariant is "no page-level horizontal
+        # scroll", not "the property may never appear". overflow-x is allowed
+        # only inside component-scoped QAT rules (e.g. .qat-setup preformatted
+        # setup blocks); any other use would leak sideways scrolling onto the
+        # whole app.
+        for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+            if "overflow-x" not in m.group(2):
+                continue
+            selectors = [s.strip() for s in m.group(1).split(",")]
+            assert all(".qat" in s for s in selectors), \
+                f"overflow-x outside .qat-scoped rules: {selectors}"
 
     def test_reduced_motion_present(self):
         assert "prefers-reduced-motion" in _src(CSS)
