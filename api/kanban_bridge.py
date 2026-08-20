@@ -544,6 +544,268 @@ def _war_room_payload(parsed):
     }
 
 
+def _war_room_event_summary(kind, payload):
+    """Compact one-line payload summary for a flight-recorder span.
+
+    Mirrors the JS ``feedDetail`` helper so the timeline renders the same
+    vocabulary as the SUBSTANCE FEED. Returns '' for kinds with no summary.
+    """
+    payload = payload or {}
+    if kind == "completed":
+        return payload.get("summary") or ""
+    if kind in ("blocked", "unblocked"):
+        return payload.get("reason") or ""
+    if kind == "progress":
+        bits = [str(payload.get("tool") or "")]
+        if payload.get("artifact"):
+            bits.append(str(payload["artifact"]))
+        return " \u2192 ".join(b for b in bits if b)
+    if kind == "created":
+        return ("status: " + str(payload["status"])) if payload.get("status") else ""
+    if kind in ("promoted", "promoted_manual"):
+        return ("\u2192 " + str(payload["status"])) if payload.get("status") else ""
+    if kind == "commented":
+        return ("by " + str(payload["author"])) if payload.get("author") else ""
+    if kind == "attached":
+        return ("attached " + str(payload["filename"])) if payload.get("filename") else ""
+    if kind == "decomposed":
+        return (str(payload.get("child_count")) + " children") if payload.get("child_count") else ""
+    return ""
+
+
+def _war_room_card_evidence(conn, task_id):
+    """Flight-recorder evidence for one card.
+
+    Envelopes (``completion_envelope`` events), gate verdicts
+    (``contract_completion_evaluated`` / ``completion_blocked_*`` /
+    ``gate_failed`` events), ``task_verify_runs`` rows, and
+    ``contract_attestations`` rows. The contract tables are additive
+    (present only on contract-gated installs) — a missing table fails soft
+    to an empty list, never a 500.
+    """
+    evidence = {"envelopes": [], "gate_verdicts": [], "verify_runs": [], "attestations": []}
+    try:
+        rows = conn.execute(
+            "SELECT id, run_id, payload, created_at FROM task_events "
+            "WHERE task_id = ? AND kind = 'completion_envelope' ORDER BY id ASC",
+            (task_id,),
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["payload"]) if row["payload"] else None
+            except Exception:
+                payload = None
+            evidence["envelopes"].append({
+                "id": int(row["id"]),
+                "run_id": row["run_id"],
+                "created_at": int(row["created_at"]) if row["created_at"] is not None else None,
+                "payload": payload,
+            })
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT id, run_id, kind, payload, created_at FROM task_events "
+            "WHERE task_id = ? AND kind IN "
+            "('contract_completion_evaluated','completion_blocked_contract',"
+            "'completion_blocked_hallucination','completion_blocked_promotion_chain',"
+            "'gate_failed') ORDER BY id ASC",
+            (task_id,),
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["payload"]) if row["payload"] else None
+            except Exception:
+                payload = None
+            evidence["gate_verdicts"].append({
+                "id": int(row["id"]),
+                "run_id": row["run_id"],
+                "kind": row["kind"],
+                "created_at": int(row["created_at"]) if row["created_at"] is not None else None,
+                "payload": payload,
+            })
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT id, run_id, phase, command, expect_exit, exit_code, "
+            "timed_out, output_tail, started_at FROM task_verify_runs "
+            "WHERE task_id = ? ORDER BY id ASC",
+            (task_id,),
+        ).fetchall()
+        for row in rows:
+            evidence["verify_runs"].append({
+                "id": int(row["id"]),
+                "run_id": row["run_id"],
+                "phase": row["phase"],
+                "command": row["command"],
+                "expect_exit": int(row["expect_exit"] or 0),
+                "exit_code": row["exit_code"],
+                "timed_out": bool(row["timed_out"]),
+                "output_tail": row["output_tail"],
+                "started_at": int(row["started_at"]) if row["started_at"] is not None else None,
+            })
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT attestation_id, role, verdict, created_at, "
+            "reviewer_task_id, reviewer_run_id FROM contract_attestations "
+            "WHERE task_id = ? ORDER BY created_at ASC",
+            (task_id,),
+        ).fetchall()
+        for row in rows:
+            evidence["attestations"].append({
+                "attestation_id": row["attestation_id"],
+                "role": row["role"],
+                "verdict": row["verdict"],
+                "created_at": int(row["created_at"]) if row["created_at"] is not None else None,
+                "reviewer_task_id": row["reviewer_task_id"],
+                "reviewer_run_id": row["reviewer_run_id"],
+            })
+    except Exception:
+        pass
+    return evidence
+
+
+def _war_room_card_payload(task_id: str, *, board=None):
+    """Per-card flight recorder. Read-only — SELECTs only, no writes.
+
+    Returns the run timeline (runs in order, each expandable into event
+    spans with kind / ts / duration / payload summary), card-level events
+    (run_id NULL: created, blocked, …), contract evidence (envelopes, gate
+    verdicts, verify runs, attestations), and parent/child links.
+
+    Heartbeats are aggregated to a cadence summary per run (count + first +
+    last ts) instead of one span per row, so a 6h soak card (700+ heartbeats)
+    stays a small payload. Substance marking reuses _WAR_ROOM_NOISE_KINDS:
+    progress/completed/blocked/… are substance; heartbeat/claimed/spawned/
+    status are idle liveness mechanics.
+    """
+    kb = _kb()
+    now = int(time.time())
+    with _conn(board=board) as conn:
+        task = kb.get_task(conn, task_id)
+        if not task:
+            return None
+        link_rows = _war_room_link_rows(conn)
+        event_rows = conn.execute(
+            "SELECT id, run_id, kind, payload, created_at "
+            "FROM task_events WHERE task_id = ? ORDER BY id ASC",
+            (task_id,),
+        ).fetchall()
+        run_rows = conn.execute(
+            "SELECT id, profile, status, outcome, started_at, ended_at, "
+            "last_heartbeat_at, summary, error FROM task_runs "
+            "WHERE task_id = ? ORDER BY started_at ASC, id ASC",
+            (task_id,),
+        ).fetchall()
+        evidence = _war_room_card_evidence(conn, task_id)
+
+    runs_by_id = {int(r["id"]): r for r in run_rows}
+    events_by_run: dict[int, list] = {}
+    card_events = []
+    for row in event_rows:
+        try:
+            payload = json.loads(row["payload"]) if row["payload"] else None
+        except Exception:
+            payload = None
+        entry = {
+            "id": int(row["id"]),
+            "kind": row["kind"],
+            "created_at": int(row["created_at"]) if row["created_at"] is not None else None,
+            "payload": payload,
+        }
+        if row["run_id"] is not None and int(row["run_id"]) in runs_by_id:
+            events_by_run.setdefault(int(row["run_id"]), []).append(entry)
+        else:
+            card_events.append(entry)
+
+    def _span(ev):
+        return {
+            "kind": ev["kind"],
+            "ts": ev["created_at"],
+            "payload_summary": _war_room_event_summary(ev["kind"], ev["payload"]),
+            "substance": ev["kind"] not in _WAR_ROOM_NOISE_KINDS,
+        }
+
+    runs = []
+    for run in run_rows:
+        run_id = int(run["id"])
+        spans = []
+        heartbeats = 0
+        hb_first = hb_last = None
+        substance_count = 0
+        prev = None
+        for ev in events_by_run.get(run_id, []):
+            if ev["kind"] == "heartbeat":
+                heartbeats += 1
+                if hb_first is None:
+                    hb_first = ev["created_at"]
+                hb_last = ev["created_at"]
+                continue
+            span = _span(ev)
+            if span["substance"]:
+                substance_count += 1
+            if prev is not None:
+                prev["duration"] = max(0, span["ts"] - prev["ts"])
+            prev = span
+            spans.append(span)
+        end_ts = run["ended_at"] or now
+        if prev is not None:
+            prev["duration"] = max(0, end_ts - prev["ts"])
+        runs.append({
+            "id": run_id,
+            "profile": run["profile"],
+            "status": run["status"],
+            "outcome": run["outcome"],
+            "started_at": int(run["started_at"]) if run["started_at"] is not None else None,
+            "ended_at": int(run["ended_at"]) if run["ended_at"] is not None else None,
+            "last_heartbeat_at": int(run["last_heartbeat_at"]) if run["last_heartbeat_at"] is not None else None,
+            "summary": run["summary"],
+            "error": run["error"],
+            "spans": spans,
+            "heartbeat": None if not heartbeats else {"count": heartbeats, "first": hb_first, "last": hb_last},
+            "substance_count": substance_count,
+            "idle_count": heartbeats,
+        })
+
+    card_spans = []
+    prev = None
+    for ev in card_events:
+        span = _span(ev)
+        if prev is not None:
+            prev["duration"] = max(0, span["ts"] - prev["ts"])
+        prev = span
+        card_spans.append(span)
+
+    children_by_parent: dict[str, list] = {}
+    parents_of: set[str] = set()
+    for parent_id, child_id in link_rows:
+        children_by_parent.setdefault(parent_id, []).append(child_id)
+        if child_id == task_id:
+            parents_of.add(parent_id)
+
+    return {
+        "read_only": True,
+        "generated_at": now,
+        "card": {
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "assignee": task.assignee,
+            "created_at": getattr(task, "created_at", None),
+        },
+        "runs": runs,
+        "card_events": card_spans,
+        "evidence": evidence,
+        "links": {
+            "parents": sorted(parents_of),
+            "children": sorted(children_by_parent.get(task_id, [])),
+        },
+    }
+
+
 def _board_payload(parsed):
     """Build the full board JSON payload: kanban columns with tasks, filter state, and latest_event_id."""
     board = _resolve_board(parsed)
@@ -1531,6 +1793,15 @@ def handle_kanban_get(handler, parsed) -> bool | None:
             return j(handler, _events_payload(parsed)) or True
         if path == "/api/kanban/war-room":
             return j(handler, _war_room_payload(parsed)) or True
+        # Per-card flight recorder — same read-only doctrine as the board view.
+        if path.startswith("/api/kanban/war-room/card/"):
+            task_id = unquote(path[len("/api/kanban/war-room/card/"):]).strip("/")
+            if not task_id or "/" in task_id:
+                return False
+            payload = _war_room_card_payload(task_id, board=_resolve_board(parsed))
+            if payload is None:
+                return bad(handler, "task not found", status=404)
+            return j(handler, payload) or True
         if path == "/api/kanban/events/stream":
             return _handle_events_sse_stream(handler, parsed)
         if path.startswith(_TASK_PREFIX) and path.endswith("/log"):

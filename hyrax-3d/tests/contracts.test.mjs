@@ -18,4 +18,7 @@ test('the production bundle is statically importable and exports the mount API',
   const module = await import(`data:text/javascript;base64,${encoded}`)
 
   assert.equal(typeof module.mountTaiLoft, 'function')
+  // Fleet loft (card t_ee790be9): the production bundle must export the
+  // multi-operator mount — hq.js prefers it over mountTaiLoft.
+  assert.equal(typeof module.mountFleetLoft, 'function')
 })

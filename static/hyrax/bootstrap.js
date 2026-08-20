@@ -36,10 +36,11 @@
     { id: 'projects', label: 'Projects', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
     { id: 'hq', label: 'HQ', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
     { id: 'war-room', label: 'War Room', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
+    { id: 'qat', label: 'QAT', icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' },
   ];
 
   // Panels whose main view renders entirely from JS (no placeholder chrome).
-  var MAIN_ONLY_PANELS = ['hq', 'projects', 'war-room'];
+  var MAIN_ONLY_PANELS = ['hq', 'projects', 'war-room', 'qat'];
 
   // Panels whose sidebar shows another panel's view while active.
   var SIDEBAR_FALLBACKS = { 'projects': 'hq' };
@@ -87,6 +88,15 @@
         }
       });
     }
+    if (id === 'qat') {
+      return loadModule('qat').then(function(m) {
+        if (typeof m.mount === 'function') return m.mount(id);
+      }).catch(function() {
+        if (typeof window.showToast === 'function') {
+          try { window.showToast('QAT panel failed to load — refresh the page.'); } catch (_) {}
+        }
+      });
+    }
     return Promise.resolve();
   }
 
@@ -103,6 +113,11 @@
     }
     if (id === 'war-room') {
       return loadModule('warroom').then(function(m) {
+        if (typeof m.unmount === 'function') m.unmount(id);
+      }).catch(function() { /* already gone — nothing to unmount */ });
+    }
+    if (id === 'qat') {
+      return loadModule('qat').then(function(m) {
         if (typeof m.unmount === 'function') m.unmount(id);
       }).catch(function() { /* already gone — nothing to unmount */ });
     }
@@ -139,6 +154,7 @@
     injectHqSidebarView();
     injectProjectsHost();
     injectWarRoomHost();
+    injectQatHost();
     injectCss();
     scheduleHomePanel();
   }
@@ -236,6 +252,18 @@
     if (!mainEl) return;
     var div = document.createElement('div');
     div.id = 'mainWarRoom';
+    div.className = 'main-view';
+    mainEl.appendChild(div);
+  }
+
+  // ── Ensure the QAT main-view host exists ──
+  // Same pattern; the controller (qat.js) fills it on mount.
+  function injectQatHost() {
+    if (document.getElementById('mainQat')) return;
+    var mainEl = document.querySelector('main.main');
+    if (!mainEl) return;
+    var div = document.createElement('div');
+    div.id = 'mainQat';
     div.className = 'main-view';
     mainEl.appendChild(div);
   }

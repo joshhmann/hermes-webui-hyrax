@@ -57,6 +57,41 @@ var _currentSisterId = null;
 var _hostEl = null;          // #mainHq host (aria-busy / toast / focus target)
 var _toastTimer = null;      // tracked fallback-toast removal timer
 var _escapeHandler = null;   // controller-owned Escape → HQ listener
+var _taskChipEl = null;      // presence-derived task-context chip in the topbar
+
+// Vocabulary lockstep with hq.js ACTIVITY_LABELS (test_hyrax_vocabulary
+// extracts both as the contract — keep values identical).
+var ACTIVITY_LABELS = {
+  'idle': 'idle',
+  'conversing': 'chatting',
+  'tool-working': 'working',
+  'waiting-approval': 'needs approval',
+  'background-working': 'background',
+  'resting': 'resting',
+  'offline': 'offline',
+};
+
+function _truncate(s, n) {
+  s = String(s == null ? '' : s);
+  if (s.length <= n) return s;
+  return s.slice(0, Math.max(0, n - 1)) + '…';
+}
+
+function _api(url, opts) {
+  var root = _root();
+  if (typeof root.api === 'function') return root.api(url, opts || {});
+  if (typeof fetch === 'function') {
+    return fetch(url, opts || {}).then(function(r) {
+      if (!r.ok) {
+        var err = new Error('HTTP ' + r.status);
+        err.status = r.status;
+        throw err;
+      }
+      return r.json();
+    });
+  }
+  return Promise.reject(new Error('no transport'));
+}
 
 function _root() {
   return typeof window !== 'undefined' ? window : globalThis;
@@ -129,6 +164,90 @@ function _clearToastTimer() {
     clearTimeout(_toastTimer);
     _toastTimer = null;
   }
+}
+
+// ── Presence-derived task context (DIRECT-4) ─────────────────────────────
+// The VN header shows what the mounted sister is currently working on,
+// from the SHARED /api/hyrax/presence state (docs/embodiment-surfaces.md:
+// VN = CONVERSATION; the header cross-references presence, it is NOT a
+// task tracker). Quiet by default: a muted chip updated on mount and then
+// by hq.js's existing 30s presence cycle via presenceContext() — no new
+// polling, no pings, no notifications. Fail soft: no chip, no error.
+
+function _taskChip() {
+  var root = _root();
+  if (!root.document) return null;
+  var host = _hostEl || _host();
+  if (!host || !host.querySelector) return null;
+  try {
+    if (_taskChipEl && _taskChipEl.isConnected) return _taskChipEl;
+  } catch (_) { /* isolated */ }
+  var topbar = null;
+  try { topbar = host.querySelector('.vn2-topbar'); } catch (_) { topbar = null; }
+  if (!topbar) return null;
+  try {
+    _taskChipEl = root.document.createElement('span');
+    _taskChipEl.className = 'vn2-room-label vn2-task-context';
+    _taskChipEl.setAttribute('data-presence', 'task');
+    topbar.appendChild(_taskChipEl);
+    return _taskChipEl;
+  } catch (_) {
+    _taskChipEl = null;
+    return null;
+  }
+}
+
+function _renderTaskContext(item) {
+  var chip = _taskChip();
+  if (!chip) return;
+  var text = '';
+  var title = '';
+  if (item) {
+    var type = item.activity && item.activity.type;
+    var act = ACTIVITY_LABELS[type] || type || 'idle';
+    var task = item.currentTask && item.currentTask.title;
+    if (item.available === false) {
+      text = 'offline';
+    } else if (task) {
+      text = act + ' · ' + _truncate(task, 56);
+      title = act + ' — ' + task;
+    } else {
+      text = act;
+    }
+  }
+  try {
+    chip.textContent = text;
+    chip.title = title;
+    chip.hidden = !text;
+  } catch (_) { /* isolated */ }
+}
+
+function _fetchTaskContext() {
+  var gen = _gen;
+  _api('/api/hyrax/presence').then(function(data) {
+    if (gen !== _gen || !_mounted) return; // stale — a newer mount owns the host
+    var items = (data && data.items) || [];
+    var item = null;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && items[i].operatorId === _currentSisterId) {
+        item = items[i];
+        break;
+      }
+    }
+    _renderTaskContext(item);
+  }).catch(function() {
+    if (gen !== _gen || !_mounted) return;
+    _renderTaskContext(null); // fail soft — chip hides, no error
+  });
+}
+
+// Called by hq.js refreshPresence on its existing 30s cycle — the shared
+// presence state reaches the VN header with ZERO new polling. No-op unless
+// the VN is mounted.
+function presenceContext(map) {
+  if (!_mounted || !_currentSisterId) return;
+  var item = (map && map[_currentSisterId]) || null;
+  _renderTaskContext(item);
 }
 
 // ── Escape → HQ (controller-owned, capture phase) ──
@@ -237,6 +356,7 @@ function mount(props) {
         if (gen !== _gen) { settle(); return false; }
         _mounted = true;
         _currentSisterId = props.sisterId;
+        _fetchTaskContext(); // quiet presence-derived header context
         settle();
         return true;
       }).catch(function() {
@@ -249,6 +369,7 @@ function mount(props) {
     }
     _mounted = true;
     _currentSisterId = props.sisterId;
+    _fetchTaskContext(); // quiet presence-derived header context
     settle();
     return true;
   }).catch(function() {
@@ -271,6 +392,10 @@ function unmount() {
   _currentSisterId = null;
   _disarmEscapeHandler();
   _clearToastTimer();
+  if (_taskChipEl) {
+    try { if (_taskChipEl.remove) _taskChipEl.remove(); } catch (_) { /* isolated */ }
+    _taskChipEl = null;
+  }
   _setBusy(false);
   _hostEl = null;
   var shell = _shell();
@@ -312,4 +437,4 @@ function isMounted() {
   return _mounted;
 }
 
-export { mount, unmount, reopen, closeStream, isMounted, ensureLoaded };
+export { mount, unmount, reopen, closeStream, isMounted, ensureLoaded, presenceContext };

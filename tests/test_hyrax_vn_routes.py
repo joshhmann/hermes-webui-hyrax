@@ -110,10 +110,10 @@ def _make_mock_session(
 class TestVnAllowlist:
     """Tests for the fixed immutable sister allowlist."""
 
-    def test_all_four_sisters_present(self):
-        """The allowlist must contain tai, rei, nei, mai."""
+    def test_all_five_sisters_present(self):
+        """The allowlist must contain tai, rei, nei, mai, aya."""
         from api.hyrax_routes import VN_PROFILES
-        expected = {"tai", "rei", "nei", "mai"}
+        expected = {"tai", "rei", "nei", "mai", "aya"}
         assert set(VN_PROFILES.keys()) == expected
 
     def test_each_profile_has_name_and_role(self):
@@ -222,9 +222,9 @@ class TestVnProfilesEndpoint:
         assert "items" in body
         items = body["items"]
         assert isinstance(items, list)
-        assert len(items) == 4
+        assert len(items) == 5
         ids = {item["id"] for item in items}
-        assert ids == {"tai", "rei", "nei", "mai"}
+        assert ids == {"tai", "rei", "nei", "mai", "aya"}
 
     def test_no_raw_profile_leak(self):
         """Response must never expose filesystem paths or raw config."""
@@ -463,7 +463,7 @@ class TestVnConversationsPost:
         """Create/archive per sister uses bounded lock registry."""
         from api.hyrax_routes import _VN_CONVERSATION_LOCKS
         assert isinstance(_VN_CONVERSATION_LOCKS, dict)
-        for pid in ("tai", "rei", "nei", "mai"):
+        for pid in ("tai", "rei", "nei", "mai", "aya"):
             assert pid in _VN_CONVERSATION_LOCKS
 
 
@@ -2507,6 +2507,11 @@ class TestVnAssetUrls:
             "portrait": "/api/hyrax/assets/mai.portrait.neutral",
             "background": "/api/hyrax/assets/mai.background.supply-hub",
             "chibi": "/api/hyrax/assets/mai.chibi.stand",
+        },
+        "aya": {
+            "portrait": "/api/hyrax/assets/aya.portrait.neutral",
+            "background": "/api/hyrax/assets/aya.background.ops-room",
+            "chibi": "/api/hyrax/assets/aya.chibi.stand",
         },
     }
 

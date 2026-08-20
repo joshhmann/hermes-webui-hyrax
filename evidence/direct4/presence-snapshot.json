@@ -1,0 +1,224 @@
+{
+  "items": [
+    {
+      "operatorId": "tai",
+      "available": true,
+      "activity": {
+        "type": "idle",
+        "interruptibility": "free"
+      },
+      "expression": {
+        "current": "neutral",
+        "intensity": 0.2677078790071341
+      },
+      "pendingApprovals": 0,
+      "kanban": {
+        "running": 2,
+        "blocked": 8
+      },
+      "currentTask": {
+        "id": "t_5b0e193b",
+        "title": "DIRECT-4 · Three-surface tie-in — doctrine + war-room/VN presence"
+      },
+      "derivedState": {
+        "fresh": true,
+        "mood": "calm",
+        "energy": 0.5083431276010018,
+        "focus": 0.5093012086040388,
+        "stress": 0.4177078790071341,
+        "sociability": 0.613545142362862,
+        "staleness_days": 0,
+        "poseIntent": "confident",
+        "sceneIntent": "coffee",
+        "tone": "warm",
+        "whims": [
+          {
+            "id": "tell-mai-share-1786593389",
+            "text": "tell mai about the blocked task \"MH-01 run-terminal hook (kanban_task_run_ended)",
+            "firedAt": 1786596194.0382605,
+            "source": "the blocked task \"MH-01 run-terminal hook (kanban_task_run_ended) — core patch for every run ending\""
+          }
+        ],
+        "whimHistory": [
+          {
+            "kind": "whim_fulfilled",
+            "whimId": "finish-build-1786636600",
+            "text": "finish \"[AAEmu] M5.1: Craft contract action — real engine path, trace + idempote",
+            "ts": "2026-08-13T15:56:55.337807+00:00",
+            "moodlet": "whim-fulfilled"
+          }
+        ],
+        "whimFulfilledTotal": 18
+      },
+      "essenceStateUpdatedAt": "2026-07-18T02:09:18.575470+00:00"
+    },
+    {
+      "operatorId": "rei",
+      "available": true,
+      "activity": {
+        "type": "idle",
+        "interruptibility": "free"
+      },
+      "expression": {
+        "current": "calm",
+        "intensity": 0.30044334218645186
+      },
+      "pendingApprovals": 0,
+      "kanban": {
+        "running": 0,
+        "blocked": 0
+      },
+      "currentTask": {
+        "id": "t_fec8883b",
+        "title": "REI GATE: review-required block on t_b2219933 — merge decision"
+      },
+      "derivedState": {
+        "fresh": true,
+        "mood": "calm",
+        "energy": 0.5501003045154867,
+        "focus": 0.35132210723427637,
+        "stress": 0.0875097715758643,
+        "sociability": 0.5803935635120775,
+        "staleness_days": 0,
+        "poseIntent": "standing",
+        "sceneIntent": "coffee",
+        "tone": "warm",
+        "whims": [
+          {
+            "id": "log-observation-1786636750",
+            "text": "log a note about kanban: [AAEmu] REI GATE: M5.1 PackPickup/PutDown contract acti",
+            "firedAt": null,
+            "source": "kanban: [AAEmu] REI GATE: M5.1 PackPickup/PutDown contract actions (t_64ecf525)"
+          }
+        ],
+        "whimHistory": [],
+        "whimFulfilledTotal": 3
+      },
+      "essenceStateUpdatedAt": "2026-07-12T13:58:53.093117+00:00"
+    },
+    {
+      "operatorId": "nei",
+      "available": true,
+      "activity": {
+        "type": "idle",
+        "interruptibility": "free"
+      },
+      "expression": {
+        "current": "neutral",
+        "intensity": 0.031096642961387325
+      },
+      "pendingApprovals": 0,
+      "kanban": {
+        "running": 0,
+        "blocked": 0
+      },
+      "currentTask": null,
+      "derivedState": {
+        "fresh": true,
+        "mood": "calm",
+        "energy": 0.7001614956063953,
+        "focus": 0.4,
+        "stress": 0.11890335703861267,
+        "sociability": 0.5125579608274317,
+        "staleness_days": 0,
+        "poseIntent": "sitting",
+        "sceneIntent": "coffee",
+        "tone": "warm",
+        "whims": [
+          {
+            "id": "field-notes-1786593539",
+            "text": "journal about kanban: [AAEmu] Refresh progression-board.md (auto staleness: STAT",
+            "firedAt": null,
+            "source": "kanban: [AAEmu] Refresh progression-board.md (auto staleness: STATUS.md newer than board by >1h)"
+          }
+        ],
+        "whimHistory": [],
+        "whimFulfilledTotal": 6
+      },
+      "essenceStateUpdatedAt": "2026-07-12T07:43:36.441995+00:00"
+    },
+    {
+      "operatorId": "mai",
+      "available": true,
+      "activity": {
+        "type": "idle",
+        "interruptibility": "free"
+      },
+      "expression": {
+        "current": "light-smile",
+        "intensity": 0.045895586829659274
+      },
+      "pendingApprovals": 0,
+      "kanban": {
+        "running": 0,
+        "blocked": 1
+      },
+      "currentTask": null,
+      "derivedState": {
+        "fresh": true,
+        "mood": "calm",
+        "energy": 0.7001590340790994,
+        "focus": 0.4,
+        "stress": 0.10410441317034072,
+        "sociability": 0.5995426248389523,
+        "staleness_days": 0,
+        "poseIntent": "sitting",
+        "sceneIntent": "coffee",
+        "tone": "warm",
+        "whims": [
+          {
+            "id": "tinker-playground-1786618129",
+            "text": "tinker in my playground container",
+            "firedAt": null,
+            "source": "my playground container"
+          },
+          {
+            "id": "unstick-blocked-1786618129",
+            "text": "unstick the blocked task \"VN: Generate blink + talking frames for Mai/Tai expres",
+            "firedAt": null,
+            "source": "the blocked task \"VN: Generate blink + talking frames for Mai/Tai expression sprites\""
+          }
+        ],
+        "whimHistory": [],
+        "whimFulfilledTotal": 9
+      },
+      "essenceStateUpdatedAt": "2026-07-27T20:22:04.551438+00:00"
+    },
+    {
+      "operatorId": "aya",
+      "available": true,
+      "activity": {
+        "type": "idle",
+        "interruptibility": "free"
+      },
+      "expression": {
+        "current": "neutral",
+        "intensity": 0.06580919522764814
+      },
+      "pendingApprovals": 0,
+      "kanban": {
+        "running": 0,
+        "blocked": 0
+      },
+      "currentTask": null,
+      "derivedState": {
+        "fresh": true,
+        "mood": "calm",
+        "energy": 0.7001556992247387,
+        "focus": 0.4,
+        "stress": 0.1037940172905869,
+        "sociability": 0.5,
+        "staleness_days": 0,
+        "poseIntent": "sitting",
+        "sceneIntent": "coffee",
+        "tone": "warm",
+        "whims": [],
+        "whimHistory": [],
+        "whimFulfilledTotal": 2
+      }
+    }
+  ],
+  "meta": {
+    "generatedAt": "2026-08-13T19:48:18.381114+00:00"
+  }
+}

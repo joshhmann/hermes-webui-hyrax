@@ -1,0 +1,20 @@
+{
+  "roomId": "director",
+  "operatorId": "aya",
+  "displayName": "Director's Office",
+  "backgroundFrameIds": ["aya.background.ops-room"],
+  "visibleObjectIds": ["director-desk", "board-wall", "window"],
+  "interactables": [
+    "room.director-desk.inspect",
+    "room.director-desk.ask",
+    "room.board-wall.inspect",
+    "room.board-wall.ask",
+    "room.window.inspect",
+    "room.enter",
+    "room.hq"
+  ],
+  "ambientState": {
+    "lighting": "evening",
+    "board-wall": "lit"
+  }
+}

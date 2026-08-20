@@ -1,0 +1,66 @@
+{
+  "count": 4,
+  "badge_count": 4,
+  "legend": "FLEET \u00b7 5 present \u2014 Rei \u00b7 Nei \u00b7 Mai \u00b7 Aya",
+  "probe": [
+    {
+      "operatorId": "rei",
+      "expression": "calm",
+      "textureUrl": "/api/hyrax/assets/rei.portrait.calm",
+      "mood": "calm",
+      "activity": "idle",
+      "kanban": {
+        "running": 0,
+        "blocked": 0
+      },
+      "task": {
+        "id": "t_092e0500",
+        "title": "REI GATE: review-required block on t_2788742e \u2014 merge decision"
+      },
+      "reaction": null,
+      "badgeText": "Rei \u00b7 QA | mood:calm | 0r/0b | REI GATE: review-required block on t_2788742e \u2014 merge decision"
+    },
+    {
+      "operatorId": "nei",
+      "expression": "neutral",
+      "textureUrl": null,
+      "mood": "calm",
+      "activity": "idle",
+      "kanban": {
+        "running": 0,
+        "blocked": 2
+      },
+      "task": null,
+      "reaction": null,
+      "badgeText": "Nei \u00b7 Quartermaster | mood:calm | 0r/2b"
+    },
+    {
+      "operatorId": "mai",
+      "expression": "light-smile",
+      "textureUrl": "/api/hyrax/assets/mai.portrait.light-smile",
+      "mood": "calm",
+      "activity": "idle",
+      "kanban": {
+        "running": 0,
+        "blocked": 1
+      },
+      "task": null,
+      "reaction": null,
+      "badgeText": "Mai \u00b7 Support | mood:calm | 0r/1b"
+    },
+    {
+      "operatorId": "aya",
+      "expression": "neutral",
+      "textureUrl": null,
+      "mood": "calm",
+      "activity": "idle",
+      "kanban": {
+        "running": 0,
+        "blocked": 0
+      },
+      "task": null,
+      "reaction": null,
+      "badgeText": "Aya \u00b7 Director | mood:calm | 0r/0b"
+    }
+  ]
+}

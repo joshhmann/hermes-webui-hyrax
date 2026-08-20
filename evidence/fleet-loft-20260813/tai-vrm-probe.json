@@ -1,0 +1,23 @@
+{
+  "ardy": {
+    "state": "live",
+    "hipsY": 0.939420414996859,
+    "footY": {
+      "leftFoot": 0.09937497630308373,
+      "rightFoot": 0.10271214822930691,
+      "leftToes": 0.038918985998031896,
+      "rightToes": 0.04704701337499454,
+      "lowest": 0.038918985998031896
+    },
+    "essence": {
+      "fresh": true,
+      "mood": "tired",
+      "energy": 0.47468296077667393,
+      "focus": 0.44011132695317295,
+      "stress": 0.5061893801883514,
+      "sociability": 0.6267806281473924,
+      "activity": "idle"
+    }
+  },
+  "pageerrors": []
+}

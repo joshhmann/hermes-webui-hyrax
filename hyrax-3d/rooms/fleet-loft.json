@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "room": "tai-loft.json",
+  "operators": [
+    {
+      "id": "rei",
+      "label": "Rei",
+      "role": "QA",
+      "position": [-2.35, 0.0, 2.55],
+      "height": 1.5,
+      "base": "/api/hyrax/assets/rei.portrait.neutral",
+      "fallback": "/api/hyrax/assets/rei.chibi.stand",
+      "expressions": {
+        "calm": "/api/hyrax/assets/rei.portrait.calm",
+        "alert": "/api/hyrax/assets/rei.portrait.alert"
+      }
+    },
+    {
+      "id": "nei",
+      "label": "Nei",
+      "role": "Quartermaster",
+      "position": [2.85, 0.0, -1.75],
+      "height": 1.5,
+      "base": "/api/hyrax/assets/nei.portrait.neutral",
+      "fallback": "/api/hyrax/assets/nei.chibi.stand",
+      "expressions": {
+        "thinking": "/api/hyrax/assets/nei.portrait.thinking",
+        "observant": "/api/hyrax/assets/nei.portrait.observant"
+      }
+    },
+    {
+      "id": "mai",
+      "label": "Mai",
+      "role": "Support",
+      "position": [-2.6, 0.0, -2.45],
+      "height": 1.5,
+      "base": "/api/hyrax/assets/mai.portrait.neutral",
+      "fallback": "/api/hyrax/assets/mai.chibi.stand",
+      "expressions": {
+        "smile": "/api/hyrax/assets/mai.portrait.smile",
+        "light-smile": "/api/hyrax/assets/mai.portrait.light-smile",
+        "laughing": "/api/hyrax/assets/mai.portrait.laughing",
+        "observant": "/api/hyrax/assets/mai.portrait.observant",
+        "shy": "/api/hyrax/assets/mai.portrait.shy-smile",
+        "playful": "/api/hyrax/assets/mai.portrait.ohhoai",
+        "mischievous": "/api/hyrax/assets/mai.portrait.yandere-smile",
+        "frustrated": "/api/hyrax/assets/mai.portrait.scream-of-fury"
+      }
+    },
+    {
+      "id": "aya",
+      "label": "Aya",
+      "role": "Director",
+      "position": [1.05, 0.0, -2.85],
+      "height": 1.5,
+      "base": "/api/hyrax/assets/aya.portrait.neutral",
+      "fallback": "/api/hyrax/assets/aya.chibi.stand",
+      "expressions": {
+        "calm": "/api/hyrax/assets/aya.portrait.calm",
+        "joy": "/api/hyrax/assets/aya.portrait.joy",
+        "thinking": "/api/hyrax/assets/aya.portrait.thinking",
+        "focus": "/api/hyrax/assets/aya.portrait.focus"
+      }
+    }
+  ]
+}

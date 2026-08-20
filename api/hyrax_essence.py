@@ -97,6 +97,7 @@ EXPRESSION_ENUM: _MappingProxyType = _MappingProxyType({
         "neutral", "smile", "laughing", "light-smile", "ohhoai", "shy-smile",
         "scream-of-fury", "yandere-smile", "sarcastic", "focused",
     }),
+    "aya": frozenset({"neutral", "smile", "light-smile", "happy-emote", "sarcastic", "deadpan"}),
 })
 
 NEUTRAL_EXPRESSION = "neutral"

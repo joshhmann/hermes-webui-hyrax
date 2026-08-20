@@ -1,0 +1,14 @@
+To eliminate this warning, add "type": "module" to /root/hermes-webui-hyrax/package.json.
+--- war-room OPERATOR PRESENCE (real payload) ---
+  taiidleliveFirst consumer: scripted Lane D auction-house scenario via contract API…
+  reiidle · calmliveREI GATE: review-required block on t_b2219933 — merge decision
+  neiidlelive
+  maiidle · light-smilelive
+  ayaidlelive
+--- VN header task-context chip (real payload) ---
+  text : idle · First consumer: scripted Lane D auction-house scenario …
+  title: idle — First consumer: scripted Lane D auction-house scenario via contract API (50 actors, conservation assert, no-Josh loop)
+--- live update via presenceContext(map) ---
+  text : idle · UPDATED TASK TITLE
+
+direct4-evidence: 12 passed, 0 failed

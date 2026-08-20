@@ -59,10 +59,10 @@ _VN_2D_ALLOWLIST: dict[str, str] = {}
 Updated at module load by _load_vn_2d_manifest()."""
 
 # Valid logical ID pattern: profile.kind.state
-#   profile ∈ {tai, rei, nei, mai}
+#   profile ∈ {tai, rei, nei, mai, aya}
 #   kind     ∈ {portrait, background, chibi}
 #   state    ∈ lowercase alphanumeric + hyphens
-_VN_2D_ID_RE = _re.compile(r"^(tai|rei|nei|mai)\.(portrait|background|chibi)\.[a-z0-9-]+$")
+_VN_2D_ID_RE = _re.compile(r"^(tai|rei|nei|mai|aya)\.(portrait|background|chibi)\.[a-z0-9-]+$")
 _VN_2D_HASH_RE = _re.compile(r"^[a-f0-9]{64}$")
 
 
@@ -121,9 +121,9 @@ def _load_vn_2d_manifest() -> dict[str, str]:
         if logical_id in seen_ids:
             continue
 
-        # Profile ID must match one of the four sisters
+        # Profile ID must match one of the five sisters
         profile_id = entry.get("profile_id")
-        if profile_id not in ("tai", "rei", "nei", "mai"):
+        if profile_id not in ("tai", "rei", "nei", "mai", "aya"):
             continue
 
         # Kind must be an allowlisted type
@@ -233,6 +233,12 @@ def handle_hyrax_get(handler, parsed) -> bool:
     if path.startswith("/api/hyrax/3d/"):
         return _serve_3d_dep(handler, path)
 
+    # /api/hyrax/qat/* — QAT packet + H-verdict capture (human testing)
+    if path == "/api/hyrax/qat/packet":
+        return _serve_qat_packet(handler)
+    if path == "/api/hyrax/qat/verdicts":
+        return _serve_qat_verdicts(handler)
+
     # Unknown /api/hyrax/* -> sanitised 404
     j(handler, {"error": "not found"}, status=404)
     return True
@@ -264,6 +270,15 @@ def handle_hyrax_post(handler, parsed) -> bool:
             body = {}
         from api import hyrax_essence as _hyrax_essence
         return _hyrax_essence.handle_essence_post(handler, parsed, body)
+
+    # /api/hyrax/qat/verdicts — append one H-verdict row (evidence capture)
+    if path == "/api/hyrax/qat/verdicts":
+        from api import routes as _routes
+        try:
+            body = _routes.read_body(handler)
+        except Exception:
+            body = {}
+        return _submit_qat_verdict(handler, body)
 
     # /api/hyrax/vn/* — VN POST routes (need body read)
     if path.startswith("/api/hyrax/vn/"):
@@ -1551,3 +1566,207 @@ def _vn_serve_approval_alias(handler, parsed, sid: str, kind: str) -> bool:
         from api.routes import _handle_approval_pending
 
         return _handle_approval_pending(handler, parsed)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# QAT (human testing) — /api/hyrax/qat/*
+#
+# Serves the QAT packet JSON (committed in-repo at hyrax-assets/qat/packet.json)
+# and captures H-verdicts (PASS / FAIL / CAVEAT + one-line why) as append-only
+# JSONL at the fleet data dir. Verdict rows are the H-dimension evidence that
+# feeds EVIDENCE-LEDGER class 7 — append-only by design, never rewritten, so a
+# submitted verdict cannot be silently altered. Each row records test_id,
+# verdict, why, who/where (source), and a wall-clock timestamp.
+#
+# Validation is fail-closed: test_id must exist in the packet's ACTIVE
+# milestone tests (gated milestones like M5.3 reject verdicts until they
+# activate), verdict must be exactly one of the three enum values, and why
+# must be non-empty and bounded. Unknown ids and malformed rows are rejected,
+# never coerced.
+# ══════════════════════════════════════════════════════════════════════════
+
+QAT_PACKET_PATH = Path(__file__).resolve().parent.parent / "hyrax-assets" / "qat" / "packet.json"
+"""Committed QAT packet JSON (in-repo data source, test-infra)."""
+
+_QAT_VERDICTS_ENV = "HERMES_QAT_VERDICTS_FILE"
+_QAT_VERDICTS_DEFAULT = "data/aaemu_qat/verdicts.jsonl"
+_QAT_VERDICT_VALUES = ("PASS", "FAIL", "CAVEAT")
+_QAT_MAX_WHY_LENGTH = 500
+_QAT_MAX_VERDICTS_RETURN = 1000
+_QAT_READ_LINE_CAP = 16 * 1024  # per-line cap when reading back (sanity bound)
+
+# One writer lock so concurrent verdict POSTs serialize their appends.
+_QAT_WRITE_LOCK = _threading.Lock()
+
+
+def _qat_verdicts_file() -> Path:
+    """Resolve the verdicts.jsonl path (fleet-root derived, test-overridable).
+
+    Env override (HERMES_QAT_VERDICTS_FILE) wins when set; otherwise the path
+    is derived from the fleet root exactly like _fleet_kanban_db: HERMES_HOME,
+    climbing out of a per-profile dir back to the fleet root, then
+    data/aaemu_qat/verdicts.jsonl. Default fleet root ~/.hermes yields
+    ~/.hermes/data/aaemu_qat/verdicts.jsonl.
+    """
+    override = os.environ.get(_QAT_VERDICTS_ENV)
+    if override:
+        return Path(override)
+    home = Path(os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes"))
+    if home.parent.name == "profiles":
+        home = home.parent.parent
+    return home / _QAT_VERDICTS_DEFAULT
+
+
+def _qat_load_packet() -> dict | None:
+    """Load and validate the QAT packet JSON. Returns dict or None on any error."""
+    try:
+        with open(QAT_PACKET_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, ValueError):
+        _logger.warning("QAT packet unreadable — QAT endpoints fail closed")
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("milestones"), list):
+        return None
+    return data
+
+
+def _qat_valid_test_ids(packet: dict) -> dict[str, str]:
+    """Map full test id -> milestone id for ACTIVE milestones only.
+
+    Full test id is ``<milestone>.<id>`` normalised to e.g. ``M4-S1`` /
+    ``M5.1-E1`` (dot collapsed to dash by the client). Each active milestone
+    also gets a synthetic overall id ``<milestone>-OVERALL``.
+    """
+    valid: dict[str, str] = {}
+    for ms in packet.get("milestones", []):
+        if not isinstance(ms, dict):
+            continue
+        if ms.get("status") != "active":
+            continue
+        ms_id = str(ms.get("id", "")).strip()
+        if not ms_id:
+            continue
+        for t in ms.get("tests", []):
+            if isinstance(t, dict) and str(t.get("id", "")).strip():
+                valid[f"{ms_id}-{str(t['id']).strip()}"] = ms_id
+        if ms.get("overall"):
+            valid[f"{ms_id}-OVERALL"] = ms_id
+    return valid
+
+
+def _serve_qat_packet(handler) -> bool:
+    """GET /api/hyrax/qat/packet — return the committed QAT packet JSON."""
+    packet = _qat_load_packet()
+    if packet is None:
+        j(handler, {"error": "not found"}, status=404)
+        return True
+    j(handler, {"packet": packet})
+    return True
+
+
+def _serve_qat_verdicts(handler) -> bool:
+    """GET /api/hyrax/qat/verdicts — read verdicts.jsonl and return rows.
+
+    Read-only. Malformed lines are skipped (never surfaced, never rewritten).
+    Returns at most the latest _QAT_MAX_VERDICTS_RETURN rows with total count.
+    """
+    path = _qat_verdicts_file()
+    items: list[dict] = []
+    if path.is_file():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or len(line) > _QAT_READ_LINE_CAP:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    if isinstance(row, dict) and row.get("test_id") and row.get("verdict"):
+                        items.append(row)
+        except OSError:
+            _logger.warning("QAT verdicts read failed — returning empty")
+            items = []
+    total = len(items)
+    j(handler, {"items": items[-_QAT_MAX_VERDICTS_RETURN:], "total": total})
+    return True
+
+
+def _submit_qat_verdict(handler, body: dict) -> bool:
+    """POST /api/hyrax/qat/verdicts — validate + append one H-verdict row.
+
+    Body: {"test_id": "M4-S1", "verdict": "PASS|FAIL|CAVEAT", "why": "..."}
+    Fail-closed: unknown test_id (or gated milestone) -> 400, invalid verdict
+    -> 400, missing/overlong why -> 400. On success appends one durable JSON
+    line and returns the stored record.
+    """
+    if not isinstance(body, dict):
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+
+    extra_keys = set(body.keys()) - {"test_id", "verdict", "why"}
+    if extra_keys:
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+
+    test_id = body.get("test_id")
+    if not isinstance(test_id, str) or not test_id.strip():
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+    test_id = test_id.strip()
+
+    verdict = body.get("verdict")
+    if not isinstance(verdict, str) or verdict not in _QAT_VERDICT_VALUES:
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+
+    why = body.get("why")
+    if not isinstance(why, str) or not why.strip():
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+    why = why.strip()
+    if len(why) > _QAT_MAX_WHY_LENGTH:
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+
+    # Fail-closed validation against the packet: the test_id must belong to an
+    # ACTIVE milestone. Gated milestones (M5.3 today) reject verdicts so H
+    # evidence cannot be minted against a spec that is not implemented yet.
+    packet = _qat_load_packet()
+    if packet is None:
+        j(handler, {"error": "packet unavailable"}, status=503)
+        return True
+    valid_ids = _qat_valid_test_ids(packet)
+    if test_id not in valid_ids:
+        j(handler, {"error": "bad request"}, status=400)
+        return True
+
+    record = {
+        "test_id": test_id,
+        "milestone": valid_ids[test_id],
+        "verdict": verdict,
+        "why": why,
+        "source": "hyrax-qat",
+        "at": time.time(),
+    }
+    line = json.dumps(record, ensure_ascii=False) + "\n"
+
+    path = _qat_verdicts_file()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _QAT_WRITE_LOCK:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass  # best-effort durability — append already landed
+    except OSError:
+        _logger.warning("QAT verdict append failed")
+        j(handler, {"error": "internal error"}, status=500)
+        return True
+
+    j(handler, {"ok": True, "record": record}, status=201)
+    return True

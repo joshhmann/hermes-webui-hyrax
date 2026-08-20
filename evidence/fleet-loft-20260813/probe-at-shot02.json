@@ -1,0 +1,124 @@
+{
+  "probe": [
+    {
+      "operatorId": "rei",
+      "expression": "alert",
+      "textureUrl": "/api/hyrax/assets/rei.portrait.alert",
+      "mood": "focused",
+      "activity": "tool-working",
+      "kanban": {
+        "running": 2,
+        "blocked": 1
+      },
+      "task": {
+        "id": "t_gate1",
+        "title": "REI GATE: fleet loft evidence"
+      },
+      "reaction": null,
+      "badgeText": "Rei \u00b7 QA | mood:focused | 2r/1b | REI GATE: fleet loft evidence"
+    },
+    {
+      "operatorId": "nei",
+      "expression": "thinking",
+      "textureUrl": "/api/hyrax/assets/nei.portrait.thinking",
+      "mood": "measured",
+      "activity": "idle",
+      "kanban": {
+        "running": 1,
+        "blocked": 0
+      },
+      "task": {
+        "id": "t_qm1",
+        "title": "Quartermaster: resupply ledger"
+      },
+      "reaction": null,
+      "badgeText": "Nei \u00b7 Quartermaster | mood:measured | 1r/0b | Quartermaster: resupply ledger"
+    },
+    {
+      "operatorId": "mai",
+      "expression": "laughing",
+      "textureUrl": "/api/hyrax/assets/mai.portrait.laughing",
+      "mood": "playful",
+      "activity": "conversing",
+      "kanban": {
+        "running": 0,
+        "blocked": 0
+      },
+      "task": {
+        "id": "t_sup1",
+        "title": "Support: war-room triage"
+      },
+      "reaction": null,
+      "badgeText": "Mai \u00b7 Support | mood:playful | 0r/0b | Support: war-room triage"
+    },
+    {
+      "operatorId": "aya",
+      "expression": "focus",
+      "textureUrl": "/api/hyrax/assets/aya.portrait.focus",
+      "mood": "directed",
+      "activity": "waiting-approval",
+      "kanban": {
+        "running": 3,
+        "blocked": 0
+      },
+      "task": {
+        "id": "t_dir1",
+        "title": "Director: lane routing pass"
+      },
+      "reaction": null,
+      "badgeText": "Aya \u00b7 Director | mood:directed | 3r/0b | Director: lane routing pass"
+    }
+  ],
+  "badge_rects": [
+    {
+      "operator": "rei",
+      "x": 1452,
+      "y": 313,
+      "w": 184,
+      "h": 73
+    },
+    {
+      "operator": "nei",
+      "x": 802,
+      "y": 925,
+      "w": 199,
+      "h": 73
+    },
+    {
+      "operator": "mai",
+      "x": 1713,
+      "y": 873,
+      "w": 167,
+      "h": 73
+    },
+    {
+      "operator": "aya",
+      "x": 1138,
+      "y": 1039,
+      "w": 174,
+      "h": 73
+    }
+  ],
+  "badge_rects_at_shot01": [
+    {
+      "operator": "rei",
+      "x": 1452,
+      "y": 313
+    },
+    {
+      "operator": "nei",
+      "x": 802,
+      "y": 925
+    },
+    {
+      "operator": "mai",
+      "x": 1713,
+      "y": 873
+    },
+    {
+      "operator": "aya",
+      "x": 1138,
+      "y": 1039
+    }
+  ]
+}

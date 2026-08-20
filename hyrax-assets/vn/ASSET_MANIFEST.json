@@ -320,6 +320,83 @@
       "size": 1929249,
       "sha256": "92c1d829e7c9d2b5801336e18e7845eb7e4d10cf4925ce3b1f8adad42b11f8ea",
       "sensitivity": "safe"
+    },
+    {
+      "id": "aya.chibi.stand",
+      "profile_id": "aya",
+      "kind": "chibi",
+      "state": "neutral",
+      "alt": "Aya chibi",
+      "relative_path": "chibis/aya-stand.png",
+      "size": 121773,
+      "sha256": "81c49095e1e2f0ca41e8390dc65f6a3ba1cc4474fdf401691291d4f61f2585b1",
+      "sensitivity": "safe"
+    },
+    {
+      "id": "aya.portrait.neutral",
+      "profile_id": "aya",
+      "kind": "portrait",
+      "state": "neutral",
+      "alt": "Aya, neutral",
+      "relative_path": "portraits/aya-neutral.png",
+      "size": 134888,
+      "sha256": "a1d483185303216162556d5198e14a612a6b11347d9fb6b36d50418da1ccd3c8",
+      "sensitivity": "safe"
+    },
+    {
+      "id": "aya.portrait.calm",
+      "profile_id": "aya",
+      "kind": "portrait",
+      "state": "calm",
+      "alt": "Aya, calm",
+      "relative_path": "portraits/aya-calm.png",
+      "size": 134959,
+      "sha256": "e2f06f80287dae3b7155ff907c30e6c32b9dcb3e1b887a89f4f9b6ec69a02939",
+      "sensitivity": "safe"
+    },
+    {
+      "id": "aya.portrait.joy",
+      "profile_id": "aya",
+      "kind": "portrait",
+      "state": "joy",
+      "alt": "Aya, joyful",
+      "relative_path": "portraits/aya-joy.png",
+      "size": 134982,
+      "sha256": "ef6fa7a0c58af5a2c8048effe521abf7a5bd2b3a494bc3fe6bb8f516a50121c8",
+      "sensitivity": "safe"
+    },
+    {
+      "id": "aya.portrait.thinking",
+      "profile_id": "aya",
+      "kind": "portrait",
+      "state": "thinking",
+      "alt": "Aya, thinking",
+      "relative_path": "portraits/aya-thinking.png",
+      "size": 134975,
+      "sha256": "d36ecd52d277f8343a88d4a675071831aebb60051a7cd1170a419ea02897509d",
+      "sensitivity": "safe"
+    },
+    {
+      "id": "aya.portrait.focus",
+      "profile_id": "aya",
+      "kind": "portrait",
+      "state": "focus",
+      "alt": "Aya, focused",
+      "relative_path": "portraits/aya-focus.png",
+      "size": 134892,
+      "sha256": "0d5b37fd9662bb744acf41d9340bb7b8d580fbeb6624d8bd1e422aea4cea5269",
+      "sensitivity": "safe"
+    },
+    {
+      "id": "aya.background.ops-room",
+      "profile_id": "aya",
+      "kind": "background",
+      "state": "neutral",
+      "alt": "Aya's ops room",
+      "relative_path": "backgrounds/aya-ops-room.png",
+      "size": 1504313,
+      "sha256": "4d08936afa2ba79bf938910c87b13ed36886d31519e1eef67015c673fa7d4d8e",
+      "sensitivity": "safe"
     }
   ]
 }

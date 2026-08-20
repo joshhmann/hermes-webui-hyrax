@@ -40,7 +40,7 @@ VN_ROOMS_DIR = REPO / "static" / "hyrax" / "vn" / "rooms"
 
 # ── The vocabulary (docs/gestalt-vn/VOCABULARY.md) ─────────────────────────
 
-OPERATORS = {"tai", "rei", "nei", "mai"}
+OPERATORS = {"tai", "rei", "nei", "mai", "aya"}
 
 EXPRESSION_FAMILIES = {"neutral", "positive", "wry", "focused", "intense", "sad"}
 
@@ -130,11 +130,16 @@ class TestOperators:
             (label, rid) for rid, label in re.findall(
                 r"id: '([^']+)',\s+label: '([^']+)'", rooms_block)
         )
+        # Double-quoted labels (e.g. "Director's Office") need a second pass.
+        id_by_label.update(
+            (label, rid) for rid, label in re.findall(
+                r"id: '([^']+)',\s+label: \"([^\"]+)\"", rooms_block)
+        )
         sisters_block = _js_array_body(hq, "HQ_SISTERS")
         hq_room_by_op = {
-            op: id_by_label[label]
+            op: id_by_label[label.replace("\\'", "'")]
             for op, label in re.findall(
-                r"id: '([^']+)', name: '[^']+',\s+room: '([^']+)'", sisters_block)
+                r"id: '([^']+)', name: '[^']+',\s+room: '((?:[^'\\]|\\.)+)'", sisters_block)
         }
         shell = VN_SHELL_JS.read_text()
         vn_room_by_op = dict(

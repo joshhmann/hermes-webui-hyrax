@@ -66,6 +66,14 @@ EXPECTED_LOGICAL_IDS = frozenset({
     "mai.portrait.yandere-smile",
     "mai.background.supply-hub",
     "mai.chibi.stand",
+    # Aya (7 logical IDs, 7 files)
+    "aya.portrait.neutral",
+    "aya.portrait.calm",
+    "aya.portrait.joy",
+    "aya.portrait.thinking",
+    "aya.portrait.focus",
+    "aya.background.ops-room",
+    "aya.chibi.stand",
 })
 
 
@@ -208,7 +216,7 @@ class TestVn2DManifestLoading:
     """Tests for manifest-based 2D allowlist construction."""
 
     def test_manifest_loads_expected_ids(self):
-        """MANIFEST: All 29 logical IDs must be present after loading."""
+        """MANIFEST: All 36 logical IDs must be present after loading."""
         import api.hyrax_routes as hyrax
         from api.hyrax_routes import ASSET_ALLOWLIST
 
@@ -228,14 +236,14 @@ class TestVn2DManifestLoading:
             assert rel_path.startswith("vn/"), f"Non-VN path for {logical_id}: {rel_path}"
             assert rel_path.endswith(".png"), f"Non-PNG path for {logical_id}: {rel_path}"
 
-    def test_manifest_count_29_logical_ids(self):
-        """MANIFEST: Exactly 29 VN logical IDs are loaded (not counting VRM)."""
+    def test_manifest_count_36_logical_ids(self):
+        """MANIFEST: Exactly 36 VN logical IDs are loaded (not counting VRM)."""
         import api.hyrax_routes as hyrax
         from api.hyrax_routes import ASSET_ALLOWLIST
 
         vn_ids = {k: v for k, v in ASSET_ALLOWLIST.items()
                   if v.endswith(".png") and v.startswith("vn/")}
-        assert len(vn_ids) == 29, f"Expected 29 VN 2D IDs, got {len(vn_ids)}"
+        assert len(vn_ids) == 36, f"Expected 36 VN 2D IDs, got {len(vn_ids)}"
 
 
 class TestVn2DAssetServing:

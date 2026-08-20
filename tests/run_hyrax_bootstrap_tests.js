@@ -296,13 +296,16 @@ function runTests() {
 
   // 3. Verify panels were registered
   console.log('\n── Panel registration counts ──');
-  // Migration contract (t_b91c5672): exactly the working panels projects + hq.
-  // The approvals panel was retired by this card; its nav/DOM/hooks are gone.
-  assert(registerCalls.length === 2, `exactly 2 panels registered (got ${registerCalls.length})`);
+  // Migration contract (t_b91c5672): exactly the working panels
+  // projects + hq + war-room. The approvals panel was retired by that card;
+  // its nav/DOM/hooks are gone. QAT panel added by t_bee1697a.
+  assert(registerCalls.length === 4, `exactly 4 panels registered (got ${registerCalls.length})`);
 
   const registeredIds = registerCalls.map(d => d.id);
   assert(registeredIds.includes('hq'), '"hq" panel registered');
   assert(registeredIds.includes('projects'), '"projects" panel registered');
+  assert(registeredIds.includes('war-room'), '"war-room" panel registered');
+  assert(registeredIds.includes('qat'), '"qat" panel registered');
   assert(!registeredIds.includes('approvals'), '"approvals" panel NOT registered (retired)');
 
   // 4. HQ mount/unmount hooks

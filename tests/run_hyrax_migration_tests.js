@@ -509,10 +509,10 @@ async function loadProjects() { return import('file://' + path.join(HYRAX, 'proj
 async function testBootstrap() {
   await loadBootstrap();
 
-  assertEqual(registeredPanels.map(p => p.id), ['projects', 'hq'],
-    'bootstrap registers exactly [projects, hq]');
-  assertEqual(registeredPanels.map(p => p.mainView), [true, true],
-    'both panels are mainView');
+  assertEqual(registeredPanels.map(p => p.id), ['projects', 'hq', 'war-room'],
+    'bootstrap registers exactly [projects, hq, war-room]');
+  assertEqual(registeredPanels.map(p => p.mainView), [true, true, true],
+    'all panels are mainView');
   assert(registeredPanels.every(p => typeof p.label === 'string' && p.label),
     'every panel has a label');
 
@@ -523,17 +523,18 @@ async function testBootstrap() {
     'bootstrap init is idempotent — no duplicate registration');
 
   // Nav buttons exist on rail + sidebar-nav, WITHOUT inline onclick.
+  const hyraxPanelIds = ['projects', 'hq', 'war-room'];
   const railHyrax = queryAllInTree([railEl], '[data-panel]')
-    .filter(b => ['projects', 'hq'].includes(b.dataset.panel || b._attrs['data-panel']))
+    .filter(b => hyraxPanelIds.includes(b.dataset.panel || b._attrs['data-panel']))
     .map(b => b.dataset.panel || b._attrs['data-panel']).sort();
   const sideHyrax = queryAllInTree([sidebarNavEl], '[data-panel]')
-    .filter(b => ['projects', 'hq'].includes(b.dataset.panel || b._attrs['data-panel']))
+    .filter(b => hyraxPanelIds.includes(b.dataset.panel || b._attrs['data-panel']))
     .map(b => b.dataset.panel || b._attrs['data-panel']).sort();
-  assertEqual(railHyrax, ['hq', 'projects'], 'rail nav has both panel buttons');
-  assertEqual(sideHyrax, ['hq', 'projects'], 'sidebar-nav has both panel buttons');
+  assertEqual(railHyrax, ['hq', 'projects', 'war-room'], 'rail nav has all panel buttons');
+  assertEqual(sideHyrax, ['hq', 'projects', 'war-room'], 'sidebar-nav has all panel buttons');
   const hyraxBtns = queryAllInTree([railEl, sidebarNavEl], '[data-panel]')
-    .filter(b => ['projects', 'hq'].includes(b.dataset.panel || b._attrs['data-panel']));
-  assert(hyraxBtns.length >= 2 && hyraxBtns.every(b => !b._attrs.onclick),
+    .filter(b => hyraxPanelIds.includes(b.dataset.panel || b._attrs['data-panel']));
+  assert(hyraxBtns.length >= 3 && hyraxBtns.every(b => !b._attrs.onclick),
     'nav buttons use listeners, not inline onclick');
 }
 

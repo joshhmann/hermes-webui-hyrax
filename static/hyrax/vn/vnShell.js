@@ -587,7 +587,7 @@
   // with static imagery and the placeholder sidebar if any module is absent
   // or errors during init (ARCH §7).
 
-  var OPERATOR_ROOM = { tai: 'ops', rei: 'security', nei: 'lab', mai: 'logistics' };
+  var OPERATOR_ROOM = { tai: 'ops', rei: 'security', nei: 'lab', mai: 'logistics', aya: 'director' };
 
   function _wireExperience(operatorId, name, ref) {
     var vn = ns.vn || {};

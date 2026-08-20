@@ -24,6 +24,7 @@ import {
   reopen as vnReopen,
   closeStream as vnCloseStream,
   isMounted as vnIsMounted,
+  presenceContext as vnPresenceContext,
 } from './vn.js';
 
 var _mounted = false;
@@ -71,6 +72,7 @@ var HQ_SISTERS = [
   { id: 'rei', name: 'Rei',  room: 'Security Alcove',   role: 'verification'  },
   { id: 'nei', name: 'Nei',  room: 'Research Lab',      role: 'contracts'     },
   { id: 'mai', name: 'Mai',  room: 'Logistics Annex',   role: 'blocked triage' },
+  { id: 'aya', name: 'Aya',  room: 'Director\'s Office', role: 'direction'     },
 ];
 
 // Room label (HQ_SISTERS.room) → room id (HQ_ROOMS.id) lookup.
@@ -790,6 +792,7 @@ function feedEssencePresentation(map) {
 function refreshPresence() {
   fetchPresence().then(function(map) {
     feedEssencePresentation(map);
+    vnPresenceContext(map); // shared presence → VN header chip (no-op unless mounted)
     renderOperatorsPanel(map);
     updateWarRoom(document.querySelector('#mainHq .hq-warroom'), map);
     applyTimeTint();
@@ -935,11 +938,16 @@ async function launch3d() {
     var mod = await _modulePromise;
     if (gen !== _mountGen) return; // panel switched while loading
 
-    if (mod && typeof mod.mountTaiLoft === 'function') {
+    if (mod && (typeof mod.mountTaiLoft === 'function' || typeof mod.mountFleetLoft === 'function')) {
       inject3dCss();
+      // Fleet loft (card t_ee790be9): the Synthesis Loft is the fleet's
+      // living room — every operator embodied, driven by her own presence
+      // item. Falls back to the single-operator mount when the bundle only
+      // exports mountTaiLoft (test fixtures), keeping the contract intact.
+      var mount = typeof mod.mountFleetLoft === 'function' ? mod.mountFleetLoft : mod.mountTaiLoft;
       // Production defaults: the VRM asset is the embodiment bundle's own
       // default configuration — only the allowlisted asset URL is supplied.
-      var cleanup = await mod.mountTaiLoft(
+      var cleanup = await mount(
         content,
         returnToVn,
         { vrmUrl: '/api/hyrax/assets/tai.embodiment.vrm' }
@@ -952,7 +960,7 @@ async function launch3d() {
         return;
       }
       if (typeof cleanup !== 'function') {
-        throw new Error('mountTaiLoft did not return a cleanup function');
+        throw new Error('embodiment bundle did not return a cleanup function');
       }
       _unmount3d = cleanup;
       return;

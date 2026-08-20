@@ -24,6 +24,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 import { TimeOfDaySystem, type TimeOfDayPreset } from './atmosphere/TimeOfDaySystem'
 import { FaceController } from './face/FaceController'
+import { FleetLayer, type FleetPresenceItem } from './fleet/FleetLayer'
+import type { FleetConfig } from './fleet/fleetConfig'
 import { loadModel } from './loaders/loadModel'
 import {
   DEFAULT_PROCEDURAL_TUNING,
@@ -57,6 +59,14 @@ export interface TaiRoomEssenceOptions {
   /** The operator whose presence drives her goals (tai for the tai-loft; the
    * mechanism is operator-generic — presence items carry operatorId). */
   operator?: string
+}
+
+/** Fleet-layer options (card t_ee790be9 — the loft is the fleet's living
+ * room): when a fleet config is supplied, every operator in it is embodied
+ * as a 2D billboard (portrait holo-card) driven by her own presence item,
+ * alongside Tai's VRM. Absent → single-operator loft exactly as before. */
+export interface TaiRoomFleetOptions {
+  config: FleetConfig
 }
 
 /** Minimal shape of one /api/hyrax/presence item (the fields the essence
@@ -157,6 +167,12 @@ export class TaiRoomScene {
   private motionPreviewStartedAt = 0
   private frameRate = 0
   private smoothedFrameTime = 0
+  /** Fleet layer (card t_ee790be9): billboard embodiments for the other
+   * operators, driven by the SAME presence poll as the essence driver. */
+  private fleet: FleetLayer | null = null
+  /** Latest full presence items array (fleet layer + essence driver both
+   * read from the one poll — no second polling loop). */
+  private lastPresenceItems: FleetPresenceItem[] = []
 
   constructor(
     private readonly container: HTMLElement,
@@ -171,6 +187,8 @@ export class TaiRoomScene {
     /** Essence driver options (spatial layer 4): which operator's presence
      * drives her goals. */
     private readonly essenceOptions: TaiRoomEssenceOptions = {},
+    /** Fleet options (card t_ee790be9): multi-operator 2D embodiment. */
+    private readonly fleetOptions: TaiRoomFleetOptions | null = null,
   ) {
     // Collision is data now (SCENE_MANIFEST_SPEC.md): bounds + obstacles
     // come from the manifest. LOFT_ACTOR_RADIUS is avatar geometry, not
@@ -206,6 +224,14 @@ export class TaiRoomScene {
     this.server.position.set(-3.45, 1.25, -1.1)
     this.scene.add(this.ambient, this.directional, this.pendant, this.projector, this.server)
     this.timeOfDay = new TimeOfDaySystem(this.scene, this.ambient, this.directional, this.pendant, this.projector, this.server)
+
+    // Fleet layer (card t_ee790be9): 2D billboard embodiments for every
+    // operator in the fleet config (the sisters + aya), each driven by her
+    // own presence item via the scene's single poll. Absent → the loft
+    // stays exactly the single-operator room it always was.
+    if (this.fleetOptions && this.fleetOptions.config.operators.length > 0) {
+      this.fleet = new FleetLayer(this.scene, this.camera, container, this.fleetOptions.config.operators)
+    }
 
     this.seedRoom()
     // Stateful interactables (spatial layer 5): object-declared collision
@@ -562,7 +588,12 @@ export class TaiRoomScene {
         return
       }
       const body = (await response.json()) as { items?: PresenceItem[] }
-      const item = (body.items ?? []).find((p) => p.operatorId === this.operatorId) ?? null
+      const items = body.items ?? []
+      // Fleet layer consumes the SAME poll (acceptance: presence flows at
+      // the existing cadence, no second loop).
+      this.lastPresenceItems = items
+      this.fleet?.updatePresence(items)
+      const item = items.find((p) => p.operatorId === this.operatorId) ?? null
       this.lastEssenceSnapshot = item === null ? null : presenceItemToEssenceState(item)
     } catch {
       this.lastEssenceSnapshot = null
@@ -580,6 +611,13 @@ export class TaiRoomScene {
   /** The snapshot the essence driver currently reads (override ?? polled). */
   getEssenceState(): EssenceStateSnapshot | null {
     return this.essenceOverride ?? this.lastEssenceSnapshot
+  }
+
+  /** Fleet layer accessor (card t_ee790be9) — the mount's window.__fleet
+   * debug seam (presence overrides + per-actor probes). Null in
+   * single-operator mode. */
+  getFleet(): FleetLayer | null {
+    return this.fleet
   }
 
   /** Cancel the active goal (journaled). No-op when idle. */
@@ -737,6 +775,10 @@ export class TaiRoomScene {
     }
     cancelAnimationFrame(this.frame)
 
+    // Fleet layer (card t_ee790be9): remove billboards, badges, textures.
+    this.fleet?.destroy()
+    this.fleet = null
+
     // Disconnect observers
     this.resizeObserver.disconnect()
 
@@ -889,6 +931,8 @@ export class TaiRoomScene {
         this.controls.target.lerp(this.rig.getVisualCenter(), 0.06)
       }
     }
+    // Fleet layer (card t_ee790be9): idle bob, crossfades, badge projection.
+    this.fleet?.update(dt, performance.now())
     this.renderer.render(this.scene, this.camera)
   }
 

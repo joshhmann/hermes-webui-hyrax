@@ -6,13 +6,23 @@
  * api / timer environment and proves the War Room contracts:
  *
  *   - pure helpers: ageLabel boundaries, feedDetail mapping, laneSummary
- *   - mount renders all five sections (DIRECTIVES / THE FLOOR / GATE QUEUE /
- *     SUBSTANCE FEED / JOSH ASKS) from a mocked read-only payload
+ *   - mount renders all five sections (WHERE EVERYONE IS / NEEDS YOU /
+ *     RECENT ACTIVITY / PROGRAMS / QA QUEUE) plus the header pulse line
+ *     from a mocked read-only payload
+ *   - plain-language contract (Rei QA review): visible labels are plain
+ *     words (working / stuck / waiting / need you / programs / view only);
+ *     Promise budgets and relation IDs are dropped; progress telemetry is
+ *     hidden by default and revealed by the feed toggle
  *   - stale (>24h) blocked cards get .wr-stale; fresh ones do not
  *   - exactly ONE 30s refresh interval is armed; re-mount does not duplicate
  *     it; unmount clears it and empties the host
  *   - api failure renders the inline error + Retry (visible, not silent);
  *     a non-read-only payload is rejected with an error box
+ *   - flight recorder: clicking any card row opens the per-card trace
+ *     waterfall; runs are expandable; heartbeats render as cadence; evidence
+ *     pane shows envelopes / verdicts / verify runs / attestations; empty
+ *     state for a never-run card; deep link #card=t_xxx opens on mount;
+ *     back returns to the board
  *
  * Usage:  node tests/run_hyrax_warroom_tests.js
  * Exit code: 0 = all pass, 1 = any failure.
@@ -74,6 +84,18 @@ globalThis.clearInterval = function(id) {
   return id;
 };
 
+// location + hashchange spy for the #card= deep link.
+globalThis.location = { hash: '' };
+const winListeners = {};
+globalThis.addEventListener = function(type, fn) {
+  (winListeners[type] = winListeners[type] || []).push(fn);
+};
+globalThis.removeEventListener = function(type, fn) {
+  const arr = winListeners[type] || [];
+  const i = arr.indexOf(fn);
+  if (i !== -1) arr.splice(i, 1);
+};
+
 function makeEl(tag) {
   const el = {
     tagName: String(tag).toUpperCase(),
@@ -109,6 +131,22 @@ function makeEl(tag) {
     },
     querySelector() { return null; },
     querySelectorAll() { return []; },
+  };
+  el.classList = {
+    add(...names) {
+      names.forEach(n => { if (!String(el.className || '').split(/\s+/).includes(n)) el.className = (el.className ? el.className + ' ' : '') + n; });
+    },
+    remove(...names) {
+      el.className = String(el.className || '').split(/\s+/).filter(c => c && !names.includes(c)).join(' ');
+    },
+    toggle(name, force) {
+      const has = String(el.className || '').split(/\s+/).includes(name);
+      const want = force === undefined ? !has : !!force;
+      if (want && !has) el.classList.add(name);
+      if (!want && has) el.classList.remove(name);
+      return want;
+    },
+    contains(name) { return String(el.className || '').split(/\s+/).includes(name); },
   };
   Object.defineProperty(el, 'textContent', {
     get() {
@@ -163,13 +201,17 @@ const apiCalls = [];
 let apiMode = 'ok'; // 'ok' | 'fail' | 'nonreadonly'
 // generated_at is ~90s before "now" so the updated-stamp assertions see a
 // sane delta (the epoch-as-duration bug would render weeks).
+const NOW = Math.floor(Date.now() / 1000);
 const SNAPSHOT = {
   read_only: true,
-  generated_at: Math.floor(Date.now() / 1000) - 90,
+  generated_at: NOW - 90,
   directives: [
     { id: 't_direct', title: 'DIRECT: Bot control plane initiative', status: 'todo',
       assignee: 'aya', age_seconds: 3600,
       children: { done: 1, total: 3 }, current_stage: 'running' },
+    { id: 't_done_d', title: 'DIRECT: finished initiative', status: 'done',
+      assignee: 'rei', age_seconds: 90000,
+      children: { done: 2, total: 2 }, current_stage: 'complete' },
   ],
   floor: {
     lanes: [
@@ -206,11 +248,11 @@ const SNAPSHOT = {
   },
   substance_feed: [
     { id: 10, kind: 'blocked', task_id: 't_yui', title: 'TRIAL GATE (Yui): mechanical rerun',
-      payload: { reason: 'mechanical gate awaiting runner' }, created_at: 1751999000, age_seconds: 1000 },
+      payload: { reason: 'mechanical gate awaiting runner' }, created_at: NOW - 1000, age_seconds: 1000 },
     { id: 9, kind: 'completed', task_id: 't_c1', title: 'child one',
-      payload: { summary: 'REI GATE ACCEPT — verified independently' }, created_at: 1751998500, age_seconds: 1500 },
+      payload: { summary: 'REI GATE ACCEPT — verified independently' }, created_at: NOW - 1500, age_seconds: 1500 },
     { id: 8, kind: 'progress', task_id: 't_c2', title: 'child two',
-      payload: { tool: 'patch', artifact: 'x.py', delta: 'patched' }, created_at: 1751998000, age_seconds: 2000 },
+      payload: { tool: 'patch', artifact: 'x.py', delta: 'patched' }, created_at: NOW - 2000, age_seconds: 2000 },
   ],
   josh_asks: [
     { id: 't_old', title: 'Parked: Josh returns', assignee: 'mai',
@@ -228,11 +270,88 @@ const SNAPSHOT = {
   },
 };
 
+// Flight-recorder fixture: two runs (crashed + completed), heartbeat cadence,
+// card-level event, envelope, gate verdict, verify runs, attestations, links.
+const CARD_PAYLOAD = {
+  read_only: true,
+  generated_at: NOW - 5,
+  card: { id: 't_heavy', title: '6h soak: bot run', status: 'done', assignee: 'tai', created_at: NOW - 22000 },
+  runs: [
+    {
+      id: 1573, profile: 'tai', status: 'crashed', outcome: 'crashed',
+      started_at: NOW - 3000, ended_at: NOW - 2900, last_heartbeat_at: NOW - 2910,
+      summary: null, error: 'worker crashed',
+      spans: [
+        { kind: 'claimed', ts: NOW - 3000, duration: 0, payload_summary: '', substance: false },
+        { kind: 'spawned', ts: NOW - 3000, duration: 90, payload_summary: '', substance: false },
+        { kind: 'crashed', ts: NOW - 2910, duration: 0, payload_summary: '', substance: true },
+      ],
+      heartbeat: { count: 10, first: NOW - 2990, last: NOW - 2910 },
+      substance_count: 1,
+      idle_count: 10,
+    },
+    {
+      id: 1669, profile: 'tai', status: 'done', outcome: 'completed',
+      started_at: NOW - 2000, ended_at: NOW - 100, last_heartbeat_at: NOW - 150,
+      summary: 'soak COMPLETED full window', error: null,
+      spans: [
+        { kind: 'claimed', ts: NOW - 2000, duration: 0, payload_summary: '', substance: false },
+        { kind: 'spawned', ts: NOW - 2000, duration: 5, payload_summary: '', substance: false },
+        { kind: 'progress', ts: NOW - 1995, duration: 1850, payload_summary: 'terminal → build/soak.sh', substance: true },
+        { kind: 'completed', ts: NOW - 145, duration: 45, payload_summary: 'soak COMPLETED full window', substance: true },
+      ],
+      heartbeat: { count: 43, first: NOW - 1980, last: NOW - 160 },
+      substance_count: 2,
+      idle_count: 43,
+    },
+  ],
+  card_events: [
+    { kind: 'created', ts: NOW - 22000, duration: 19000, payload_summary: 'status: ready', substance: true },
+  ],
+  evidence: {
+    envelopes: [{
+      id: 901, run_id: 1669, created_at: NOW - 140,
+      payload: {
+        schema_version: 1, status: 'done', summary: 'soak completed',
+        changed_files: ['scripts/soak.sh'], artifacts: ['build/soak.log'],
+        evidence_refs: ['evidence-abc'], notes_for_next: 'retry flag still missing',
+      },
+    }],
+    gate_verdicts: [{
+      id: 900, run_id: 1669, kind: 'contract_completion_evaluated', created_at: NOW - 130,
+      payload: { verdict: 'pass', mode: 'enforce', reason_codes: [], diff_matches_claims: true },
+    }],
+    verify_runs: [
+      { id: 1, run_id: 1669, phase: 'baseline', command: 'bash verify_suite.sh {workspace}', expect_exit: 0, exit_code: 0, timed_out: false, output_tail: 'all green', started_at: NOW - 100 },
+      { id: 2, run_id: 1573, phase: 'verify', command: 'node --check x.js', expect_exit: 0, exit_code: 1, timed_out: false, output_tail: 'SyntaxError', started_at: NOW - 2900 },
+    ],
+    attestations: [
+      { attestation_id: 'att-1', role: 'reviewer:rei', verdict: 'pass', created_at: NOW - 90, reviewer_task_id: 't_gate1', reviewer_run_id: 1700 },
+    ],
+  },
+  links: { parents: ['t_epic'], children: ['t_child1', 't_child2'] },
+};
+
+// Zero-run card: the empty state the recorder must handle gracefully.
+const CARD_EMPTY = {
+  read_only: true,
+  generated_at: NOW,
+  card: { id: 't_fresh', title: 'Never dispatched', status: 'todo', assignee: null, created_at: NOW - 50 },
+  runs: [],
+  card_events: [],
+  evidence: { envelopes: [], gate_verdicts: [], verify_runs: [], attestations: [] },
+  links: { parents: [], children: [] },
+};
+
 function fakeApi(url, opts = {}) {
   apiCalls.push({ url, method: opts.method || 'GET' });
   if (apiMode === 'fail') return Promise.reject(new Error('boom'));
   if (apiMode === 'nonreadonly') {
     return Promise.resolve(Object.assign({}, SNAPSHOT, { read_only: false }));
+  }
+  if (url.indexOf('/api/kanban/war-room/card/') === 0) {
+    const id = url.slice('/api/kanban/war-room/card/'.length);
+    return Promise.resolve(id === 't_fresh' ? CARD_EMPTY : CARD_PAYLOAD);
   }
   if (url === '/api/hyrax/presence') {
     return Promise.resolve({
@@ -271,8 +390,14 @@ function resetHarness() {
   intervalCalls.length = 0;
   clearedIntervals.length = 0;
   apiMode = 'ok';
+  globalThis.location = { hash: '' };
   hostEl.replaceChildren();
   hostEl._children = [];
+}
+
+function fireHashChange(hash) {
+  globalThis.location = { hash };
+  (winListeners.hashchange || []).slice().forEach(fn => { try { fn({ type: 'hashchange' }); } catch (_) {} });
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -295,6 +420,20 @@ async function testHelpers(wr) {
   assertEqual(wr.laneSummary({ running: 1, blocked: 2, todo: 1, ready: 3 }),
     { running: 1, blocked: 2, queued: 4 }, 'laneSummary: queued = todo + ready');
   assertEqual(wr.laneSummary(null), { running: 0, blocked: 0, queued: 0 }, 'laneSummary: null-safe');
+
+  // Recorder helpers
+  assertEqual(wr.fmtDuration(5), '5s', 'fmtDuration: seconds');
+  assertEqual(wr.fmtDuration(90), '2m', 'fmtDuration: minutes');
+  assertEqual(wr.fmtDuration(7200), '2h', 'fmtDuration: hours');
+  assertEqual(wr.fmtDuration(2 * 86400), '2d', 'fmtDuration: days');
+  assertEqual(wr.fmtDuration(null), '', 'fmtDuration: null → empty');
+  assertEqual(wr.fmtDuration(0), '', 'fmtDuration: zero → empty');
+  assertEqual(wr.cardIdFromHash('#card=t_abc123'), 't_abc123', 'cardIdFromHash: extracts id');
+  assertEqual(wr.cardIdFromHash('#session=x'), null, 'cardIdFromHash: non-card hash → null');
+  assertEqual(wr.cardIdFromHash(''), null, 'cardIdFromHash: empty → null');
+  assertEqual(wr.cardIdFromHash(null), null, 'cardIdFromHash: null → null');
+  assert(typeof wr.clockLabel(0) === 'string' && wr.clockLabel(0).length === 8,
+    'clockLabel: HH:MM:SS shape');
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -306,93 +445,119 @@ async function testMount(wr) {
   await tick(6); // fetch resolves
 
   const sections = findByClass(hostEl, 'wr-section');
-  assertEqual(sections.length, 6, 'mount renders exactly six sections');
+  assertEqual(sections.length, 5, 'mount renders exactly five sections');
 
-  // 1. DIRECTIVES
-  const directive = findByClass(hostEl, 'wr-directive');
-  assertEqual(directive.length, 1, 'directive row rendered');
-  if (directive[0]) {
-    assert(directive[0].textContent.indexOf('DIRECT: Bot control plane initiative') !== -1,
-      'directive title rendered');
-  }
-  const meta = findByClass(hostEl, 'wr-directive-meta');
-  assert(meta.some(m => m.textContent.indexOf('1/3 done') !== -1), 'child-chain progress rendered (1/3 done)');
-  assert(meta.some(m => m.textContent.indexOf('stage: running') !== -1), 'current stage rendered');
+  // 0. Header — plain-language chrome + pulse line
+  const badge = findByClass(hostEl, 'wr-badge');
+  assertEqual(badge.length, 1, 'view-only badge rendered');
+  assert(badge[0] && badge[0].textContent.indexOf('VIEW ONLY') !== -1,
+    'badge reads VIEW ONLY (plain, not READ-ONLY)');
+  const subtitle = findByClass(hostEl, 'page-subtitle');
+  assert(subtitle.length && subtitle[0].textContent.indexOf('View only') !== -1,
+    'subtitle uses plain language (no factory-floor jargon)');
+  const pulseCells = findByClass(hostEl, 'wr-pulse-cell');
+  assertEqual(pulseCells.length, 4, 'pulse line has four numbers');
+  assertEqual(pulseCells.map(c => c.textContent),
+    ['1working', '4stuck', '6waiting', '1need you'],
+    'pulse numbers: 1 working · 4 stuck · 6 waiting · 1 need you');
+  const pulseText = hostEl.textContent || '';
+  assert(/updated (\d+)(s|m|h) ago/.test(pulseText),
+    'pulse carries a sane relative updated stamp (delta, not epoch)');
+  assert(pulseText.indexOf('2954w') === -1,
+    'updated stamp is NOT the epoch-as-duration bug');
+  assert(pulseText.indexOf('gate depth') === -1 && pulseText.indexOf('HIGH') === -1,
+    'no gate-depth gauge chrome in the header');
 
-  const commitments = findByClass(hostEl, 'wr-commitment');
-  assert(commitments.length === 1, 'canonical Promise commitment rendered');
-  assert(commitments[0].textContent.indexOf('Verified economic exit') !== -1,
-    'Promise title rendered from snapshot');
-  assert(commitments[0].textContent.indexOf('1/3 cards done') !== -1,
-    'canonical Promise membership progress rendered');
-  assert(commitments[0].textContent.indexOf('LLM calls 4/12') !== -1,
-    'aggregate Promise budget rendered');
-
-  // 2. THE FLOOR — six lane cards + blocked rows with stale highlight
-  const lanes = findByClass(hostEl, 'wr-lane');
-  assertEqual(lanes.length, 6, 'six lane cards (5 sisters + other)');
-  const laneNames = lanes.map(l => l.textContent);
-  assert(laneNames.some(t => t.indexOf('tai') !== -1 && t.indexOf('1') !== -1),
-    'tai lane shows its counts');
-
-  // 2b. OPERATOR PRESENCE strip (inside the floor section, read-only)
-  const presenceRows = findByClass(hostEl, 'wr-presence-row');
-  assertEqual(presenceRows.length, 5, 'presence strip shows one row per operator');
-  const presenceTexts = presenceRows.map(r => r.textContent || '');
-  assert(presenceTexts.some(t => t.indexOf('tai') !== -1 && t.indexOf('working') !== -1),
-    'tai row shows activity label');
-  assert(presenceTexts.some(t => t.indexOf('live') !== -1),
-    'fresh operators carry the live freshness tag');
-  assert(presenceTexts.some(t => t.indexOf('REI GATE: control-plane') !== -1),
-    'current task title surfaces in the strip');
-  assert(presenceTexts.some(t => t.indexOf('offline') !== -1),
-    'unavailable operator shows offline');
+  // 1. WHERE EVERYONE IS — ledger table (one row per sister) + stuck list
+  const ledgerRows = findByClass(hostEl, 'wr-ledger-row');
+  assertEqual(ledgerRows.length, 6, 'ledger table has six rows (5 sisters + other)');
+  const ledgerTexts = ledgerRows.map(r => r.textContent || '');
+  assert(ledgerTexts.some(t => t.indexOf('tai') !== -1 && t.indexOf('working') !== -1),
+    'tai row: now = working');
+  assert(ledgerTexts.some(t => t.indexOf('DIRECT-4') !== -1),
+    'tai row: working-on shows the current task title');
+  assert(ledgerTexts.some(t => t.indexOf('REI GATE: control-plane') !== -1),
+    'rei row: current task title surfaces in the table');
+  assert(ledgerTexts.some(t => t.indexOf('needs approval') !== -1),
+    'rei row: now = needs approval');
+  assert(ledgerTexts.some(t => t.indexOf('offline') !== -1),
+    'aya row: now = offline');
+  assert(ledgerTexts.some(t => t.indexOf('idle · stale 2d') !== -1),
+    'nei row: staleness flagged, not "live" noise');
+  assert(ledgerTexts.some(t => t.indexOf('1 · 1h') !== -1),
+    'stuck column shows count + age (nei: 1 · 1h)');
 
   const blockedRows = findByClass(hostEl, 'wr-blocked');
-  assertEqual(blockedRows.length, 2, 'both blocked cards listed');
-  const staleRows = findByClass(hostEl, 'wr-blocked wr-stale');
-  // .wr-stale is a class on the same element; findByClass splits on className
+  assertEqual(blockedRows.length, 2, 'both stuck cards listed');
   const staleAll = blockedRows.filter(r => String(r.className || '').split(/\s+/).includes('wr-stale'));
-  assertEqual(staleAll.length, 1, 'exactly one blocked card highlighted stale (>24h)');
-  assert(staleRows.length === 0, 'combined-class lookup not used (see staleAll)');
+  assertEqual(staleAll.length, 1, 'exactly one stuck card highlighted stale (>24h)');
   const staleTag = findByClass(hostEl, 'wr-stale-tag');
-  assertEqual(staleTag.length, 1, 'STALE >24h tag rendered on the old block');
+  assertEqual(staleTag.length, 1, 'stuck 24h+ tag rendered on the old block');
+  assert(staleTag[0] && staleTag[0].textContent.indexOf('stuck 24h+') !== -1,
+    'stale tag text is plain language');
   const reasonTexts = blockedRows.map(r => r.textContent || '');
   assert(reasonTexts.some(t => t.indexOf('Josh decision required') !== -1),
-    'block reason text rendered');
+    'stuck reason text rendered');
 
-  // 3. GATE QUEUE
-  const gauge = findByClass(hostEl, 'wr-gauge');
-  assertEqual(gauge.length, 1, 'gate depth gauge rendered');
-  assert(gauge[0].textContent.indexOf('3 / HIGH 8') !== -1, 'depth vs HIGH mark shown');
-  const gateRows = findByClass(hostEl, 'wr-gate-row');
-  assertEqual(gateRows.length, 4, 'review gates + review-required blocks + mechanical rows');
-  const gateTexts = gateRows.map(r => r.textContent || '');
-  assert(gateTexts.some(t => t.indexOf('REI GATE: control-plane') !== -1), 'rei gate listed');
-  assert(gateTexts.some(t => t.indexOf('TRIAL GATE (Yui)') !== -1), 'yui mechanical gate listed separately');
+  // 2. NEEDS YOU
+  const asks = findByClass(hostEl, 'wr-ask');
+  assertEqual(asks.length, 1, 'needs-you row rendered');
+  assert(asks[0] && asks[0].textContent.indexOf('view only') !== -1,
+    'needs-you row notes view-only answering');
 
-  // 4. SUBSTANCE FEED
+  // 3. RECENT ACTIVITY — progress telemetry hidden by default
   const feedRows = findByClass(hostEl, 'wr-feed-row');
-  assertEqual(feedRows.length, 3, 'substance feed rows rendered');
+  assertEqual(feedRows.length, 2, 'feed shows substance rows only (progress hidden)');
   const feedTexts = feedRows.map(r => r.textContent || '');
   assert(feedTexts.some(t => t.indexOf('REI GATE ACCEPT') !== -1), 'completion verdict text rendered');
-  assert(feedTexts.some(t => t.indexOf('patch → x.py') !== -1), 'progress tool → artifact rendered');
+  assert(feedTexts.some(t => t.indexOf('finished') !== -1), 'kind chip reads plain "finished"');
+  assert(!feedTexts.some(t => t.indexOf('patch → x.py') !== -1),
+    'tool-progress telemetry hidden by default');
+  const toggle = findByClass(hostEl, 'wr-feed-toggle');
+  assertEqual(toggle.length, 1, 'feed has a show-tool-activity toggle');
+  toggle[0].click();
+  const feedRowsShown = findByClass(hostEl, 'wr-feed-row');
+  assertEqual(feedRowsShown.length, 3, 'toggle reveals progress rows');
+  assert(feedRowsShown.some(r => (r.textContent || '').indexOf('patch → x.py') !== -1),
+    'progress row shows tool → artifact detail');
+  toggle[0].click(); // reset to default for later tests
+  assertEqual(findByClass(hostEl, 'wr-feed-row').length, 2, 'toggle hides progress rows again');
 
-  // 5. JOSH ASKS
-  const asks = findByClass(hostEl, 'wr-ask');
-  assertEqual(asks.length, 1, 'josh ask row rendered');
-  assert(asks[0] && asks[0].textContent.indexOf('read-only') !== -1, 'ask row notes read-only answering');
+  // 4. PROGRAMS — steering cards + Promises merged, budgets dropped
+  const programs = findByClass(hostEl, 'wr-program');
+  assertEqual(programs.length, 3, 'program rows: 2 active + 1 recently finished');
+  const programTexts = programs.map(r => r.textContent || '');
+  assert(programTexts.some(t => t.indexOf('DIRECT: Bot control plane initiative') !== -1),
+    'steering card rendered as a program');
+  assert(programTexts.some(t => t.indexOf('cards 1/3 done') !== -1),
+    'child-chain progress reads cards N/M done');
+  assert(programTexts.some(t => t.indexOf('Verified economic exit') !== -1),
+    'Promise rendered as a program');
+  const doneProgram = programs.filter(r => String(r.className || '').split(/\s+/).includes('wr-done'));
+  assertEqual(doneProgram.length, 1, 'finished program dimmed with .wr-done');
+  assert(doneProgram[0] && doneProgram[0].textContent.indexOf('DIRECT: finished initiative') !== -1,
+    'recently finished program listed under the collapsed group');
+  const pageText = hostEl.textContent || '';
+  assert(pageText.indexOf('Recently finished') !== -1, 'recently finished subhead rendered');
+  assert(pageText.indexOf('LLM calls') === -1 && pageText.indexOf('tokens') === -1,
+    'Promise budgets dropped from the visible surface');
+  assert(pageText.indexOf('depends_on') === -1 && pageText.indexOf('p_0') === -1,
+    'Promise relation IDs dropped from the visible surface');
 
-  // Read-only badge + status line
-  const badge = findByClass(hostEl, 'wr-badge');
-  assertEqual(badge.length, 1, 'READ-ONLY badge rendered');
-  const status = findByClass(hostEl, 'wr-status');
-  assert(status.length && status[0].textContent.indexOf('gate depth 3') !== -1,
-    'status line shows gate depth');
-  assert(status.length && /updated (\d+)(s|m|h) ago/.test(status[0].textContent),
-    'status line shows a sane relative updated stamp (delta, not epoch)');
-  assert(status[0].textContent.indexOf('2954w') === -1,
-    'updated stamp is NOT the epoch-as-duration bug');
+  // 5. QA QUEUE — one plain line, no gauge
+  const qaLines = findByClass(hostEl, 'wr-qa-line');
+  assertEqual(qaLines.length, 1, 'qa queue is a single line');
+  assert(qaLines[0].textContent.indexOf('QA queue: 3 waiting') !== -1,
+    'qa line reads "QA queue: 3 waiting"');
+  const qaSub = findByClass(hostEl, 'wr-qa-sub');
+  assert(qaSub.length && qaSub[0].textContent.indexOf('auto-checks: 1 waiting') !== -1,
+    'auto-checks collapsed to one line');
+  assertEqual(findByClass(hostEl, 'wr-gauge').length, 0, 'no gauge anywhere');
+
+  // Card rows are clickable into the flight recorder.
+  const clickable = findByClass(hostEl, 'wr-clickable');
+  assert(clickable.length >= 4,
+    'stuck/needs-you/feed/program rows carry the wr-clickable recorder affordance');
 
   // Single fetch pair on mount: board snapshot + presence (same cycle).
   assertEqual(apiCalls.filter(c => c.url === '/api/kanban/war-room').length, 1,
@@ -421,16 +586,16 @@ async function testLifecycle(wr) {
   intervalCalls[0].fn();
   await tick(6);
   assertEqual(apiCalls.length, 4, 'refresh tick re-fetches the snapshot pair');
-  assertEqual(findByClass(hostEl, 'wr-section').length, 6,
-    'refresh re-renders six sections (no duplicates)');
-  assertEqual(findByClass(hostEl, 'wr-presence-row').length, 5,
-    'refresh re-renders the presence strip (no duplicates)');
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5,
+    'refresh re-renders five sections (no duplicates)');
+  assertEqual(findByClass(hostEl, 'wr-ledger-row').length, 6,
+    'refresh re-renders the ledger table (no duplicates)');
 
   // Idempotent re-mount: no extra interval, no duplicate DOM.
   await wr.mount('war-room');
   await tick(6);
   assertEqual(intervalCalls.length, 1, 're-mount does not arm a second interval');
-  assertEqual(findByClass(hostEl, 'wr-section').length, 6,
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5,
     're-mount does not duplicate sections');
 
   // Unmount: clears the interval and empties the host.
@@ -446,7 +611,7 @@ async function testLifecycle(wr) {
   // Re-mount after unmount works (fresh generation).
   await wr.mount('war-room');
   await tick(6);
-  assertEqual(findByClass(hostEl, 'wr-section').length, 6, 're-mount after unmount renders again');
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5, 're-mount after unmount renders again');
   wr.unmount('war-room');
 }
 
@@ -467,7 +632,7 @@ async function testErrors(wr) {
   apiMode = 'ok';
   retry[0].click();
   await tick(6);
-  assertEqual(findByClass(hostEl, 'wr-section').length, 6, 'retry recovers and renders the board');
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5, 'retry recovers and renders the board');
   wr.unmount('war-room');
 
   resetHarness();
@@ -483,6 +648,155 @@ async function testErrors(wr) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// 5. Flight recorder: click-to-open, run timeline, evidence, empty state
+// ══════════════════════════════════════════════════════════════════════
+async function testRecorder(wr) {
+  resetHarness();
+  await wr.mount('war-room');
+  await tick(6);
+
+  // Click a blocked card row → recorder opens with a card fetch.
+  const blocked = findByClass(hostEl, 'wr-blocked');
+  assert(blocked.length >= 1, 'blocked rows present before recorder');
+  blocked[0].click();
+  await tick(6);
+
+  const runs = findByClass(hostEl, 'wr-run');
+  assertEqual(runs.length, 2, 'recorder shows both runs in the timeline');
+  assert(findByClass(hostEl, 'wr-back').length === 1, 'recorder has a back button');
+  assert(findByClass(hostEl, 'wr-badge').length === 1, 'recorder keeps the VIEW ONLY badge');
+  const pageText = hostEl.textContent || '';
+  assert(pageText.indexOf('Flight Recorder') !== -1, 'recorder header rendered');
+  assert(pageText.indexOf('6h soak: bot run') !== -1, 'recorder shows the card title');
+
+  // Card-level events + substance marking (created is substance).
+  const cardLevel = findByClass(hostEl, 'wr-subhead');
+  assert(cardLevel.some(s => s.textContent.indexOf('CARD EVENTS') !== -1),
+    'card-level events rendered as their own group');
+  const substanceSpans = findByClass(hostEl, 'wr-span-substance');
+  assert(substanceSpans.length >= 2, 'substance spans (created + progress/completed) marked');
+
+  // Heartbeat cadence is aggregated, not one row per heartbeat.
+  const idleSpans = findByClass(hostEl, 'wr-span-idle');
+  assert(idleSpans.length >= 3, 'idle/liveness spans render (claimed/spawned/heartbeat cadence)');
+  const idleTexts = idleSpans.map(s => s.textContent || '').join(' ');
+  assert(/×43 over/.test(idleTexts), 'heartbeat cadence aggregated (×43 over …)');
+  assert(/liveness cadence/.test(idleTexts), 'heartbeat cadence labelled as liveness, not substance');
+
+  // Evidence pane: envelope contents, gate verdict, verify runs, attestation.
+  const evText = hostEl.textContent || '';
+  assert(evText.indexOf('COMPLETION RECORDS') !== -1, 'evidence pane lists completion records');
+  assert(evText.indexOf('scripts/soak.sh') !== -1, 'envelope changed_files rendered');
+  assert(evText.indexOf('build/soak.log') !== -1, 'envelope artifacts rendered');
+  assert(evText.indexOf('evidence-abc') !== -1, 'envelope evidence_refs rendered');
+  assert(evText.indexOf('diff_matches_claims: true') !== -1, 'envelope gate outcome rendered');
+  assert(evText.indexOf('contract_completion_evaluated') !== -1, 'gate verdict kind rendered');
+  assert(evText.indexOf('CHECK RUNS') !== -1, 'check runs section rendered');
+  assert(evText.indexOf('verify_suite.sh') !== -1, 'verify command rendered');
+  assert(evText.indexOf('reviewer:rei') !== -1, 'attestation role rendered');
+
+  // Links pane: parents + children.
+  assert(evText.indexOf('t_epic') !== -1, 'parent link rendered');
+  assert(evText.indexOf('t_child1') !== -1, 'child link rendered');
+
+  // Expand a run: its spans become visible.
+  const runHeads = findByClass(hostEl, 'wr-run-head');
+  assertEqual(runHeads.length, 2, 'each run has an expandable head');
+  const runBodies = findByClass(hostEl, 'wr-run-spans');
+  assertEqual(runBodies.length, 2, 'each run has a collapsible spans body');
+  assertEqual(runBodies[1].style.display, 'none', 'run spans start collapsed');
+  runHeads[1].click();
+  assert(runBodies[1].style.display !== 'none', 'clicking a run head expands its spans');
+  assert(runHeads[1].classList.contains('wr-run-open'), 'expanded run head carries .wr-run-open');
+  runHeads[1].click();
+  assertEqual(runBodies[1].style.display, 'none', 'clicking again collapses the run');
+
+  // Recorder interval behavior: the 30s tick does NOT re-render the board
+  // while the recorder is open (no polling storm, no view nuke).
+  intervalCalls[0].fn();
+  await tick(6);
+  assert(findByClass(hostEl, 'wr-back').length === 1,
+    '30s tick leaves the recorder open (no board nuke)');
+
+  // Manual Refresh re-fetches the card (light auto-refresh contract).
+  const cardCallsBefore = apiCalls.filter(c => c.url.indexOf('/api/kanban/war-room/card/') === 0).length;
+  const refreshBtn = findByClass(hostEl, 'panel-retry');
+  refreshBtn[refreshBtn.length - 1].click();
+  await tick(6);
+  const cardCallsAfter = apiCalls.filter(c => c.url.indexOf('/api/kanban/war-room/card/') === 0).length;
+  assert(cardCallsAfter === cardCallsBefore + 1, 'Refresh button re-fetches the card payload');
+
+  // Back returns to the board.
+  findByClass(hostEl, 'wr-back')[0].click();
+  await tick(6);
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5, 'back returns to the five-section board');
+  assertEqual(findByClass(hostEl, 'wr-run').length, 0, 'recorder DOM is gone after back');
+
+  // Deep link close: hashchange to empty closes the recorder too.
+  blocked[0].click();
+  await tick(6);
+  assert(findByClass(hostEl, 'wr-run').length === 2, 'recorder reopened for deep-link test');
+  fireHashChange('');
+  await tick(6);
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5,
+    'hash cleared → recorder closes back to the board');
+
+  wr.unmount('war-room');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 6. Flight recorder: empty state (card with zero runs)
+// ══════════════════════════════════════════════════════════════════════
+async function testRecorderEmpty(wr) {
+  resetHarness();
+  await wr.mount('war-room');
+  await tick(6);
+
+  // t_fresh in the blocked list maps to CARD_EMPTY in the fake api.
+  const blocked = findByClass(hostEl, 'wr-blocked');
+  const freshRow = blocked.find(r => (r.dataset.task || '') === 't_fresh') || blocked[0];
+  freshRow.click();
+  await tick(6);
+
+  const text = hostEl.textContent || '';
+  assert(text.indexOf('No runs recorded yet') !== -1, 'zero-run card shows the empty state');
+  assert(findByClass(hostEl, 'wr-run').length === 0, 'no run rows rendered for empty card');
+  assert(text.indexOf('Evidence') !== -1, 'evidence section still renders');
+  assert(text.indexOf('No contract evidence for this card.') !== -1, 'evidence pane empty state');
+
+  // Back still works.
+  findByClass(hostEl, 'wr-back')[0].click();
+  await tick(6);
+  assertEqual(findByClass(hostEl, 'wr-section').length, 5, 'back from empty recorder returns to board');
+  wr.unmount('war-room');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 7. Flight recorder: deep link #card=t_xxx opens on mount
+// ══════════════════════════════════════════════════════════════════════
+async function testRecorderDeepLink(wr) {
+  resetHarness();
+  globalThis.location = { hash: '#card=t_heavy' };
+  await wr.mount('war-room');
+  await tick(8);
+
+  assert(findByClass(hostEl, 'wr-back').length === 1,
+    'mount with #card= opens the recorder directly');
+  const text = hostEl.textContent || '';
+  assert(text.indexOf('6h soak: bot run') !== -1, 'deep-linked card rendered');
+  assertEqual(findByClass(hostEl, 'wr-run').length, 2, 'deep-linked card timeline rendered');
+
+  // Live hashchange to another card switches the recorder.
+  fireHashChange('#card=t_heavy'); // same id — no-op (same hash, no change event)
+  fireHashChange('#card=t_fresh');
+  await tick(6);
+  assert(text.indexOf('No runs recorded yet') !== -1 || hostEl.textContent.indexOf('Never dispatched') !== -1,
+    'hashchange to another card switches the recorder target');
+
+  wr.unmount('war-room');
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // Main
 // ══════════════════════════════════════════════════════════════════════
 (async function main() {
@@ -492,6 +806,9 @@ async function testErrors(wr) {
   await testMount(wr);
   await testLifecycle(wr);
   await testErrors(wr);
+  await testRecorder(wr);
+  await testRecorderEmpty(wr);
+  await testRecorderDeepLink(wr);
 
   if (failures.length) {
     console.error(`\nrun_hyrax_warroom_tests.js: ${failed} FAILED / ${passed} passed`);

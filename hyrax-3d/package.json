@@ -7,7 +7,7 @@
     "build": "vite build",
     "build:test": "vite build --mode test",
     "check": "npm run typecheck && npm run build && npm test",
-    "test": "node --experimental-transform-types --import ./tests/hooks/hyrax-api-3d.mjs --test tests/contracts.test.mjs tests/ardy_motion.test.mjs tests/ardy_profiled.test.mjs tests/ardy_sanity.test.mjs tests/ardy_reset_crossfade.test.mjs tests/ardy_reflex.test.mjs tests/ardy_acrobatics.test.mjs tests/ardy_self_collision.test.mjs tests/avatar_ground_contact.test.mjs tests/scene_manifest.test.mjs tests/goal_planner.test.mjs tests/pickup_system.test.mjs tests/studio_profile_viewer.test.mjs calibration-studio/tests/contracts.test.mjs calibration-studio/tests/calibration.test.mjs calibration-studio/tests/validation.test.mjs calibration-studio/tests/ik.test.mjs",
+    "test": "node --experimental-transform-types --import ./tests/hooks/hyrax-api-3d.mjs --test tests/contracts.test.mjs tests/fleet_config.test.mjs tests/ardy_motion.test.mjs tests/ardy_profiled.test.mjs tests/ardy_sanity.test.mjs tests/ardy_reset_crossfade.test.mjs tests/ardy_reflex.test.mjs tests/ardy_acrobatics.test.mjs tests/ardy_self_collision.test.mjs tests/avatar_ground_contact.test.mjs tests/scene_manifest.test.mjs tests/goal_planner.test.mjs tests/pickup_system.test.mjs tests/studio_profile_viewer.test.mjs calibration-studio/tests/contracts.test.mjs calibration-studio/tests/calibration.test.mjs calibration-studio/tests/validation.test.mjs calibration-studio/tests/ik.test.mjs",
     "test:lifecycle": "vite build --mode test && node --test tests/lifecycle.test.mjs",
     "typecheck": "tsc --noEmit"
   },

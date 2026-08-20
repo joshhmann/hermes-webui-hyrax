@@ -2,6 +2,7 @@ import './tai-room.css'
 
 import { TaiRoomScene } from './TaiRoomScene'
 import type { TimeOfDayPreset } from './atmosphere/TimeOfDaySystem'
+import { loadFleetConfig, type FleetConfig } from './fleet/fleetConfig'
 import type { GoalPlannerPolicy } from './planning/GoalPlanner'
 import { RigDevelopmentPanel } from './debug/RigDevelopmentPanel'
 import { loadSceneManifest } from './room/sceneManifest'
@@ -14,6 +15,12 @@ export interface TaiLoftMountConfiguration {
   /** Operator whose presence drives her goals (default tai for the tai-loft;
    * the essence driver mechanism is operator-generic). */
   operator?: string
+  /** Fleet mode (card t_ee790be9): mount the whole fleet in the shared loft
+   * — every operator from the fleet config appears as a 2D billboard driven
+   * by her own presence item, alongside Tai's VRM. */
+  fleet?: boolean
+  /** Fleet placement config URL (default rooms/fleet-loft.json). */
+  fleetConfigUrl?: string
 }
 
 export async function mountTaiLoft(
@@ -28,7 +35,13 @@ export async function mountTaiLoft(
   const chrome = document.createElement('div')
   chrome.className = 'tai-loft-chrome'
   const identity = document.createElement('div')
-  identity.innerHTML = '<small>TAI · EMBODIMENT</small><strong>The Synthesis Loft</strong><span>Body downstream of Hermes</span>'
+  const fleetMode = configuration.fleet === true
+  identity.innerHTML = fleetMode
+    ? '<small>HYRAXKNOT · FLEET PRESENCE</small><strong>The Synthesis Loft</strong><span>One room, all sisters — presence live</span>'
+    : '<small>TAI · EMBODIMENT</small><strong>The Synthesis Loft</strong><span>Body downstream of Hermes</span>'
+  const fleetLegend = document.createElement('div')
+  fleetLegend.className = 'tai-loft-fleet-legend'
+  fleetLegend.style.display = 'none'
   const controls = document.createElement('div')
   controls.className = 'tai-loft-controls'
 
@@ -37,6 +50,7 @@ export async function mountTaiLoft(
   exit.addEventListener('click', onExit)
   controls.append(exit)
   chrome.append(identity, controls)
+  identity.append(fleetLegend)
   shell.append(canvas, chrome)
   host.replaceChildren(shell)
 
@@ -45,9 +59,26 @@ export async function mountTaiLoft(
   // Fail-closed: a missing/malformed manifest resolves to the default empty
   // room with a console warning — the loft still mounts, just uncluttered.
   const manifest = await loadSceneManifest()
-  const room = new TaiRoomScene(canvas, configuration.vrmUrl, manifest, configuration.plannerPolicy, {
-    operator: configuration.operator,
-  })
+  // Fleet mode (card t_ee790be9): the fleet placement config is a separate
+  // file (rooms/fleet-loft.json) — the spatial manifest stays the single
+  // source of truth for the room. Fail-closed: a missing config mounts the
+  // single-operator loft; a broken operator entry is dropped individually.
+  let fleetConfig: FleetConfig | null = null
+  if (fleetMode) {
+    fleetConfig = await loadFleetConfig(configuration.fleetConfigUrl)
+    if (fleetConfig.operators.length > 0) {
+      fleetLegend.style.display = 'block'
+      fleetLegend.textContent = `FLEET · ${fleetConfig.operators.length + 1} present — ${fleetConfig.operators.map((o) => o.label).join(' · ')}`
+    }
+  }
+  const room = new TaiRoomScene(
+    canvas,
+    configuration.vrmUrl,
+    manifest,
+    configuration.plannerPolicy,
+    { operator: configuration.operator },
+    fleetConfig && fleetConfig.operators.length > 0 ? { config: fleetConfig } : null,
+  )
   for (const mode of ['room', 'follow', 'portrait'] as const) {
     const button = document.createElement('button')
     button.textContent = mode[0].toUpperCase() + mode.slice(1)
@@ -313,7 +344,7 @@ export async function mountTaiLoft(
 
   // Debug/E2E handle: ardy state, EMB-1 telemetry, prompt sender, and a
   // hips-height probe.
-  const debugWindow = window as unknown as { __ardy?: unknown }
+  const debugWindow = window as unknown as { __ardy?: unknown; __fleet?: unknown }
   debugWindow.__ardy = {
     getState: () => room.getArdyState(),
     getTelemetry: () => room.getArdyTelemetry(),
@@ -347,6 +378,19 @@ export async function mountTaiLoft(
     setSelfCollision: (enabled: boolean) => room.setArdySelfCollision(enabled),
     selfCollisionReport: () => room.getArdySelfCollisionReport(),
   }
+  // Fleet seam (card t_ee790be9): per-operator presence overrides +
+  // per-actor probes. Mirrors __ardy's test-only override philosophy —
+  // while an override is set, that actor reads IT instead of the poll.
+  const fleet = room.getFleet()
+  if (fleet) {
+    debugWindow.__fleet = {
+      setOverride: (operatorId: string, item: object | null) => fleet.setOverride(operatorId, item as never),
+      clearOverride: (operatorId: string) => fleet.setOverride(operatorId, null),
+      setOverrideAll: (items: object[] | null) => fleet.setOverrideAll(items as never),
+      probe: () => fleet.probe(),
+      count: () => fleet.operatorCount,
+    }
+  }
   let workbenchButton: HTMLButtonElement | null = null
   if (configuration.development) {
     const time = document.createElement('select')
@@ -376,6 +420,7 @@ export async function mountTaiLoft(
     clearInterval(goalStatusTimer)
     stopShuffle()
     delete debugWindow.__ardy
+    delete debugWindow.__fleet
     if (configuration.development) window.removeEventListener('keydown', onKeyDown)
     workbench?.destroy()
     room.destroy()

@@ -1,0 +1,70 @@
+[
+  {
+    "operatorId": "rei",
+    "expression": "neutral",
+    "textureUrl": "/api/hyrax/assets/rei.portrait.neutral",
+    "mood": "steady",
+    "activity": "idle",
+    "kanban": {
+      "running": 0,
+      "blocked": 0
+    },
+    "task": {
+      "id": "t_new_rei",
+      "title": "Fresh task for rei"
+    },
+    "reaction": "\u2713 REI GATE: fleet lof\u2026 done \u2192 Fresh task for rei",
+    "badgeText": "Rei \u00b7 QA | mood:steady | 0r/0b | Fresh task for rei"
+  },
+  {
+    "operatorId": "nei",
+    "expression": "neutral",
+    "textureUrl": "/api/hyrax/assets/nei.portrait.neutral",
+    "mood": "steady",
+    "activity": "idle",
+    "kanban": {
+      "running": 0,
+      "blocked": 0
+    },
+    "task": {
+      "id": "t_new_nei",
+      "title": "Fresh task for nei"
+    },
+    "reaction": "\u2713 Quartermaster: resu\u2026 done \u2192 Fresh task for nei",
+    "badgeText": "Nei \u00b7 Quartermaster | mood:steady | 0r/0b | Fresh task for nei"
+  },
+  {
+    "operatorId": "mai",
+    "expression": "neutral",
+    "textureUrl": "/api/hyrax/assets/mai.portrait.neutral",
+    "mood": "steady",
+    "activity": "idle",
+    "kanban": {
+      "running": 0,
+      "blocked": 0
+    },
+    "task": {
+      "id": "t_new_mai",
+      "title": "Fresh task for mai"
+    },
+    "reaction": "\u2713 Support: war-room t\u2026 done \u2192 Fresh task for mai",
+    "badgeText": "Mai \u00b7 Support | mood:steady | 0r/0b | Fresh task for mai"
+  },
+  {
+    "operatorId": "aya",
+    "expression": "neutral",
+    "textureUrl": "/api/hyrax/assets/aya.portrait.neutral",
+    "mood": "steady",
+    "activity": "idle",
+    "kanban": {
+      "running": 0,
+      "blocked": 0
+    },
+    "task": {
+      "id": "t_new_aya",
+      "title": "Fresh task for aya"
+    },
+    "reaction": "\u2713 Director: lane rout\u2026 done \u2192 Fresh task for aya",
+    "badgeText": "Aya \u00b7 Director | mood:steady | 0r/0b | Fresh task for aya"
+  }
+]

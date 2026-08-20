@@ -31,3 +31,23 @@ export function mountTaiLoft(
     ...options,
   })
 }
+
+/**
+ * Mount the FLEET loft into `host` (card t_ee790be9): the same Synthesis
+ * Loft, now the fleet's living room — Tai's VRM plus every operator from
+ * the fleet placement config (rooms/fleet-loft.json) as a 2D billboard
+ * driven by her own /api/hyrax/presence item.
+ *
+ * Same cleanup contract as mountTaiLoft.
+ */
+export function mountFleetLoft(
+  host: HTMLElement,
+  onExit: () => void,
+  options: TaiLoftMountOptions = {},
+): Promise<() => void> {
+  return mountTaiLoftImplementation(host, onExit, {
+    ...productionDefaults,
+    ...options,
+    fleet: true,
+  })
+}

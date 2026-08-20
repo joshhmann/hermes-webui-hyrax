@@ -56,3 +56,46 @@
 .rig-sliders input { grid-column: 1 / -1; width: 100%; accent-color: #5eb8de; }
 @media (max-width: 760px) { .tai-loft-chrome { flex-direction: column; } .tai-loft-controls { justify-content: flex-start; } .tai-loft-chrome strong { font-size: 17px; } .rig-workbench { top: 145px; } }
 @media (prefers-reduced-motion: reduce) { .tai-loft-canvas { opacity: .92; } }
+
+/* ── Fleet layer (card t_ee790be9): billboard badges over the canvas ── */
+.fleet-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
+.tai-loft-fleet-legend { margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(126, 200, 255, .18); color: #6ecbf5; font: 9px ui-monospace, monospace; letter-spacing: .12em; }
+.fleet-actor-badge {
+  position: absolute; left: 0; top: 0; min-width: 148px; max-width: 210px;
+  padding: 7px 10px 8px; color: #c9d1d9; text-align: left;
+  background: rgba(8, 12, 20, .78); border: 1px solid rgba(126, 200, 255, .3);
+  border-radius: 9px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  backdrop-filter: blur(10px); font-size: 10.5px; line-height: 1.45;
+  transform-origin: 50% 0; will-change: transform;
+}
+.fleet-actor-head { display: flex; align-items: baseline; gap: 7px; }
+.fleet-actor-head b { color: #f0f3f6; font-size: 12px; letter-spacing: .04em; }
+.fleet-actor-head span { color: #8b949e; font-size: 9.5px; }
+.fleet-actor-dot { margin-left: auto; align-self: center; width: 7px; height: 7px; border-radius: 50%; background: #6e7681; flex: none; }
+.fleet-actor-dot[data-activity='conversing'] { background: #6ecbf5; box-shadow: 0 0 6px rgba(110, 203, 245, .7); }
+.fleet-actor-dot[data-activity='tool-working'] { background: #d29922; box-shadow: 0 0 6px rgba(210, 153, 34, .7); }
+.fleet-actor-dot[data-activity='waiting-approval'] { background: #f6ad55; box-shadow: 0 0 6px rgba(246, 173, 85, .7); }
+.fleet-actor-mood { color: #7dd3fc; font-size: 10px; }
+.fleet-actor-mood[data-state='empty'] { display: none; }
+.fleet-actor-kanban { color: #8b949e; font: 9px ui-monospace, monospace; }
+.fleet-actor-kanban[data-blocked='yes'] { color: #f6ad55; }
+.fleet-actor-task { color: #e6edf3; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-actor-task[data-state='empty'] { display: none; }
+.fleet-actor-reaction {
+  position: absolute; left: 50%; top: -30px; translate: -50% 0; white-space: nowrap;
+  padding: 4px 9px; border-radius: 999px; font-size: 10px; color: #f0f3f6;
+  background: rgba(13, 17, 23, .92); border: 1px solid rgba(63, 185, 80, .55);
+  opacity: 0; pointer-events: none;
+}
+.fleet-actor-reaction[data-kind='warn'] { border-color: rgba(246, 173, 85, .6); }
+.fleet-actor-reaction[data-kind='info'] { border-color: rgba(110, 203, 245, .5); }
+.fleet-actor-reaction.is-pop { animation: fleet-reaction-pop 4.2s ease forwards; }
+@keyframes fleet-reaction-pop {
+  0% { opacity: 0; translate: -50% 8px; }
+  12% { opacity: 1; translate: -50% 0; }
+  82% { opacity: 1; }
+  100% { opacity: 0; translate: -50% -6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fleet-actor-badge, .fleet-actor-reaction { animation: none !important; transition: none !important; }
+}
