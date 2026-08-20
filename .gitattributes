@@ -1,3 +1,14 @@
+# Normalize line endings to LF in the repository.
+* text=auto
+
+# Shell scripts must stay LF on checkout too. A CRLF shebang (`#!/bin/bash\r`)
+# breaks the Docker image: the kernel can't find interpreter `/bin/bash\r`, so
+# local `docker compose up -d --build` on Windows machines with
+# `core.autocrlf=true` fails with `exec /hermeswebui_init.bash: no such file
+# or directory`.
+*.sh text eol=lf
+*.bash text eol=lf
+
 # Git LFS is intentionally NOT used in this repository.
 #
 # 2026-07-31: GitHub refuses LFS object uploads to forks of public
