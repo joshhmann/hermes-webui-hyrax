@@ -4603,12 +4603,15 @@ async function loadInsights(animate) {
   }
   const period = ($('insightsPeriod') || {}).value || '30';
   try {
-    const [data, wikiStatus, skillUsage] = await Promise.all([
+    const [data, wikiStatus, skillUsage, fleetUsage] = await Promise.all([
       api(`/api/insights?days=${period}`),
       api('/api/wiki/status').catch(err => ({status:'error', error: err.message || String(err)})),
       api('/api/skills/usage').catch(() => ({usage:{}, skill_names:[], total_invocations:0, unique_skills_used:0})),
+      // Hyrax: router-ledger fleet view — optional extension endpoint, never
+      // let its failure blank the whole Insights panel.
+      api(`/api/hyrax/fleet-usage?days=${period}`).catch(() => null),
     ]);
-    _renderInsights(data, box, wikiStatus, skillUsage);
+    _renderInsights(data, box, wikiStatus, skillUsage, fleetUsage);
     if (typeof _syncSystemHealthMonitorVisibility === 'function') _syncSystemHealthMonitorVisibility();
     if (typeof pollSystemHealth === 'function') void pollSystemHealth();
   } catch(e) {
@@ -4869,7 +4872,72 @@ function _renderSkillUsage(d) {
   return `<div class="insights-card" id="skillUsageCard"><div class="insights-card-title">${esc(t('insights_skill_usage_title'))}</div><div class="skill-usage-grid" style="margin-bottom:8px"><div><span>${esc(t('insights_skill_usage_total'))}</span><strong>${totalInvocations.toLocaleString()}</strong></div><div><span>${esc(t('insights_skill_usage_skills_used'))}</span><strong>${uniqueUsed}/${skillNames.length}</strong></div></div><div class="insights-table skill-usage-table"><div class="insights-table-head"><span>${esc(t('insights_skill_usage_col_skill'))}</span><span>${esc(t('insights_skill_usage_col_uses'))}</span><span>${esc(t('insights_skill_usage_col_views'))}</span><span>${esc(t('insights_skill_usage_col_patches'))}</span><span>${esc(t('insights_skill_usage_col_share'))}</span></div>${rows}</div><div class="wiki-status-footer" style="margin-top:8px">${esc(t('insights_skill_usage_footer'))}</div></div>`;
 }
 
-function _renderInsights(d, box, wikiStatus, skillUsage) {
+function _renderFleetUsageCard(fleet, fmtTokens, fmtNum) {
+  // Hyrax fleet usage (router ledger) — rendered alongside the profile
+  // stats. fleet is null when the extension endpoint is unreachable.
+  if (!fleet || !fleet.totals) return '';
+  const tt = fleet.totals;
+  const fmtFleetCost = (c) => {
+    const v = Number(c || 0);
+    return '$' + (v < 1 ? v.toFixed(4) : v.toFixed(2));
+  };
+  const costValue = fmtFleetCost(tt.cost_usd) +
+    (Number(tt.cost_unpriced || 0) > 0 ? ` <span style="color:var(--muted);font-size:10px">(${esc(t('insights_fleet_cost_partial'))})</span>` : '');
+
+  const totalTokens = Number(tt.input_tokens || 0) + Number(tt.output_tokens || 0);
+
+  // Per-day mini-series — same bucketing + bar classes as the profile chart.
+  const chartRows = _bucketDailyTokensForChart(Array.isArray(fleet.per_day) ? fleet.per_day : []);
+  let seriesHtml = '';
+  if (chartRows.length) {
+    const maxDay = Math.max(...chartRows.map(r => Number(r.input_tokens || 0) + Number(r.output_tokens || 0)), 1);
+    const labelEvery = Math.max(Math.ceil(chartRows.length / 7), 1);
+    seriesHtml = `<div class="insights-daily-token-chart">` +
+      chartRows.map((r, idx) => {
+        const input = Number(r.input_tokens || 0);
+        const output = Number(r.output_tokens || 0);
+        const inputPct = Math.max((input / maxDay) * 100, input ? 2 : 0).toFixed(1);
+        const outputPct = Math.max((output / maxDay) * 100, output ? 2 : 0).toFixed(1);
+        const showLabel = idx === 0 || idx === chartRows.length - 1 || idx % labelEvery === 0;
+        const day = r.date || (r.title || '');
+        const title = `${day} · ${fmtNum(r.requests)} ${t('insights_fleet_requests').toLowerCase()} · ${fmtTokens(input + output)} ${t('insights_tokens').toLowerCase()} · ${fmtFleetCost(r.cost_usd)}`;
+        const labelText = String(day).slice(5);
+        return `<div class="insights-daily-bar" title="${esc(title)}"><div class="insights-daily-stack" aria-label="${esc(title)}"><div class="insights-daily-bar-output" style="height:${outputPct}%"></div><div class="insights-daily-bar-input" style="height:${inputPct}%"></div></div><span>${showLabel ? esc(labelText) : ''}</span></div>`;
+      }).join('') +
+      `</div><div class="insights-daily-legend"><span><i class="insights-daily-legend-input"></i>${esc(t('insights_input_tokens'))}</span><span><i class="insights-daily-legend-output"></i>${esc(t('insights_output_tokens'))}</span></div>`;
+  }
+
+  // Per-model table — subscription/local rows show tokens but no dollar cost.
+  const models = Array.isArray(fleet.per_model) ? fleet.per_model : [];
+  let modelsHtml = `<div class="insights-empty">${esc(t('insights_no_usage_data'))}</div>`;
+  if (models.length) {
+    modelsHtml = `<div class="insights-table insights-model-table"><div class="insights-table-head"><span>${esc(t('insights_model_name'))}</span><span>${esc(t('insights_fleet_requests'))}</span><span>${esc(t('insights_fleet_errors'))}</span><span>${esc(t('insights_model_tokens'))}</span><span>${esc(t('insights_model_cost'))}</span></div>` +
+      models.map(m => {
+        const costCell = m.pricing === 'subscription' ? '—'
+          : m.pricing === 'free' ? '$0'
+          : fmtFleetCost(m.cost_usd);
+        const title = `${m.key} · ${m.pricing} · ${fmtTokens(m.input_tokens)} ${t('insights_input_tokens')} · ${fmtTokens(m.output_tokens)} ${t('insights_output_tokens')}`;
+        return `<div class="insights-table-row"><span class="insights-model-name" title="${esc(m.key)}">${esc(m.model)}</span><span>${fmtNum(m.requests)}</span><span>${fmtNum(m.errors)}</span><span class="insights-model-tokens" title="${esc(title)}">${fmtTokens(Number(m.input_tokens || 0) + Number(m.output_tokens || 0))}</span><span class="insights-model-cost">${costCell}</span></div>`;
+      }).join('') +
+      `</div>`;
+  }
+
+  return `
+    <div class="insights-card" id="fleetUsageCard">
+      <div class="insights-card-title">${esc(t('insights_fleet_title'))}</div>
+      <div class="insights-grid" style="margin:8px 0 12px">
+        <div class="insights-stat"><div class="insights-stat-info"><div class="insights-stat-value">${fmtNum(tt.requests)}</div><div class="insights-stat-label">${esc(t('insights_fleet_requests'))}</div></div></div>
+        <div class="insights-stat"><div class="insights-stat-info"><div class="insights-stat-value">${fmtNum(tt.errors)}</div><div class="insights-stat-label">${esc(t('insights_fleet_errors'))}</div></div></div>
+        <div class="insights-stat"><div class="insights-stat-info"><div class="insights-stat-value">${fmtTokens(totalTokens)}</div><div class="insights-stat-label">${esc(t('insights_tokens'))}</div></div></div>
+        <div class="insights-stat"><div class="insights-stat-info"><div class="insights-stat-value">${costValue}</div><div class="insights-stat-label">${esc(t('insights_cost'))}</div></div></div>
+      </div>
+      ${seriesHtml}
+      ${modelsHtml}
+      <div class="wiki-status-footer" style="margin-top:8px">${esc(fleet.note || '')}</div>
+    </div>`;
+}
+
+function _renderInsights(d, box, wikiStatus, skillUsage, fleetUsage) {
   const fmtNum = n => Number(n || 0).toLocaleString();
   const fmtCost = c => {
     const value = Number(c || 0);
@@ -4994,6 +5062,7 @@ function _renderInsights(d, box, wikiStatus, skillUsage) {
       ${tokenCards}
       ${modelsHtml}
     </div>
+    ${_renderFleetUsageCard(fleetUsage, fmtTokens, fmtNum)}
     ${dowHtml}
     ${hodHtml}
     <div style="text-align:center;color:var(--muted);font-size:10px;margin-top:12px;opacity:.6">${esc(t('insights_footer').replace('{days}', d.period_days))}</div>

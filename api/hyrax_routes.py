@@ -8,6 +8,7 @@ All canonical endpoints live under /api/hyrax/:
   - /api/hyrax/projects     — Kanban project aggregation
   - /api/hyrax/stats        — Control-plane stats snapshot
   - /api/hyrax/agents       — Active agent/task summary
+  - /api/hyrax/fleet-usage  — Router-ledger usage aggregation (fleet-wide)
   - /api/hyrax/assets/<name> — Allowlisted asset serving (VRM, etc.)
 """
 
@@ -18,6 +19,7 @@ import re as _re
 import stat
 import time
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from api.helpers import j, _security_headers, flush_pending_auth_cookies
@@ -218,6 +220,10 @@ def handle_hyrax_get(handler, parsed) -> bool:
     # /api/hyrax/agents — active agent/task summary
     if path == "/api/hyrax/agents":
         return _serve_agents(handler)
+
+    # /api/hyrax/fleet-usage — router-ledger usage aggregation
+    if path == "/api/hyrax/fleet-usage":
+        return _serve_fleet_usage(handler, parsed)
 
     # /api/hyrax/presence + /api/hyrax/essence/* — Essence runtime (read side)
     if path == "/api/hyrax/presence" or path.startswith("/api/hyrax/essence"):
@@ -547,6 +553,235 @@ def _serve_agents(handler) -> bool:
     """GET /api/hyrax/agents — active agent/task summary."""
     rows = _query(KANBAN_DB, _AGENTS_SQL)
     j(handler, {"items": rows, "meta": {"total": len(rows)}})
+    return True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Fleet usage — /api/hyrax/fleet-usage
+#
+# Aggregates the fleet router ledger (requests.jsonl) — one JSON row per
+# routed request with the REAL provider/model, token counts, and upstream
+# status. This is the router-verified usage view; /api/insights only sees the
+# active profile's state.db and attributes costs to router aliases.
+# ══════════════════════════════════════════════════════════════════════════
+
+_FLEET_USAGE_DAYS_DEFAULT = 30
+_FLEET_USAGE_DAYS_MAX = 90
+
+# deepseek-v4-flash fallback pricing (USD per 1M tokens), used when the
+# ledger row carries no estimated_cost_usd. Peak windows 01:00-04:00 and
+# 06:00-10:00 UTC double the miss and output rates.
+_DEEPSEEK_CACHE_HIT_PER_M = 0.007
+_DEEPSEEK_CACHE_MISS_PER_M = 0.22
+_DEEPSEEK_CACHE_MISS_PEAK_PER_M = 0.44
+_DEEPSEEK_OUTPUT_PER_M = 0.66
+_DEEPSEEK_OUTPUT_PEAK_PER_M = 1.32
+_PEAK_HOURS_UTC = frozenset({1, 2, 3, 6, 7, 8, 9})
+
+_LOCAL_PROVIDERS = frozenset({"local", "local_reasoning"})
+_SUBSCRIPTION_PROVIDERS = frozenset({"codex", "luna"})
+
+FLEET_USAGE_NOTE = (
+    "per-profile breakdown stays hermes-side; "
+    "router fleet view is per-provider/model"
+)
+
+
+def _router_ledger_path() -> Path:
+    """Resolve the router requests.jsonl path (test-overridable via env)."""
+    override = os.environ.get("HERMES_ROUTER_LEDGER")
+    if override:
+        return Path(override)
+    return Path.home() / ".local" / "state" / "hermes-router" / "requests.jsonl"
+
+
+def _int_or_zero(value) -> int:
+    """Ledger numeric fields can be null (e.g. upstream 400s) — coerce safely."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _row_pricing(row: dict) -> str:
+    """Classify the pricing regime for a ledger row."""
+    provider = str(row.get("selected_provider") or "").strip()
+    model = str(row.get("selected_model") or "").strip()
+    if provider in _LOCAL_PROVIDERS:
+        return "free"
+    if provider in _SUBSCRIPTION_PROVIDERS or model == "gpt-5.6-luna":
+        return "subscription"
+    if provider == "deepseek":
+        return "metered"
+    return "unknown"
+
+
+def _row_cost(row: dict) -> float | None:
+    """Resolve the USD cost of one ledger row.
+
+    Priority: the ledger's own estimated_cost_usd, then the deepseek-v4-flash
+    fallback pricing (peak-aware), then 0 for local models, then None for
+    subscription/unknown rows (tokens still counted, cost simply not priced).
+    """
+    est = row.get("estimated_cost_usd")
+    if isinstance(est, (int, float)):
+        return float(est)
+    pricing = _row_pricing(row)
+    if pricing == "free":
+        return 0.0
+    if pricing != "metered":
+        return None
+    ts = row.get("timestamp")
+    peak = False
+    if isinstance(ts, str):
+        try:
+            peak = datetime.fromisoformat(ts.replace("Z", "+00:00")).hour in _PEAK_HOURS_UTC
+        except ValueError:
+            peak = False
+    cached = _int_or_zero(row.get("cached_input_tokens"))
+    miss = max(_int_or_zero(row.get("input_tokens")) - cached, 0)
+    out = _int_or_zero(row.get("output_tokens"))
+    cost = cached * _DEEPSEEK_CACHE_HIT_PER_M
+    cost += miss * (_DEEPSEEK_CACHE_MISS_PEAK_PER_M if peak else _DEEPSEEK_CACHE_MISS_PER_M)
+    cost += out * (_DEEPSEEK_OUTPUT_PEAK_PER_M if peak else _DEEPSEEK_OUTPUT_PER_M)
+    return cost / 1_000_000
+
+
+def _new_bucket() -> dict:
+    return {
+        "requests": 0,
+        "errors": 0,
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "cost_usd": 0.0,
+        "cost_unpriced": 0,  # rows with no price (subscription/unknown)
+    }
+
+
+def _bucket_add(bucket: dict, row: dict, cost: float | None) -> None:
+    bucket["requests"] += 1
+    status = row.get("upstream_status")
+    if status != 200:
+        bucket["errors"] += 1
+    bucket["input_tokens"] += _int_or_zero(row.get("input_tokens"))
+    bucket["cached_input_tokens"] += _int_or_zero(row.get("cached_input_tokens"))
+    bucket["output_tokens"] += _int_or_zero(row.get("output_tokens"))
+    if cost is None:
+        bucket["cost_unpriced"] += 1
+    else:
+        bucket["cost_usd"] += cost
+
+
+def aggregate_fleet_usage(rows: list, days: int, now=None) -> dict:
+    """Pure aggregation over parsed ledger rows for the trailing `days` window.
+
+    `rows` are decoded JSON objects (malformed lines are the reader's job).
+    Returns totals, per-day series (zero-filled), per-provider and per-model
+    breakdowns. Cost is the sum of priced rows only; cost_unpriced counts
+    rows that carry no price so the UI can flag partial coverage.
+    """
+    now = now or datetime.now(timezone.utc)
+    days = max(1, min(int(days), _FLEET_USAGE_DAYS_MAX))
+    cutoff = now - timedelta(days=days)
+    since_day = cutoff.date()
+
+    totals = _new_bucket()
+    per_day: dict[str, dict] = {}
+    per_provider: dict[str, dict] = {}
+    per_model: dict[str, dict] = {}
+    day = since_day
+    while day <= now.date():
+        per_day[str(day)] = _new_bucket()
+        day += timedelta(days=1)
+
+    skipped = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        ts_raw = row.get("timestamp")
+        try:
+            ts = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
+        except ValueError:
+            skipped += 1
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if ts < cutoff:
+            continue
+
+        cost = _row_cost(row)
+        _bucket_add(totals, row, cost)
+        _bucket_add(per_day[str(ts.date())], row, cost)
+
+        provider = str(row.get("selected_provider") or "").strip() or "unknown"
+        pb = per_provider.setdefault(provider, _new_bucket())
+        pb["pricing"] = _row_pricing(row)
+        _bucket_add(pb, row, cost)
+
+        model = str(row.get("selected_model") or "").strip() or "unknown"
+        mb = per_model.setdefault(f"{provider}/{model}", _new_bucket())
+        mb["provider"] = provider
+        mb["model"] = model
+        mb["pricing"] = _row_pricing(row)
+        _bucket_add(mb, row, cost)
+
+    def _shape(bucket: dict) -> dict:
+        out = dict(bucket)
+        out["cost_usd"] = round(out["cost_usd"], 6)
+        return out
+
+    return {
+        "window": {
+            "days": days,
+            "since": cutoff.isoformat().replace("+00:00", "Z"),
+        },
+        "totals": _shape(totals),
+        "per_day": [{"date": d, **_shape(b)} for d, b in sorted(per_day.items())],
+        "per_provider": [
+            {"provider": name, **_shape(b)}
+            for name, b in sorted(per_provider.items(), key=lambda kv: -kv[1]["requests"])
+        ],
+        "per_model": [
+            {"key": key, **_shape(b)}
+            for key, b in sorted(per_model.items(), key=lambda kv: -kv[1]["requests"])
+        ],
+        "skipped_rows": skipped,
+        "note": FLEET_USAGE_NOTE,
+    }
+
+
+def _serve_fleet_usage(handler, parsed) -> bool:
+    """GET /api/hyrax/fleet-usage?days=N — router-ledger usage aggregation.
+
+    Fail-closed: a missing/unreadable ledger yields an empty aggregation,
+    never a 500. Auth is enforced by server.do_GET's check_auth before this
+    dispatch, same as every other /api/hyrax/* route.
+    """
+    from urllib.parse import parse_qs
+
+    try:
+        days = int((parse_qs(parsed.query or "").get("days") or [""])[0])
+    except (TypeError, ValueError):
+        days = _FLEET_USAGE_DAYS_DEFAULT
+
+    rows = []
+    ledger = _router_ledger_path()
+    try:
+        with open(ledger, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    rows.append(None)  # counted as skipped_rows downstream
+    except OSError:
+        _logger.warning("router ledger unreadable (%s) — fleet usage empty", ledger)
+
+    j(handler, aggregate_fleet_usage(rows, days))
     return True
 
 
