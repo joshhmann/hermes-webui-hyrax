@@ -3,7 +3,7 @@
  *
  * Registered through bootstrap.js as the native `projects` extension panel
  * (window.HermesPanels). Aggregates the NATIVE kanban surface by project
- * (GET /api/kanban/tasks — the same endpoint the native Kanban panel uses),
+ * (GET /api/kanban/board — the same endpoint the native Kanban panel uses),
  * so the panel is a presentation slice over existing native data. No donor
  * gateway, no donor routes.
  *
@@ -168,7 +168,7 @@ function _load(host) {
 
   var opts = {};
   if (_abort) opts.signal = _abort.signal;
-  _api('/api/kanban/tasks', opts).then(function(payload) {
+  _api('/api/kanban/board', opts).then(function(payload) {
     if (gen !== _gen || !_mounted) return; // stale — a newer mount owns the host
     _render(host, aggregateByProject(payload), null);
   }).catch(function() {

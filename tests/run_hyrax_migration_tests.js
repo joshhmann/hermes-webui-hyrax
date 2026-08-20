@@ -406,7 +406,7 @@ function fakeApi(url, opts = {}) {
   if (url === '/api/hyrax/presence') {
     return Promise.resolve({ items: [] });
   }
-  if (url.startsWith('/api/kanban/tasks')) {
+  if (url.startsWith('/api/kanban/board')) {
     return Promise.resolve({
       columns: [
         { name: 'todo', tasks: [
